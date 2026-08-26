@@ -1,8 +1,16 @@
 import { createClient } from '@/lib/supabase/server';
 
+type UsuarioComPerfil = {
+  nome: string | null;
+  ativo: boolean;
+  perfis: { slug: string; nome: string } | null;
+};
+
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // Buscar perfil do usuário logado
   const { data: usuario } = user
@@ -10,10 +18,10 @@ export default async function DashboardPage() {
         .from('usuarios')
         .select('nome, ativo, perfis(slug, nome)')
         .eq('id', user.id)
-        .single()
+        .single<UsuarioComPerfil>()
     : { data: null };
 
-  const perfil = usuario?.perfis as { slug: string; nome: string } | null;
+  const perfil = usuario?.perfis ?? null;
 
   return (
     <div className="max-w-2xl">
