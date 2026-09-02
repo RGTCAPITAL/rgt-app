@@ -110,7 +110,9 @@ export default async function OperacaoDetalhePage({
     .eq('id', user.id)
     .single<{ perfil: { slug: string } | null }>();
 
-  const podeAvancar = ['admin', 'gestao'].includes(usuario?.perfil?.slug ?? '');
+  const role = usuario?.perfil?.slug ?? '';
+  const podeAvancar = ['admin', 'gestao'].includes(role);
+  const isAdmin = role === 'admin';
 
   const { data: historico } = await supabase
     .from('etapas_operacao')
@@ -118,6 +120,15 @@ export default async function OperacaoDetalhePage({
     .eq('operacao_id', id)
     .order('entrou_em', { ascending: false })
     .returns<EtapaHist[]>();
+
+  const { data: comentarios } = await supabase
+    .from('comentarios')
+    .select('id, texto, etapa, created_at, autor:usuarios(id, nome)')
+    .eq('operacao_id', id)
+    .order('created_at', { ascending: false })
+    .returns<
+      { id: string; texto: string; etapa: string | null; created_at: string; autor: { id: string; nome: string | null } | null }[]
+    >();
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -172,6 +183,10 @@ export default async function OperacaoDetalhePage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <div>
           <DetalheTabs
+            operacaoId={op.id}
+            usuarioAtualId={user.id}
+            isAdmin={isAdmin}
+            comentarios={comentarios ?? []}
             operacao={{
               valor_total: op.valor_total,
               valor_principal: op.valor_principal,

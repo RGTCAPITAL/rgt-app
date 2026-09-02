@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { labelEtapa } from '@/lib/workflow';
+import { TabComentarios, type Comentario } from './tab-comentarios';
 
 type EtapaHistorico = {
   id: string;
@@ -32,8 +33,12 @@ type OperacaoDetalhes = {
 };
 
 type Props = {
+  operacaoId: string;
   operacao: OperacaoDetalhes;
   historico: EtapaHistorico[];
+  comentarios: Comentario[];
+  usuarioAtualId: string;
+  isAdmin: boolean;
 };
 
 const TABS = [
@@ -73,7 +78,14 @@ function diffDuracao(inicio: string, fim: string | null): string {
   return `${dias} dias`;
 }
 
-export function DetalheTabs({ operacao, historico }: Props) {
+export function DetalheTabs({
+  operacaoId,
+  operacao,
+  historico,
+  comentarios,
+  usuarioAtualId,
+  isAdmin,
+}: Props) {
   const [tab, setTab] = useState<TabKey>('detalhes');
 
   return (
@@ -100,7 +112,14 @@ export function DetalheTabs({ operacao, historico }: Props) {
       <div className="p-6">
         {tab === 'detalhes' && <TabDetalhes op={operacao} />}
         {tab === 'documentos' && <PlaceholderTab issue="RGT-22" descricao="upload de documentos via Supabase Storage" />}
-        {tab === 'comentarios' && <PlaceholderTab issue="RGT-21" descricao="comentários por etapa" />}
+        {tab === 'comentarios' && (
+          <TabComentarios
+            operacaoId={operacaoId}
+            usuarioAtualId={usuarioAtualId}
+            isAdmin={isAdmin}
+            comentarios={comentarios}
+          />
+        )}
         {tab === 'historico' && <TabHistorico historico={historico} />}
       </div>
     </div>
