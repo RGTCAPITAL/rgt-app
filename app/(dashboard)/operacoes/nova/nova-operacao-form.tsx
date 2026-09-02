@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 type EnteDevedor = {
@@ -179,7 +180,6 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
         duration: 8000,
       });
     }
-     
   }, [leadInicial]);
 
   useEffect(() => {
@@ -732,7 +732,10 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
               {pending ? (
-                'Enviando…'
+                <>
+                  <Spinner />
+                  Enviando…
+                </>
               ) : (
                 <>
                   <Send className="size-4" />

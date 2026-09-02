@@ -5,6 +5,7 @@ import { ArrowRight, Check, X } from 'lucide-react';
 import { mudarEtapa, registrarAceite } from './actions';
 import { labelEtapa, transicoesPermitidas, type Etapa } from '@/lib/workflow';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
@@ -213,6 +214,7 @@ export function AcoesEtapa({
               Cancelar
             </Button>
             <Button onClick={confirmar} disabled={pending || !novaEtapa}>
+              {pending && <Spinner />}
               {pending ? 'Salvando…' : 'Confirmar mudança'}
             </Button>
           </DialogFooter>
@@ -260,6 +262,7 @@ export function AcoesEtapa({
               disabled={pending || !precoInput}
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
+              {pending && <Spinner />}
               {pending ? 'Salvando…' : 'Confirmar aceite'}
             </Button>
           </DialogFooter>

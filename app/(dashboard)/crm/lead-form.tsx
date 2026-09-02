@@ -27,6 +27,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 export type DonoOption = { id: string; nome: string | null };
@@ -204,6 +205,7 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
             Cancelar
           </Button>
           <Button onClick={salvar} disabled={pending || !nome.trim() || !origem}>
+            {pending && <Spinner />}
             {pending ? 'Salvando…' : editando ? 'Salvar alterações' : 'Criar lead'}
           </Button>
         </DialogFooter>

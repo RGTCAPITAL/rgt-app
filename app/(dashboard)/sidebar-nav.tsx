@@ -53,7 +53,9 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       className={cn(
         'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
-        active ? 'bg-neutral-900 font-medium text-white' : 'text-neutral-700 hover:bg-neutral-100',
+        active
+          ? 'bg-primary text-primary-foreground font-medium'
+          : 'text-neutral-700 hover:bg-neutral-100',
       )}
     >
       <Icon className="size-4" />
