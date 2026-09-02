@@ -9,12 +9,21 @@ type Props = {
   etapaAtual: string;
   podeAvancar: boolean;
   precoAceito: boolean | null;
+  precoProposto: number | null;
 };
 
-export function AcoesEtapa({ operacaoId, etapaAtual, podeAvancar, precoAceito }: Props) {
+export function AcoesEtapa({
+  operacaoId,
+  etapaAtual,
+  podeAvancar,
+  precoAceito,
+  precoProposto,
+}: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [novaEtapa, setNovaEtapa] = useState<Etapa | ''>('');
   const [observacao, setObservacao] = useState('');
+  const [aceiteModalOpen, setAceiteModalOpen] = useState(false);
+  const [precoInput, setPrecoInput] = useState(precoProposto ? String(precoProposto) : '');
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -47,10 +56,33 @@ export function AcoesEtapa({ operacaoId, etapaAtual, podeAvancar, precoAceito }:
     });
   }
 
-  function marcarAceite(aceitou: boolean) {
+  function abrirAceite() {
+    setErro(null);
+    setPrecoInput(precoProposto ? String(precoProposto) : '');
+    setAceiteModalOpen(true);
+  }
+
+  function confirmarAceite() {
+    setErro(null);
+    const preco = Number(precoInput.replace(',', '.'));
+    if (!preco || preco <= 0) {
+      setErro('Informe um preço proposto válido (> 0).');
+      return;
+    }
+    startTransition(async () => {
+      const res = await registrarAceite(operacaoId, true, preco);
+      if (!res.ok) {
+        setErro(res.error);
+        return;
+      }
+      setAceiteModalOpen(false);
+    });
+  }
+
+  function registrarRecusa() {
     setErro(null);
     startTransition(async () => {
-      const res = await registrarAceite(operacaoId, aceitou);
+      const res = await registrarAceite(operacaoId, false, null);
       if (!res.ok) setErro(res.error);
     });
   }
@@ -73,7 +105,7 @@ export function AcoesEtapa({ operacaoId, etapaAtual, podeAvancar, precoAceito }:
             <div className="mt-2 text-xs text-neutral-600">
               Preço:{' '}
               {precoAceito === true
-                ? '✓ Aceito pelo credor'
+                ? `✓ Aceito pelo credor${precoProposto ? ` — ${precoProposto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}`
                 : precoAceito === false
                   ? '✗ Recusado pelo credor'
                   : 'Aguardando resposta do credor'}
@@ -84,7 +116,7 @@ export function AcoesEtapa({ operacaoId, etapaAtual, podeAvancar, precoAceito }:
           {emAceite && precoAceito !== true && (
             <button
               type="button"
-              onClick={() => marcarAceite(true)}
+              onClick={abrirAceite}
               disabled={pending}
               className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
             >
@@ -94,7 +126,7 @@ export function AcoesEtapa({ operacaoId, etapaAtual, podeAvancar, precoAceito }:
           {emAceite && precoAceito !== false && (
             <button
               type="button"
-              onClick={() => marcarAceite(false)}
+              onClick={registrarRecusa}
               disabled={pending}
               className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
             >
@@ -179,6 +211,56 @@ export function AcoesEtapa({ operacaoId, etapaAtual, podeAvancar, precoAceito }:
               className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
             >
               {pending ? 'Salvando…' : 'Confirmar mudança'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {aceiteModalOpen && (
+        <Modal onClose={() => !pending && setAceiteModalOpen(false)}>
+          <h2 className="text-lg font-semibold text-neutral-900">Registrar aceite do credor</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Informe o preço proposto que o credor aceitou. Esse valor fica gravado como
+            <code className="mx-1 rounded bg-neutral-100 px-1 text-xs">preco_proposto</code>
+            na operação.
+          </p>
+
+          <label className="mt-4 flex flex-col gap-1 text-sm">
+            <span className="text-xs font-medium text-neutral-700">Preço proposto (R$) *</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={precoInput}
+              onChange={(e) => setPrecoInput(e.target.value)}
+              disabled={pending}
+              placeholder="Ex: 30000"
+              className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+              autoFocus
+            />
+          </label>
+
+          {erro && (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {erro}
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setAceiteModalOpen(false)}
+              disabled={pending}
+              className="rounded-md px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={confirmarAceite}
+              disabled={pending || !precoInput}
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+            >
+              {pending ? 'Salvando…' : 'Confirmar aceite'}
             </button>
           </div>
         </Modal>

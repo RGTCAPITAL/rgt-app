@@ -32,6 +32,7 @@ type Operacao = {
   cedente_cpf: string;
   observacoes: string | null;
   preco_aceito: boolean | null;
+  preco_proposto: number | null;
   etapa_atual: string;
   created_at: string;
   updated_at: string;
@@ -92,7 +93,7 @@ export default async function OperacaoDetalhePage({
        retencao_honorarios_pct, percentual_aquisicao,
        pss_ativo, pss_pct, rra_ativo, rra_meses,
        data_base, data_autuacao, loa,
-       cedente_nome, cedente_cpf, observacoes, preco_aceito,
+       cedente_nome, cedente_cpf, observacoes, preco_aceito, preco_proposto,
        etapa_atual, created_at, updated_at,
        dono:usuarios!operacoes_dono_id_fkey(nome),
        broker:usuarios!operacoes_broker_id_fkey(nome),
@@ -164,12 +165,33 @@ export default async function OperacaoDetalhePage({
           etapaAtual={op.etapa_atual}
           podeAvancar={podeAvancar}
           precoAceito={op.preco_aceito}
+          precoProposto={op.preco_proposto}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         <div>
-          <DetalheTabs operacao={op} historico={historico ?? []} />
+          <DetalheTabs
+            operacao={{
+              valor_total: op.valor_total,
+              valor_principal: op.valor_principal,
+              valor_juros: op.valor_juros,
+              valor_selic: op.valor_selic,
+              preco_proposto: op.preco_proposto,
+              preco_aceito: op.preco_aceito,
+              retencao_honorarios_pct: op.retencao_honorarios_pct,
+              percentual_aquisicao: op.percentual_aquisicao,
+              pss_ativo: op.pss_ativo,
+              pss_pct: op.pss_pct,
+              rra_ativo: op.rra_ativo,
+              rra_meses: op.rra_meses,
+              data_base: op.data_base,
+              data_autuacao: op.data_autuacao,
+              loa: op.loa,
+              observacoes: op.observacoes,
+            }}
+            historico={historico ?? []}
+          />
         </div>
 
         <aside className="space-y-4">

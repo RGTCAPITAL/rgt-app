@@ -85,6 +85,7 @@ export async function mudarEtapa(
 export async function registrarAceite(
   operacaoId: string,
   aceitou: boolean,
+  precoProposto: number | null,
 ): Promise<ChangeEtapaResult> {
   const supabase = await createClient();
 
@@ -106,19 +107,30 @@ export async function registrarAceite(
 
   const { data: op } = await supabase
     .from('operacoes')
-    .select('etapa_atual')
+    .select('etapa_atual, preco_proposto')
     .eq('id', operacaoId)
-    .single<{ etapa_atual: string }>();
+    .single<{ etapa_atual: string; preco_proposto: number | null }>();
 
   if (!op || op.etapa_atual !== 'aceite') {
     return { ok: false, error: 'Aceite só pode ser registrado na etapa "Aceite".' };
   }
 
-  const { error } = await supabase
-    .from('operacoes')
-    .update({ preco_aceito: aceitou })
-    .eq('id', operacaoId);
+  // Pra aceitar, é preciso ter preço proposto (constraint operacoes_aceite_precisa_preco).
+  // Se ainda não tem, o caller passa o valor via `precoProposto`.
+  const precoParaSalvar =
+    op.preco_proposto ?? (precoProposto !== null && precoProposto > 0 ? precoProposto : null);
 
+  if (aceitou && precoParaSalvar === null) {
+    return {
+      ok: false,
+      error: 'Pra registrar aceite é preciso informar o preço proposto ao credor.',
+    };
+  }
+
+  const update: Record<string, unknown> = { preco_aceito: aceitou };
+  if (precoParaSalvar !== null) update.preco_proposto = precoParaSalvar;
+
+  const { error } = await supabase.from('operacoes').update(update).eq('id', operacaoId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/operacoes/${operacaoId}`);

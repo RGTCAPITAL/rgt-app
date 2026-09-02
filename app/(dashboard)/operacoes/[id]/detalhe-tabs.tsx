@@ -17,6 +17,8 @@ type OperacaoDetalhes = {
   valor_principal: number | null;
   valor_juros: number | null;
   valor_selic: number | null;
+  preco_proposto: number | null;
+  preco_aceito: boolean | null;
   retencao_honorarios_pct: number;
   percentual_aquisicao: number;
   pss_ativo: boolean;
@@ -115,6 +117,20 @@ function TabDetalhes({ op }: { op: OperacaoDetalhes }) {
           <Item label="Valor principal" value={fmtBRL(op.valor_principal)} />
           <Item label="Valor dos juros" value={fmtBRL(op.valor_juros)} />
           <Item label="Valor SELIC" value={fmtBRL(op.valor_selic)} />
+          <Item
+            label="Preço proposto"
+            value={
+              op.preco_proposto
+                ? `${fmtBRL(op.preco_proposto)}${
+                    op.preco_aceito === true
+                      ? ' · aceito'
+                      : op.preco_aceito === false
+                        ? ' · recusado'
+                        : ' · pendente'
+                  }`
+                : '—'
+            }
+          />
         </dl>
       </section>
 
