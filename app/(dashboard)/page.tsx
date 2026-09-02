@@ -1,8 +1,23 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import {
+  Briefcase,
+  TrendingUp,
+  Wallet,
+  Users,
+  AlertTriangle,
+  CircleDollarSign,
+  Sparkles,
+  Plus,
+  Inbox,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { labelEtapa } from '@/lib/workflow';
 import { TIPOS_ATIVO } from './operacoes/nova/schemas';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 type UsuarioComPerfil = {
   nome: string | null;
@@ -36,11 +51,13 @@ function fmtRel(iso: string): string {
   if (dias < 30) return `há ${dias}d`;
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
-function corEtapa(v: string): string {
-  if (v === 'finalizada') return 'bg-emerald-100 text-emerald-800';
-  if (v === 'cancelada') return 'bg-red-100 text-red-800';
-  if (v === 'pagamento') return 'bg-blue-100 text-blue-800';
-  return 'bg-neutral-100 text-neutral-700';
+function classesEtapa(etapa: string): string {
+  if (etapa === 'finalizada')
+    return 'border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-100';
+  if (etapa === 'cancelada') return 'border-transparent bg-red-100 text-red-800 hover:bg-red-100';
+  if (etapa === 'pagamento')
+    return 'border-transparent bg-blue-100 text-blue-800 hover:bg-blue-100';
+  return 'border-transparent bg-neutral-100 text-neutral-700 hover:bg-neutral-100';
 }
 
 export default async function DashboardPage() {
@@ -59,23 +76,25 @@ export default async function DashboardPage() {
   const perfil = usuario?.perfis?.slug ?? null;
   const primeiroNome = (usuario?.nome ?? '').split(' ')[0] || null;
 
-  // ===== Sem perfil: mostra aviso =====
   if (!perfil) {
     return (
       <div className="mx-auto max-w-2xl">
-        <h1 className="text-3xl font-bold tracking-tight">Bem-vindo</h1>
-        <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-          <h3 className="font-semibold">⚠️ Aguardando definição de perfil</h3>
-          <p className="mt-2">
-            Sua conta foi criada mas ainda não tem perfil. Peça pro admin te promover em{' '}
-            <code>/admin/usuarios</code>.
-          </p>
+        <h1 className="text-3xl font-semibold tracking-tight">Bem-vindo</h1>
+        <div className="mt-6 flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+          <AlertTriangle className="size-5 shrink-0" />
+          <div>
+            <h3 className="font-semibold">Aguardando definição de perfil</h3>
+            <p className="mt-2">
+              Sua conta foi criada mas ainda não tem perfil. Peça pro admin te promover em{' '}
+              <code>/admin/usuarios</code>.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ===== JURÍDICO — foco em DD =====
+  // ===== JURÍDICO =====
   if (perfil === 'juridico') {
     const { data: ddJuridica } = await supabase
       .from('operacoes')
@@ -96,15 +115,22 @@ export default async function DashboardPage() {
       <div>
         <Header primeiroNome={primeiroNome} perfilLabel={usuario?.perfis?.nome ?? 'Jurídico'} />
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Kpi label="Em DD Jurídica" valor={String(totalDD ?? 0)} sub="aguardando seu parecer" />
+          <Kpi
+            label="Em DD Jurídica"
+            valor={String(totalDD ?? 0)}
+            sub="aguardando seu parecer"
+            icon={Briefcase}
+          />
           <Kpi
             label="Valor total em análise"
             valor={fmtBRL((ddJuridica ?? []).reduce((a, o) => a + Number(o.valor_total || 0), 0))}
             sub={`${ddJuridica?.length ?? 0} operações listadas abaixo`}
+            icon={CircleDollarSign}
           />
         </div>
         <SectionOps
           titulo="Sua fila de due diligence"
+          icon={Briefcase}
           ops={ddJuridica ?? []}
           vazio="Nenhuma operação aguardando parecer jurídico agora."
         />
@@ -112,7 +138,7 @@ export default async function DashboardPage() {
     );
   }
 
-  // ===== BROKER — foco em próprias operações =====
+  // ===== BROKER =====
   if (perfil === 'broker') {
     const { data: minhas } = await supabase
       .from('operacoes')
@@ -137,12 +163,24 @@ export default async function DashboardPage() {
             label="Em andamento"
             valor={String(emAndamento.length)}
             sub="operações suas ativas"
+            icon={Briefcase}
           />
-          <Kpi label="Pipeline" valor={fmtBRL(valorTotalPipeline)} sub="valor total em andamento" />
-          <Kpi label="Finalizadas (recentes)" valor={String(finalizadas)} sub="nas últimas 10" />
+          <Kpi
+            label="Pipeline"
+            valor={fmtBRL(valorTotalPipeline)}
+            sub="valor total em andamento"
+            icon={TrendingUp}
+          />
+          <Kpi
+            label="Finalizadas (recentes)"
+            valor={String(finalizadas)}
+            sub="nas últimas 10"
+            icon={CircleDollarSign}
+          />
         </div>
         <SectionOps
           titulo="Suas operações recentes"
+          icon={Sparkles}
           ops={(minhas ?? []).slice(0, 5)}
           vazio="Você ainda não cadastrou nenhuma operação. Comece pelo botão acima."
         />
@@ -150,7 +188,7 @@ export default async function DashboardPage() {
     );
   }
 
-  // ===== ADMIN / GESTÃO — visão global =====
+  // ===== ADMIN / GESTÃO =====
   const seteDiasAtras = new Date(Date.now() - 7 * 86400000).toISOString();
   const quatorzeDiasAtras = new Date(Date.now() - 14 * 86400000).toISOString();
 
@@ -226,36 +264,47 @@ export default async function DashboardPage() {
           label="Operações abertas"
           valor={String(totalAbertas)}
           sub="fora de finalizada/cancelada"
+          icon={Briefcase}
         />
-        <Kpi label="Pipeline" valor={fmtBRL(totalPipeline)} sub="valor total em andamento" />
+        <Kpi
+          label="Pipeline"
+          valor={fmtBRL(totalPipeline)}
+          sub="valor total em andamento"
+          icon={TrendingUp}
+        />
         <Kpi
           label="Prontas pra pagar"
           valor={String(prontas.length)}
           sub={prontas.length === 1 ? '1 operação' : `${prontas.length} operações`}
+          icon={Wallet}
         />
         <Kpi
           label="Leads em aberto"
           valor={String(totalLeadsAbertos)}
           sub="pipeline CRM"
+          icon={Users}
           linkPara="/crm"
         />
       </div>
 
       {filaAtencao.length > 0 && (
         <SectionOps
-          titulo="⚠️ Precisa de atenção"
+          titulo="Precisa de atenção"
+          icon={AlertTriangle}
           descricao="Aceite pendente há mais de 7 dias · DD travada há mais de 14 dias"
           ops={filaAtencao}
           vazio=""
+          highlight
         />
       )}
 
       {prontas.length > 0 && (
-        <SectionOps titulo="💰 Prontas pra pagamento" ops={prontas} vazio="" />
+        <SectionOps titulo="Prontas pra pagamento" icon={Wallet} ops={prontas} vazio="" />
       )}
 
       <SectionOps
-        titulo="🆕 Últimas cadastradas"
+        titulo="Últimas cadastradas"
+        icon={Sparkles}
         ops={recentes}
         vazio="Nenhuma operação cadastrada ainda."
       />
@@ -277,7 +326,7 @@ function Header({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">
+        <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
           {primeiroNome ? `Olá, ${primeiroNome}` : 'Bem-vindo'}
         </h1>
         <p className="mt-1 text-sm text-neutral-600">
@@ -285,36 +334,53 @@ function Header({
         </p>
       </div>
       {cta && (
-        <Link
-          href="/operacoes/nova"
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-        >
-          + Nova operação
+        <Link href="/operacoes/nova" className={cn(buttonVariants({ size: 'lg' }))}>
+          <Plus className="size-4" />
+          Nova operação
         </Link>
       )}
     </div>
   );
 }
 
+type LucideIcon = React.ComponentType<{ className?: string }>;
+
 function Kpi({
   label,
   valor,
   sub,
+  icon: Icon,
   linkPara,
 }: {
   label: string;
   valor: string;
   sub?: string;
+  icon: LucideIcon;
   linkPara?: string;
 }) {
   const inner = (
-    <div className="rounded-md border border-neutral-200 bg-white p-4 transition-shadow hover:shadow-sm">
-      <div className="text-xs tracking-wide text-neutral-500 uppercase">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-neutral-900">{valor}</div>
-      {sub && <div className="mt-0.5 text-xs text-neutral-500">{sub}</div>}
-    </div>
+    <Card size="sm" className="transition-shadow hover:shadow-md">
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-xs font-medium tracking-wide text-neutral-500 uppercase">
+            {label}
+          </CardTitle>
+          <Icon className="size-4 text-neutral-400" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-semibold text-neutral-900">{valor}</div>
+        {sub && <div className="mt-0.5 text-xs text-neutral-500">{sub}</div>}
+      </CardContent>
+    </Card>
   );
-  return linkPara ? <Link href={linkPara}>{inner}</Link> : inner;
+  return linkPara ? (
+    <Link href={linkPara} className="block">
+      {inner}
+    </Link>
+  ) : (
+    inner
+  );
 }
 
 function SectionOps({
@@ -322,61 +388,73 @@ function SectionOps({
   descricao,
   ops,
   vazio,
+  icon: Icon,
+  highlight,
 }: {
   titulo: string;
   descricao?: string;
   ops: OpResumo[];
   vazio: string;
+  icon: LucideIcon;
+  highlight?: boolean;
 }) {
   return (
     <section className="mt-8">
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold text-neutral-900">{titulo}</h2>
-        {descricao && <p className="text-xs text-neutral-500">{descricao}</p>}
+      <div className="mb-3 flex items-start gap-2">
+        <Icon
+          className={cn('size-4 shrink-0', highlight ? 'text-amber-600' : 'text-neutral-500')}
+          aria-hidden
+        />
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-900">{titulo}</h2>
+          {descricao && <p className="text-xs text-neutral-500">{descricao}</p>}
+        </div>
       </div>
       {ops.length === 0 ? (
         vazio ? (
-          <p className="text-sm text-neutral-500">{vazio}</p>
+          <Card className="items-center py-10 text-center">
+            <CardContent className="flex flex-col items-center gap-2">
+              <div className="flex size-10 items-center justify-center rounded-full bg-neutral-100">
+                <Inbox className="size-5 text-neutral-500" />
+              </div>
+              <p className="text-sm text-neutral-600">{vazio}</p>
+            </CardContent>
+          </Card>
         ) : null
       ) : (
-        <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-neutral-100">
-              {ops.map((op) => (
-                <tr key={op.id} className="hover:bg-neutral-50">
-                  <td className="px-4 py-2.5">
-                    <Link
-                      href={`/operacoes/${op.id}`}
-                      className="font-medium text-neutral-900 hover:underline"
-                    >
-                      {op.numero_processo}
-                    </Link>
-                    <div className="text-xs text-neutral-500">
-                      {op.cedente_nome} ·{' '}
-                      {TIPOS_ATIVO.find((t) => t.value === op.tipo)?.label ?? op.tipo}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <div className="font-medium text-neutral-900">
-                      {fmtBRL(Number(op.valor_total))}
-                    </div>
-                    <div className="text-xs text-neutral-500">{op.dono?.nome ?? '—'}</div>
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${corEtapa(op.etapa_atual)}`}
-                    >
-                      {labelEtapa(op.etapa_atual)}
-                    </span>
-                    <div className="mt-0.5 text-[10px] tracking-wide text-neutral-400 uppercase">
-                      {fmtRel(op.updated_at)}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Card className={cn(highlight && 'ring-amber-200')}>
+          <div className="divide-y divide-neutral-100">
+            {ops.map((op) => (
+              <Link
+                key={op.id}
+                href={`/operacoes/${op.id}`}
+                className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-neutral-50"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-neutral-900">{op.numero_processo}</div>
+                  <div className="truncate text-xs text-neutral-500">
+                    {op.cedente_nome} ·{' '}
+                    {TIPOS_ATIVO.find((t) => t.value === op.tipo)?.label ?? op.tipo}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="font-medium text-neutral-900">
+                    {fmtBRL(Number(op.valor_total))}
+                  </div>
+                  <div className="text-xs text-neutral-500">{op.dono?.nome ?? '—'}</div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-0.5">
+                  <Badge className={classesEtapa(op.etapa_atual)}>
+                    {labelEtapa(op.etapa_atual)}
+                  </Badge>
+                  <span className="text-[10px] tracking-wide text-neutral-400 uppercase">
+                    {fmtRel(op.updated_at)}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </Card>
       )}
     </section>
   );
