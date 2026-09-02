@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { type LeadCard } from './kanban';
 import { CrmShell } from './crm-shell';
 import { ORIGEM_LEAD } from '@/lib/leads';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 type SearchParams = { origem?: string; dono?: string };
 
@@ -35,7 +37,6 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const { data: leads, error } =
     await query.returns<(LeadCard & { dono: { id: string; nome: string | null } | null })[]>();
 
-  // Todos os donos possíveis (não só os que já têm lead) — pra dropdown do form
   const { data: donosTodos } = await supabase
     .from('usuarios')
     .select('id, nome')
@@ -43,7 +44,6 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     .order('nome')
     .returns<{ id: string; nome: string | null }[]>();
 
-  // Filtro de dono usa só os que têm lead (evita ruído)
   const donosNoResultado = Array.from(
     new Map(
       (leads ?? []).filter((l) => l.dono?.id).map((l) => [l.dono!.id, l.dono!.nome ?? '—']),
@@ -55,20 +55,23 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">CRM</h1>
-        <p className="mt-2 text-sm text-neutral-600">
+        <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">CRM</h1>
+        <p className="mt-1 text-sm text-neutral-600">
           {leads?.length ?? 0} lead{(leads?.length ?? 0) === 1 ? '' : 's'} no pipeline. Arraste
           entre colunas pra mudar status. Clique num card pra editar.
         </p>
       </div>
 
-      <form className="mb-4 flex flex-wrap items-end gap-3 rounded-md border border-neutral-200 bg-white p-3">
+      <form
+        className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"
+        method="get"
+      >
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-neutral-700">Origem</span>
           <select
             name="origem"
             defaultValue={params.origem ?? ''}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+            className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900"
           >
             <option value="">Todas</option>
             {ORIGEM_LEAD.map((o) => (
@@ -83,7 +86,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           <select
             name="dono"
             defaultValue={params.dono ?? ''}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+            className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900"
           >
             <option value="">Todos</option>
             {donosNoResultado.map(([id, nome]) => (
@@ -94,17 +97,11 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           </select>
         </label>
         <div className="flex gap-2">
-          <button
-            type="submit"
-            className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
-          >
+          <button type="submit" className={cn(buttonVariants({ variant: 'default' }))}>
             Filtrar
           </button>
           {temFiltro && (
-            <Link
-              href="/crm"
-              className="rounded-md border border-neutral-300 bg-white px-4 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
-            >
+            <Link href="/crm" className={cn(buttonVariants({ variant: 'outline' }))}>
               Limpar
             </Link>
           )}

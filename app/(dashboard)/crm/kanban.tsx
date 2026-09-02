@@ -1,10 +1,22 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, useTransition } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { mudarStatusLead } from './actions';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 export type LeadCard = {
   id: string;
@@ -61,7 +73,7 @@ export function Kanban({
   const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
   const [editandoLead, setEditandoLead] = useState<LeadEdit | null>(null);
-  const [_, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   function onDragStart(e: React.DragEvent, leadId: string) {
     e.dataTransfer.setData('text/plain', leadId);
@@ -87,7 +99,6 @@ export function Kanban({
     const lead = leads.find((l) => l.id === leadId);
     if (!lead || lead.status === novoStatus) return;
 
-    // "Perdido" abre modal pra pegar motivo
     if (novoStatus === 'perdido') {
       setModalPerdido({ leadId, nome: lead.nome });
       setMotivoPerda('');
@@ -133,18 +144,20 @@ export function Kanban({
               onDragOver={(e) => onDragOver(e, col.value)}
               onDragLeave={onDragLeave}
               onDrop={(e) => onDrop(e, col.value)}
-              className={`flex min-h-[60vh] flex-col rounded-md border bg-neutral-50 p-2 transition-colors ${
-                highlight ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200'
-              }`}
+              className={cn(
+                'flex min-h-[60vh] flex-col rounded-lg border bg-neutral-50 p-2 transition-colors',
+                highlight ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200',
+              )}
             >
               <div className="mb-2 flex items-center justify-between px-1">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    leadsDaCol.length === 0 ? col.corVazio : col.cor
-                  }`}
+                <Badge
+                  className={cn(
+                    'border-transparent',
+                    leadsDaCol.length === 0 ? col.corVazio : col.cor,
+                  )}
                 >
                   {col.label}
-                </span>
+                </Badge>
                 <span className="text-xs text-neutral-500">{leadsDaCol.length}</span>
               </div>
 
@@ -172,7 +185,7 @@ export function Kanban({
                           motivo_perda: lead.motivo_perda,
                         })
                       }
-                      className="cursor-grab rounded-md border border-neutral-200 bg-white p-3 text-sm shadow-sm hover:shadow active:cursor-grabbing"
+                      className="group cursor-grab rounded-lg bg-white p-3 text-sm shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md active:cursor-grabbing"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-medium text-neutral-900">{lead.nome}</span>
@@ -188,26 +201,30 @@ export function Kanban({
                         </div>
                       )}
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                        <Badge variant="secondary" className="text-[10px]">
                           {labelOrigem(lead.origem)}
-                        </span>
+                        </Badge>
                         {lead.dono?.nome && (
                           <span
                             title={lead.dono.nome}
-                            className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-800 text-[9px] font-medium text-white"
+                            className="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-[9px] font-medium text-white"
                           >
                             {iniciais(lead.dono.nome)}
                           </span>
                         )}
                       </div>
                       {(lead.status === 'qualificado' || lead.status === 'proposta_enviada') && (
-                        <Link
+                        <a
                           href={`/operacoes/nova?lead_id=${lead.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="mt-2 inline-block rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-700"
+                          className={cn(
+                            buttonVariants({ size: 'xs' }),
+                            'mt-2 w-full bg-emerald-600 text-white hover:bg-emerald-700',
+                          )}
                         >
-                          → Virar operação
-                        </Link>
+                          Virar operação
+                          <ArrowRight className="size-3" />
+                        </a>
                       )}
                       {lead.status === 'perdido' && lead.motivo_perda && (
                         <p className="mt-2 border-l-2 border-red-300 pl-2 text-[11px] text-neutral-600 italic">
@@ -217,6 +234,7 @@ export function Kanban({
                       {lead.status === 'ganho' && lead.operacao_id && (
                         <a
                           href={`/operacoes/${lead.operacao_id}`}
+                          onClick={(e) => e.stopPropagation()}
                           className="mt-2 inline-block text-[11px] text-emerald-700 underline"
                         >
                           → Ver operação
@@ -250,49 +268,42 @@ export function Kanban({
         />
       )}
 
-      {modalPerdido && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4"
-          onClick={() => setModalPerdido(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-md border border-neutral-200 bg-white p-6 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold text-neutral-900">Marcar como perdido</h2>
-            <p className="mt-1 text-sm text-neutral-600">
-              Lead: <strong>{modalPerdido.nome}</strong>
-            </p>
-            <label className="mt-4 flex flex-col gap-1 text-sm">
-              <span className="text-xs font-medium text-neutral-700">Motivo *</span>
-              <textarea
-                value={motivoPerda}
-                onChange={(e) => setMotivoPerda(e.target.value)}
-                rows={3}
-                placeholder="Ex: cliente desistiu, valor abaixo do mínimo, fora do ICP"
-                className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-900"
-                autoFocus
-              />
-            </label>
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setModalPerdido(null)}
-                className="rounded-md px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmarPerda}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Confirmar perda
-              </button>
-            </div>
+      <Dialog open={!!modalPerdido} onOpenChange={(open) => !open && setModalPerdido(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marcar como perdido</DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-neutral-600">
+            Lead: <strong className="text-neutral-900">{modalPerdido?.nome}</strong>
+          </p>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="motivo-perda">Motivo *</Label>
+            <Textarea
+              id="motivo-perda"
+              value={motivoPerda}
+              onChange={(e) => setMotivoPerda(e.target.value)}
+              rows={3}
+              placeholder="Ex: cliente desistiu, valor abaixo do mínimo, fora do ICP"
+              autoFocus
+            />
           </div>
-        </div>
-      )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setModalPerdido(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmarPerda}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Confirmar perda
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
