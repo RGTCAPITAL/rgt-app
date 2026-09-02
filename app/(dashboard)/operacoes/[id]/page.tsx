@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { WorkflowStepper } from './workflow-stepper';
 import { DetalheTabs } from './detalhe-tabs';
+import { AcoesEtapa } from './acoes-etapa';
 import { labelEtapa } from '@/lib/workflow';
 import { TIPOS_ATIVO } from '../nova/schemas';
 
@@ -30,6 +31,7 @@ type Operacao = {
   cedente_nome: string;
   cedente_cpf: string;
   observacoes: string | null;
+  preco_aceito: boolean | null;
   etapa_atual: string;
   created_at: string;
   updated_at: string;
@@ -90,7 +92,7 @@ export default async function OperacaoDetalhePage({
        retencao_honorarios_pct, percentual_aquisicao,
        pss_ativo, pss_pct, rra_ativo, rra_meses,
        data_base, data_autuacao, loa,
-       cedente_nome, cedente_cpf, observacoes,
+       cedente_nome, cedente_cpf, observacoes, preco_aceito,
        etapa_atual, created_at, updated_at,
        dono:usuarios!operacoes_dono_id_fkey(nome),
        broker:usuarios!operacoes_broker_id_fkey(nome),
@@ -156,23 +158,13 @@ export default async function OperacaoDetalhePage({
         <WorkflowStepper etapaAtual={op.etapa_atual} />
       </div>
 
-      <div className="mb-6 flex items-center justify-between rounded-md border border-neutral-200 bg-white p-4">
-        <div>
-          <div className="text-sm font-medium text-neutral-900">Ações da operação</div>
-          <div className="text-xs text-neutral-500">
-            {podeAvancar
-              ? 'Mover a operação para a próxima etapa do workflow.'
-              : 'Somente admin/gestão podem mudar etapas.'}
-          </div>
-        </div>
-        <button
-          type="button"
-          disabled
-          title="Fluxo completo de mudança de etapa será implementado na RGT-20."
-          className="cursor-not-allowed rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white opacity-40"
-        >
-          Avançar etapa →
-        </button>
+      <div className="mb-6">
+        <AcoesEtapa
+          operacaoId={op.id}
+          etapaAtual={op.etapa_atual}
+          podeAvancar={podeAvancar}
+          precoAceito={op.preco_aceito}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
