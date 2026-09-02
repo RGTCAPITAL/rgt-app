@@ -411,9 +411,8 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal }: Props) {
           <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
             <h3 className="mb-2 text-sm font-semibold text-neutral-900">Documentos</h3>
             <p className="text-sm text-neutral-600">
-              Upload do <strong>Ofício Requisitório</strong> será liberado quando o Supabase Storage
-              estiver configurado (RGT-22). Por ora, a operação pode ser cadastrada e o ofício
-              anexado depois na tela de detalhe.
+              Após criar a operação, anexe o <strong>Ofício Requisitório</strong> e demais documentos
+              na aba <em>Documentos</em> da tela de detalhe.
             </p>
           </div>
 
@@ -424,12 +423,30 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal }: Props) {
               <ReviewItem label="CPF" value={s1.cedente_cpf} />
               <ReviewItem label="Processo" value={s1.numero_processo} />
               <ReviewItem label="Tipo" value={TIPOS_ATIVO.find((t) => t.value === s1.tipo)?.label ?? '—'} />
+              <ReviewItem label="Natureza" value={NATUREZAS.find((n) => n.value === s1.natureza)?.label ?? '—'} />
               <ReviewItem label="Esfera" value={ESFERAS.find((e) => e.value === s1.esfera)?.label ?? '—'} />
               <ReviewItem label="Tribunal" value={s1.tribunal || '—'} />
               <ReviewItem
                 label="Ente devedor"
                 value={entesDevedores.find((e) => e.id === s1.ente_devedor_id)?.nome ?? '—'}
               />
+              <ReviewItem label="Espécie" value={ESPECIES.find((e) => e.value === s1.especie)?.label ?? '—'} />
+              <ReviewItem label="Data-base" value={s1.data_base ? new Date(s1.data_base).toLocaleDateString('pt-BR') : '—'} />
+              <ReviewItem label="LOA" value={s1.loa || '—'} />
+              <ReviewItem
+                label="Principal"
+                value={Number(s2.valor_principal.replace(',', '.') || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              />
+              <ReviewItem
+                label="Juros"
+                value={Number(s2.valor_juros.replace(',', '.') || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              />
+              <ReviewItem
+                label="SELIC"
+                value={s2.valor_selic ? Number(s2.valor_selic.replace(',', '.')).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}
+              />
+              <ReviewItem label="Retenção honorários" value={`${s2.retencao_honorarios_pct}%`} />
+              <ReviewItem label="Aquisição" value={`${s2.percentual_aquisicao}%`} />
               <ReviewItem
                 label="Valor total"
                 value={valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}

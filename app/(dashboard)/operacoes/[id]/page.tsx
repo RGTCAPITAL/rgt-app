@@ -5,7 +5,7 @@ import { WorkflowStepper } from './workflow-stepper';
 import { DetalheTabs } from './detalhe-tabs';
 import { AcoesEtapa } from './acoes-etapa';
 import { labelEtapa } from '@/lib/workflow';
-import { TIPOS_ATIVO } from '../nova/schemas';
+import { TIPOS_ATIVO, ESPECIES } from '../nova/schemas';
 
 type Operacao = {
   id: string;
@@ -225,7 +225,7 @@ export default async function OperacaoDetalhePage({
             <SideItem label="Tipo" value={labelTipo(op.tipo)} />
             <SideItem label="Esfera" value={<span className="capitalize">{op.esfera}</span>} />
             <SideItem label="Natureza" value={<span className="capitalize">{op.natureza}</span>} />
-            <SideItem label="Espécie" value={op.especie.replace('_', ' ')} />
+            <SideItem label="Espécie" value={ESPECIES.find((e) => e.value === op.especie)?.label ?? op.especie} />
           </SideCard>
 
           <SideCard title="Cedente">
@@ -254,9 +254,6 @@ export default async function OperacaoDetalhePage({
             />
           </SideCard>
 
-          <p className="px-1 text-xs text-neutral-500">
-            Edição inline dos campos: escopo futuro (não RGT-19).
-          </p>
         </aside>
       </div>
     </div>
