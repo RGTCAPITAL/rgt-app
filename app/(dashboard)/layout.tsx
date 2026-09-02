@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { NotifSino, type Notif } from './notif-sino';
 
 const menu = [
   { label: 'Dashboard', href: '/' },
@@ -13,6 +14,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) redirect('/login');
+
+  const { data: notifs } = await supabase
+    .from('notificacoes')
+    .select('id, tipo, titulo, descricao, link, lida_em, created_at')
+    .eq('destinatario', user.id)
+    .order('created_at', { ascending: false })
+    .limit(10)
+    .returns<Notif[]>();
 
   return (
     <div className="flex min-h-screen">
@@ -47,7 +56,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </form>
         </div>
       </aside>
-      <main className="flex-1 p-8">{children}</main>
+      <div className="flex flex-1 flex-col">
+        <header className="flex items-center justify-end border-b border-neutral-200 bg-white px-6 py-2">
+          <NotifSino notifs={notifs ?? []} />
+        </header>
+        <main className="flex-1 p-8">{children}</main>
+      </div>
     </div>
   );
 }
