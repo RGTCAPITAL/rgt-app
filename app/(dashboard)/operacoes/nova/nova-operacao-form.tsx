@@ -203,11 +203,15 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
 
   const entesFiltrados = useMemo(() => {
     if (!s1.esfera) return [];
-    return entesDevedores.filter((e) => e.esfera === s1.esfera && (podeMunicipal || e.esfera !== 'municipal'));
+    return entesDevedores.filter(
+      (e) => e.esfera === s1.esfera && (podeMunicipal || e.esfera !== 'municipal'),
+    );
   }, [entesDevedores, s1.esfera, podeMunicipal]);
 
   const valorTotal = useMemo(() => {
-    return parseNumero(s2.valor_principal) + parseNumero(s2.valor_juros) + parseNumero(s2.valor_selic);
+    return (
+      parseNumero(s2.valor_principal) + parseNumero(s2.valor_juros) + parseNumero(s2.valor_selic)
+    );
   }, [s2.valor_principal, s2.valor_juros, s2.valor_selic]);
 
   function updateS1<K extends keyof Step1State>(key: K, value: Step1State[K]) {
@@ -296,7 +300,8 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
       {rascunhoRestaurado && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
           <span>
-            ✓ Rascunho restaurado ({fmtRascunhoIdade(rascunhoRestaurado.savedAt)}). Continue de onde parou.
+            ✓ Rascunho restaurado ({fmtRascunhoIdade(rascunhoRestaurado.savedAt)}). Continue de onde
+            parou.
           </span>
           <button
             type="button"
@@ -408,7 +413,8 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
             hint={
               !s1.esfera
                 ? 'Selecione a esfera primeiro'
-                : entesFiltrados.find((e) => e.id === s1.ente_devedor_id)?.situacao === 'regime_especial'
+                : entesFiltrados.find((e) => e.id === s1.ente_devedor_id)?.situacao ===
+                    'regime_especial'
                   ? '⚠️ Este ente está em regime especial — RGT normalmente não opera. Só admin consegue salvar.'
                   : undefined
             }
@@ -505,9 +511,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                   onChange={(e) => updateS2('pss_ativo', e.target.checked)}
                   className="h-4 w-4"
                 />
-                <span
-                  title="PSS = contribuição previdenciária retida pelo tribunal. Marque se o precatório do cedente sofre desconto de PSS (comum em servidores públicos). Percentual típico: 11%."
-                >
+                <span title="PSS = contribuição previdenciária retida pelo tribunal. Marque se o precatório do cedente sofre desconto de PSS (comum em servidores públicos). Percentual típico: 11%.">
                   Ativar PSS (Plano de Seguridade Social)
                   <span className="ml-1 cursor-help text-neutral-400">ⓘ</span>
                 </span>
@@ -530,9 +534,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                   onChange={(e) => updateS2('rra_ativo', e.target.checked)}
                   className="h-4 w-4"
                 />
-                <span
-                  title="RRA = Rendimento Recebido Acumuladamente. Marque quando o crédito acumula meses de atraso (regime especial de IR). 0 meses = IR fixo 3%. >0 meses = tabela progressiva sobre valor dividido pelo número de meses."
-                >
+                <span title="RRA = Rendimento Recebido Acumuladamente. Marque quando o crédito acumula meses de atraso (regime especial de IR). 0 meses = IR fixo 3%. >0 meses = tabela progressiva sobre valor dividido pelo número de meses.">
                   Ativar IR / RRA (Rendimento Recebido Acumuladamente)
                   <span className="ml-1 cursor-help text-neutral-400">ⓘ</span>
                 </span>
@@ -565,8 +567,8 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
           <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
             <h3 className="mb-2 text-sm font-semibold text-neutral-900">Documentos</h3>
             <p className="text-sm text-neutral-600">
-              Após criar a operação, anexe o <strong>Ofício Requisitório</strong> e demais documentos
-              na aba <em>Documentos</em> da tela de detalhe.
+              Após criar a operação, anexe o <strong>Ofício Requisitório</strong> e demais
+              documentos na aba <em>Documentos</em> da tela de detalhe.
             </p>
           </div>
 
@@ -576,30 +578,58 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
               <ReviewItem label="Cedente" value={s1.cedente_nome} />
               <ReviewItem label="CPF" value={s1.cedente_cpf} />
               <ReviewItem label="Nascimento" value={fmtDataBR(s1.cedente_data_nascimento)} />
-              <ReviewItem label="Estado civil" value={ESTADOS_CIVIS.find((e) => e.value === s1.cedente_estado_civil)?.label ?? '—'} />
+              <ReviewItem
+                label="Estado civil"
+                value={ESTADOS_CIVIS.find((e) => e.value === s1.cedente_estado_civil)?.label ?? '—'}
+              />
               <ReviewItem label="Processo" value={s1.numero_processo} />
-              <ReviewItem label="Tipo" value={TIPOS_ATIVO.find((t) => t.value === s1.tipo)?.label ?? '—'} />
-              <ReviewItem label="Natureza" value={NATUREZAS.find((n) => n.value === s1.natureza)?.label ?? '—'} />
-              <ReviewItem label="Esfera" value={ESFERAS.find((e) => e.value === s1.esfera)?.label ?? '—'} />
+              <ReviewItem
+                label="Tipo"
+                value={TIPOS_ATIVO.find((t) => t.value === s1.tipo)?.label ?? '—'}
+              />
+              <ReviewItem
+                label="Natureza"
+                value={NATUREZAS.find((n) => n.value === s1.natureza)?.label ?? '—'}
+              />
+              <ReviewItem
+                label="Esfera"
+                value={ESFERAS.find((e) => e.value === s1.esfera)?.label ?? '—'}
+              />
               <ReviewItem label="Tribunal" value={s1.tribunal || '—'} />
               <ReviewItem
                 label="Ente devedor"
                 value={entesDevedores.find((e) => e.id === s1.ente_devedor_id)?.nome ?? '—'}
               />
-              <ReviewItem label="Espécie" value={ESPECIES.find((e) => e.value === s1.especie)?.label ?? '—'} />
+              <ReviewItem
+                label="Espécie"
+                value={ESPECIES.find((e) => e.value === s1.especie)?.label ?? '—'}
+              />
               <ReviewItem label="Data-base" value={fmtDataBR(s1.data_base)} />
               <ReviewItem label="LOA" value={s1.loa || '—'} />
               <ReviewItem
                 label="Principal"
-                value={Number(s2.valor_principal.replace(',', '.') || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                value={Number(s2.valor_principal.replace(',', '.') || 0).toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                })}
               />
               <ReviewItem
                 label="Juros"
-                value={Number(s2.valor_juros.replace(',', '.') || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                value={Number(s2.valor_juros.replace(',', '.') || 0).toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                })}
               />
               <ReviewItem
                 label="SELIC"
-                value={s2.valor_selic ? Number(s2.valor_selic.replace(',', '.')).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}
+                value={
+                  s2.valor_selic
+                    ? Number(s2.valor_selic.replace(',', '.')).toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      })
+                    : '—'
+                }
               />
               <ReviewItem label="Retenção honorários" value={`${s2.retencao_honorarios_pct}%`} />
               <ReviewItem label="Aquisição" value={`${s2.percentual_aquisicao}%`} />
@@ -633,9 +663,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
               {!aceite && <span className="ml-1 text-red-600">*</span>}
             </span>
           </label>
-          {erros.aceite_termos && (
-            <p className="text-xs text-red-600">{erros.aceite_termos}</p>
-          )}
+          {erros.aceite_termos && <p className="text-xs text-red-600">{erros.aceite_termos}</p>}
         </section>
       )}
 
@@ -698,7 +726,9 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
             >
               {done ? '✓' : item.n}
             </span>
-            <span className={`text-sm ${active ? 'font-medium text-neutral-900' : 'text-neutral-500'}`}>
+            <span
+              className={`text-sm ${active ? 'font-medium text-neutral-900' : 'text-neutral-500'}`}
+            >
               {item.label}
             </span>
             {i < items.length - 1 && <span className="mx-2 h-px w-8 bg-neutral-300" />}

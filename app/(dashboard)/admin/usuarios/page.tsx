@@ -46,8 +46,8 @@ export default async function AdminUsuariosPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Usuários</h1>
         <p className="mt-2 text-sm text-neutral-600">
-          {rows.length} usuário{rows.length === 1 ? '' : 's'} cadastrado{rows.length === 1 ? '' : 's'}.
-          Só você (admin) vê essa tela.
+          {rows.length} usuário{rows.length === 1 ? '' : 's'} cadastrado
+          {rows.length === 1 ? '' : 's'}. Só você (admin) vê essa tela.
         </p>
       </div>
 

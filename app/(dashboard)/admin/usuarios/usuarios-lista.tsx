@@ -35,13 +35,7 @@ function corPerfil(slug: string | null): string {
   return 'bg-amber-100 text-amber-800'; // NULL = sem perfil
 }
 
-export function UsuariosLista({
-  usuarios,
-  meuId,
-}: {
-  usuarios: UsuarioRow[];
-  meuId: string;
-}) {
+export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meuId: string }) {
   const [erro, setErro] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [_, startTransition] = useTransition();
@@ -77,14 +71,14 @@ export function UsuariosLista({
       <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+            <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs tracking-wide text-neutral-500 uppercase">
               <tr>
                 <th className="px-4 py-3 font-medium">Nome</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Perfil</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Criado</th>
-                <th className="px-4 py-3 font-medium text-right">Ações</th>
+                <th className="px-4 py-3 text-right font-medium">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">

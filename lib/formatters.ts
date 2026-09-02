@@ -49,4 +49,3 @@ export function titleCase(v: string): string {
     })
     .join(' ');
 }
-

@@ -49,10 +49,7 @@ export async function POST(req: Request) {
   const secretHeader = req.headers.get('x-rgt-secret');
   const secretEnv = process.env.LEADS_WEBHOOK_SECRET;
   if (!secretEnv) {
-    return NextResponse.json(
-      { error: 'server_misconfigured' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'server_misconfigured' }, { status: 500 });
   }
   if (secretHeader !== secretEnv) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -78,9 +75,7 @@ export async function POST(req: Request) {
   // 3. Insere lead com service role (bypass RLS)
   const supabase = createServiceClient();
 
-  const notasFinal = data.mensagem
-    ? `Mensagem do site:\n${data.mensagem}`
-    : null;
+  const notasFinal = data.mensagem ? `Mensagem do site:\n${data.mensagem}` : null;
 
   const { data: lead, error } = await supabase
     .from('leads')

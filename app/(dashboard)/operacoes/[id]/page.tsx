@@ -132,16 +132,33 @@ export default async function OperacaoDetalhePage({
     .eq('operacao_id', id)
     .order('created_at', { ascending: false })
     .returns<
-      { id: string; texto: string; etapa: string | null; created_at: string; autor: { id: string; nome: string | null } | null }[]
+      {
+        id: string;
+        texto: string;
+        etapa: string | null;
+        created_at: string;
+        autor: { id: string; nome: string | null } | null;
+      }[]
     >();
 
   const { data: documentos } = await supabase
     .from('documentos')
-    .select('id, tipo, nome_original, storage_path, tamanho_bytes, uploaded_at, uploaded_by, uploader:usuarios!documentos_uploaded_by_fkey(nome)')
+    .select(
+      'id, tipo, nome_original, storage_path, tamanho_bytes, uploaded_at, uploaded_by, uploader:usuarios!documentos_uploaded_by_fkey(nome)',
+    )
     .eq('operacao_id', id)
     .order('uploaded_at', { ascending: false })
     .returns<
-      { id: string; tipo: string; nome_original: string; storage_path: string; tamanho_bytes: number | null; uploaded_at: string; uploaded_by: string | null; uploader: { nome: string | null } | null }[]
+      {
+        id: string;
+        tipo: string;
+        nome_original: string;
+        storage_path: string;
+        tamanho_bytes: number | null;
+        uploaded_at: string;
+        uploaded_by: string | null;
+        uploader: { nome: string | null } | null;
+      }[]
     >();
 
   const { data: tarefas } = await supabase
@@ -152,7 +169,18 @@ export default async function OperacaoDetalhePage({
     .eq('operacao_id', id)
     .order('created_at', { ascending: false })
     .returns<
-      { id: string; titulo: string; descricao: string | null; destinatario_perfil: string | null; destinatario_id: string | null; prazo: string | null; status: string; created_at: string; criado_por: { nome: string | null } | null; destinatario: { nome: string | null } | null }[]
+      {
+        id: string;
+        titulo: string;
+        descricao: string | null;
+        destinatario_perfil: string | null;
+        destinatario_id: string | null;
+        prazo: string | null;
+        status: string;
+        created_at: string;
+        criado_por: { nome: string | null } | null;
+        destinatario: { nome: string | null } | null;
+      }[]
     >();
 
   const { data: usuariosOpt } = await supabase
@@ -183,7 +211,7 @@ export default async function OperacaoDetalhePage({
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <div className="text-xs uppercase tracking-wide text-neutral-500">Valor total</div>
+            <div className="text-xs tracking-wide text-neutral-500 uppercase">Valor total</div>
             <div className="text-lg font-semibold text-neutral-900">{fmtBRL(op.valor_total)}</div>
           </div>
           <span
@@ -250,7 +278,10 @@ export default async function OperacaoDetalhePage({
             <SideItem label="Tipo" value={labelTipo(op.tipo)} />
             <SideItem label="Esfera" value={<span className="capitalize">{op.esfera}</span>} />
             <SideItem label="Natureza" value={<span className="capitalize">{op.natureza}</span>} />
-            <SideItem label="Espécie" value={ESPECIES.find((e) => e.value === op.especie)?.label ?? op.especie} />
+            <SideItem
+              label="Espécie"
+              value={ESPECIES.find((e) => e.value === op.especie)?.label ?? op.especie}
+            />
           </SideCard>
 
           <SideCard title="Cedente">
@@ -274,7 +305,6 @@ export default async function OperacaoDetalhePage({
             <SideItem label="Criada em" value={fmtDataBR(op.created_at)} />
             <SideItem label="Atualizada" value={fmtDataBR(op.updated_at)} />
           </SideCard>
-
         </aside>
       </div>
     </div>
@@ -284,7 +314,7 @@ export default async function OperacaoDetalhePage({
 function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-md border border-neutral-200 bg-white p-4">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+      <h3 className="mb-3 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
         {title}
       </h3>
       <dl className="space-y-2 text-sm">{children}</dl>

@@ -87,7 +87,11 @@ export function TabComentarios({ operacaoId, usuarioAtualId, isAdmin, comentario
         />
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-neutral-500">
-            {texto.length}/5000 · <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1 text-[10px]">Ctrl+Enter</kbd> pra enviar
+            {texto.length}/5000 ·{' '}
+            <kbd className="rounded border border-neutral-200 bg-neutral-50 px-1 text-[10px]">
+              Ctrl+Enter
+            </kbd>{' '}
+            pra enviar
           </span>
           <button
             type="button"
@@ -132,7 +136,7 @@ export function TabComentarios({ operacaoId, usuarioAtualId, isAdmin, comentario
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-800">{c.texto}</p>
+                  <p className="mt-1 text-sm whitespace-pre-wrap text-neutral-800">{c.texto}</p>
                   {podeApagar && (
                     <button
                       type="button"

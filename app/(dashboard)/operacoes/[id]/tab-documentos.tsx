@@ -39,7 +39,14 @@ function fmtTamanho(b: number | null): string {
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function TabDocumentos({ operacaoId, tipoAtivo, ctxCedente, usuarioAtualId, isAdmin, documentos }: Props) {
+export function TabDocumentos({
+  operacaoId,
+  tipoAtivo,
+  ctxCedente,
+  usuarioAtualId,
+  isAdmin,
+  documentos,
+}: Props) {
   const obrigatorios = new Set(tiposObrigatorios(tipoAtivo, ctxCedente));
   const avisos = avisosCedente(ctxCedente);
   const [erro, setErro] = useState<string | null>(null);
@@ -61,9 +68,14 @@ export function TabDocumentos({ operacaoId, tipoAtivo, ctxCedente, usuarioAtualI
       <div className="flex items-center justify-between rounded-md bg-neutral-50 p-3 text-sm">
         <div>
           <strong className="text-neutral-900">{enviados}</strong>
-          <span className="text-neutral-600"> documento{enviados === 1 ? '' : 's'} enviado{enviados === 1 ? '' : 's'}</span>
+          <span className="text-neutral-600">
+            {' '}
+            documento{enviados === 1 ? '' : 's'} enviado{enviados === 1 ? '' : 's'}
+          </span>
           <span className="mx-2 text-neutral-400">·</span>
-          <strong className="text-neutral-900">{enviadosObrig}/{totalObrig}</strong>
+          <strong className="text-neutral-900">
+            {enviadosObrig}/{totalObrig}
+          </strong>
           <span className="text-neutral-600"> obrigatórios completos</span>
         </div>
         {enviadosObrig === totalObrig && totalObrig > 0 && (
@@ -91,7 +103,7 @@ export function TabDocumentos({ operacaoId, tipoAtivo, ctxCedente, usuarioAtualI
 
       {GRUPOS.map((grupo) => (
         <section key={grupo.key}>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          <h3 className="mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
             {grupo.label}
           </h3>
           <ul className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
@@ -113,8 +125,8 @@ export function TabDocumentos({ operacaoId, tipoAtivo, ctxCedente, usuarioAtualI
       ))}
 
       <p className="text-xs text-neutral-500">
-        Máximo 20MB por arquivo. Formatos aceitos: PDF, PNG, JPG, DOCX. Downloads geram
-        link temporário de 60 segundos.
+        Máximo 20MB por arquivo. Formatos aceitos: PDF, PNG, JPG, DOCX. Downloads geram link
+        temporário de 60 segundos.
       </p>
     </div>
   );

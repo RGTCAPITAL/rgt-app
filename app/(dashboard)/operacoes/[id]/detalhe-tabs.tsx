@@ -189,10 +189,7 @@ function TabDetalhes({ op }: { op: OperacaoDetalhes }) {
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <Item label="Retenção de honorários" value={fmtPct(op.retencao_honorarios_pct)} />
           <Item label="Percentual de aquisição" value={fmtPct(op.percentual_aquisicao)} />
-          <Item
-            label="PSS"
-            value={op.pss_ativo ? `Ativo — ${fmtPct(op.pss_pct)}` : 'Não aplica'}
-          />
+          <Item label="PSS" value={op.pss_ativo ? `Ativo — ${fmtPct(op.pss_pct)}` : 'Não aplica'} />
           <Item
             label="IR / RRA"
             value={
@@ -218,7 +215,7 @@ function TabDetalhes({ op }: { op: OperacaoDetalhes }) {
       {op.observacoes && (
         <section>
           <h3 className="mb-2 text-sm font-semibold text-neutral-900">Observações</h3>
-          <p className="whitespace-pre-wrap rounded-md bg-neutral-50 p-3 text-sm text-neutral-700">
+          <p className="rounded-md bg-neutral-50 p-3 text-sm whitespace-pre-wrap text-neutral-700">
             {op.observacoes}
           </p>
         </section>
@@ -247,11 +244,9 @@ function TabHistorico({ historico }: { historico: EtapaHistorico[] }) {
             </div>
             <div className="flex-1 pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-neutral-900">
-                  {labelEtapa(h.etapa)}
-                </span>
+                <span className="text-sm font-medium text-neutral-900">{labelEtapa(h.etapa)}</span>
                 {atual && (
-                  <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+                  <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-medium tracking-wide text-white uppercase">
                     Atual
                   </span>
                 )}
@@ -260,11 +255,11 @@ function TabHistorico({ historico }: { historico: EtapaHistorico[] }) {
                 Entrou em {fmtDataHora(h.entrou_em)}
                 {h.autorizado_por?.nome && ` · por ${h.autorizado_por.nome}`}
                 {' · '}
-                {atual ? `há ${diffDuracao(h.entrou_em, null)}` : `permaneceu ${diffDuracao(h.entrou_em, h.saiu_em)}`}
+                {atual
+                  ? `há ${diffDuracao(h.entrou_em, null)}`
+                  : `permaneceu ${diffDuracao(h.entrou_em, h.saiu_em)}`}
               </p>
-              {h.observacao && (
-                <p className="mt-1 text-sm text-neutral-700">{h.observacao}</p>
-              )}
+              {h.observacao && <p className="mt-1 text-sm text-neutral-700">{h.observacao}</p>}
             </div>
           </li>
         );

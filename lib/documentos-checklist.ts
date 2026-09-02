@@ -42,8 +42,8 @@ export function labelTipoDoc(tipo: string): string {
  * Contexto do cedente pra derivar obrigatórios contextuais.
  */
 export type ContextoCedente = {
-  dataNascimento?: string | null;  // ISO yyyy-mm-dd
-  estadoCivil?: string | null;     // 'solteiro' | 'casado' | ...
+  dataNascimento?: string | null; // ISO yyyy-mm-dd
+  estadoCivil?: string | null; // 'solteiro' | 'casado' | ...
 };
 
 function calcularIdade(dataNascISO: string): number {

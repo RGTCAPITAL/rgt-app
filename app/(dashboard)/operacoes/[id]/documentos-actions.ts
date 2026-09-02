@@ -9,8 +9,7 @@ const MAX_BYTES = 20 * 1024 * 1024; // 20MB (mesmo do bucket)
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
-const isTipoValido = (v: string): v is TipoDocumento =>
-  TIPOS_DOCUMENTO.some((t) => t.value === v);
+const isTipoValido = (v: string): v is TipoDocumento => TIPOS_DOCUMENTO.some((t) => t.value === v);
 
 export async function uploadDocumento(formData: FormData): Promise<Result<{ id: string }>> {
   const operacaoId = String(formData.get('operacao_id') ?? '');
@@ -24,7 +23,10 @@ export async function uploadDocumento(formData: FormData): Promise<Result<{ id: 
     return { ok: false, error: 'Selecione um arquivo.' };
   }
   if (file.size > MAX_BYTES) {
-    return { ok: false, error: `Arquivo maior que 20MB (${(file.size / 1024 / 1024).toFixed(1)}MB).` };
+    return {
+      ok: false,
+      error: `Arquivo maior que 20MB (${(file.size / 1024 / 1024).toFixed(1)}MB).`,
+    };
   }
 
   const supabase = await createClient();
@@ -67,10 +69,7 @@ export async function uploadDocumento(formData: FormData): Promise<Result<{ id: 
   return { ok: true, data: { id: inserted.id } };
 }
 
-export async function deletarDocumento(
-  operacaoId: string,
-  documentoId: string,
-): Promise<Result> {
+export async function deletarDocumento(operacaoId: string, documentoId: string): Promise<Result> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -104,7 +103,11 @@ export async function deletarDocumento(
     .maybeSingle();
 
   if (delDbErr) return { ok: false, error: delDbErr.message };
-  if (!deleted) return { ok: false, error: 'Sem permissão pra apagar este documento (só o uploader ou admin).' };
+  if (!deleted)
+    return {
+      ok: false,
+      error: 'Sem permissão pra apagar este documento (só o uploader ou admin).',
+    };
 
   const { error: delStorageErr } = await supabase.storage.from(BUCKET).remove([doc.storage_path]);
   if (delStorageErr) {
@@ -116,18 +119,14 @@ export async function deletarDocumento(
   return { ok: true };
 }
 
-export async function getSignedUrl(
-  storagePath: string,
-): Promise<Result<{ url: string }>> {
+export async function getSignedUrl(storagePath: string): Promise<Result<{ url: string }>> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: 'Sessão expirada.' };
 
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(storagePath, 60);
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60);
 
   if (error || !data) return { ok: false, error: error?.message ?? 'Falha ao gerar URL.' };
   return { ok: true, data: { url: data.signedUrl } };

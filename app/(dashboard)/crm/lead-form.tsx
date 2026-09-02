@@ -26,7 +26,7 @@ type Props = {
   donos: DonoOption[];
   meuId: string;
   isAdmin: boolean;
-  editando?: LeadEdit;  // se passado, é edição; senão criação
+  editando?: LeadEdit; // se passado, é edição; senão criação
 };
 
 function fmtTelefone(v: string): string {
@@ -77,9 +77,7 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
     };
 
     startTransition(async () => {
-      const res = editando
-        ? await atualizarLead(editando.id, payload)
-        : await criarLead(payload);
+      const res = editando ? await atualizarLead(editando.id, payload) : await criarLead(payload);
       if (!res.ok) {
         setErro(res.error);
         return;
@@ -237,7 +235,11 @@ function StatusVinculo({ lead }: { lead: LeadEdit }) {
   const perdido = lead.status === 'perdido' && lead.motivo_perda;
 
   function converter(e: React.MouseEvent) {
-    if (!confirm(`Converter "${lead.nome}" em operação? Você será levado ao formulário com os dados pré-preenchidos.`)) {
+    if (
+      !confirm(
+        `Converter "${lead.nome}" em operação? Você será levado ao formulário com os dados pré-preenchidos.`,
+      )
+    ) {
       e.preventDefault();
     }
   }
@@ -247,7 +249,9 @@ function StatusVinculo({ lead }: { lead: LeadEdit }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-neutral-500">Status:</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${stat?.cor ?? 'bg-neutral-100 text-neutral-700'}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${stat?.cor ?? 'bg-neutral-100 text-neutral-700'}`}
+          >
             {stat?.label ?? lead.status}
           </span>
         </div>
@@ -270,7 +274,7 @@ function StatusVinculo({ lead }: { lead: LeadEdit }) {
         )}
       </div>
       {perdido && (
-        <p className="mt-2 border-l-2 border-red-300 pl-2 text-xs italic text-neutral-600">
+        <p className="mt-2 border-l-2 border-red-300 pl-2 text-xs text-neutral-600 italic">
           Motivo: {lead.motivo_perda}
         </p>
       )}

@@ -21,7 +21,10 @@ export async function criarTarefa(payload: {
   if (!payload.destinatarioPerfil && !payload.destinatarioId) {
     return { ok: false, error: 'Escolha um destinatário (perfil ou pessoa).' };
   }
-  if (payload.destinatarioPerfil && !PERFIS.includes(payload.destinatarioPerfil as (typeof PERFIS)[number])) {
+  if (
+    payload.destinatarioPerfil &&
+    !PERFIS.includes(payload.destinatarioPerfil as (typeof PERFIS)[number])
+  ) {
     return { ok: false, error: 'Perfil inválido.' };
   }
 
@@ -48,10 +51,7 @@ export async function criarTarefa(payload: {
   return { ok: true };
 }
 
-export async function atualizarStatusTarefa(
-  tarefaId: string,
-  novoStatus: string,
-): Promise<Result> {
+export async function atualizarStatusTarefa(tarefaId: string, novoStatus: string): Promise<Result> {
   if (!STATUS.includes(novoStatus as (typeof STATUS)[number])) {
     return { ok: false, error: 'Status inválido.' };
   }

@@ -91,22 +91,15 @@ export const step2Schema = z
       .string()
       .optional()
       .or(z.literal(''))
-      .refine(
-        (v) => !v || Number(v.replace(',', '.')) >= 0,
-        'Valor inválido',
-      ),
-    retencao_honorarios_pct: z
-      .string()
-      .refine((v) => {
-        const n = Number(v.replace(',', '.'));
-        return n >= 0 && n <= 100;
-      }, 'Percentual entre 0 e 100'),
-    percentual_aquisicao: z
-      .string()
-      .refine((v) => {
-        const n = Number(v.replace(',', '.'));
-        return n > 0 && n <= 100;
-      }, 'Percentual entre 0 (exclusive) e 100'),
+      .refine((v) => !v || Number(v.replace(',', '.')) >= 0, 'Valor inválido'),
+    retencao_honorarios_pct: z.string().refine((v) => {
+      const n = Number(v.replace(',', '.'));
+      return n >= 0 && n <= 100;
+    }, 'Percentual entre 0 e 100'),
+    percentual_aquisicao: z.string().refine((v) => {
+      const n = Number(v.replace(',', '.'));
+      return n > 0 && n <= 100;
+    }, 'Percentual entre 0 (exclusive) e 100'),
     pss_ativo: z.boolean(),
     pss_pct: z.string().optional().or(z.literal('')),
     rra_ativo: z.boolean(),

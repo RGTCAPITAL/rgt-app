@@ -98,8 +98,10 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <span className="text-sm text-neutral-600">
-          {abertas.length} tarefa{abertas.length === 1 ? '' : 's'} aberta{abertas.length === 1 ? '' : 's'}
-          {fechadas.length > 0 && ` · ${fechadas.length} fechada${fechadas.length === 1 ? '' : 's'}`}
+          {abertas.length} tarefa{abertas.length === 1 ? '' : 's'} aberta
+          {abertas.length === 1 ? '' : 's'}
+          {fechadas.length > 0 &&
+            ` · ${fechadas.length} fechada${fechadas.length === 1 ? '' : 's'}`}
         </span>
         <button
           type="button"
@@ -135,7 +137,9 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${stat.cor}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${stat.cor}`}
+                      >
                         {stat.label}
                       </span>
                       {atrasada && (
@@ -146,7 +150,9 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
                       <span className="font-medium text-neutral-900">{t.titulo}</span>
                     </div>
                     {t.descricao && (
-                      <p className="mt-1 whitespace-pre-wrap text-xs text-neutral-700">{t.descricao}</p>
+                      <p className="mt-1 text-xs whitespace-pre-wrap text-neutral-700">
+                        {t.descricao}
+                      </p>
                     )}
                     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-neutral-500">
                       {t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>}

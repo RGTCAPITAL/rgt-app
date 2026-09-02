@@ -8,7 +8,8 @@ type Result = { ok: true } | { ok: false; error: string };
 export async function criarComentario(operacaoId: string, texto: string): Promise<Result> {
   const conteudo = texto.trim();
   if (!conteudo) return { ok: false, error: 'Comentário vazio.' };
-  if (conteudo.length > 5000) return { ok: false, error: 'Comentário muito longo (máx 5000 caracteres).' };
+  if (conteudo.length > 5000)
+    return { ok: false, error: 'Comentário muito longo (máx 5000 caracteres).' };
 
   const supabase = await createClient();
 

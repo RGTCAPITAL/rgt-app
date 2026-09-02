@@ -1,13 +1,14 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const AUTH_ROUTES = ['/login', '/cadastro', '/esqueci-senha', '/redefinir-senha', '/verifique-email'];
-const PUBLIC_ROUTES = [
-  ...AUTH_ROUTES,
-  '/auth/callback',
-  '/auth/signout',
-  '/api/leads/webhook',
+const AUTH_ROUTES = [
+  '/login',
+  '/cadastro',
+  '/esqueci-senha',
+  '/redefinir-senha',
+  '/verifique-email',
 ];
+const PUBLIC_ROUTES = [...AUTH_ROUTES, '/auth/callback', '/auth/signout', '/api/leads/webhook'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

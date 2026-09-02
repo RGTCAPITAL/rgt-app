@@ -26,10 +26,7 @@ export const leadFormSchema = z.object({
     .optional()
     .or(z.literal(''))
     .transform((v) => (v ? somenteDigitos(v) : ''))
-    .refine(
-      (v) => !v || v.length === 11 || v.length === 14,
-      'CPF (11) ou CNPJ (14) dígitos',
-    ),
+    .refine((v) => !v || v.length === 11 || v.length === 14, 'CPF (11) ou CNPJ (14) dígitos'),
   origem: z.enum(['whatsapp', 'site', 'indicacao', 'linkedin', 'evento', 'outro']),
   dono_id: z.string().uuid().optional().or(z.literal('')),
   notas: z.string().trim().optional().or(z.literal('')),

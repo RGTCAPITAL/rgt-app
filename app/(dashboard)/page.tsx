@@ -22,7 +22,11 @@ type OpResumo = {
 };
 
 function fmtBRL(v: number): string {
-  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  return Number(v).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  });
 }
 function fmtRel(iso: string): string {
   const d = new Date(iso);
@@ -63,7 +67,8 @@ export default async function DashboardPage() {
         <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
           <h3 className="font-semibold">⚠️ Aguardando definição de perfil</h3>
           <p className="mt-2">
-            Sua conta foi criada mas ainda não tem perfil. Peça pro admin te promover em <code>/admin/usuarios</code>.
+            Sua conta foi criada mas ainda não tem perfil. Peça pro admin te promover em{' '}
+            <code>/admin/usuarios</code>.
           </p>
         </div>
       </div>
@@ -98,7 +103,11 @@ export default async function DashboardPage() {
             sub={`${ddJuridica?.length ?? 0} operações listadas abaixo`}
           />
         </div>
-        <SectionOps titulo="Sua fila de due diligence" ops={ddJuridica ?? []} vazio="Nenhuma operação aguardando parecer jurídico agora." />
+        <SectionOps
+          titulo="Sua fila de due diligence"
+          ops={ddJuridica ?? []}
+          vazio="Nenhuma operação aguardando parecer jurídico agora."
+        />
       </div>
     );
   }
@@ -114,7 +123,9 @@ export default async function DashboardPage() {
       .limit(10)
       .returns<OpResumo[]>();
 
-    const emAndamento = (minhas ?? []).filter((o) => o.etapa_atual !== 'finalizada' && o.etapa_atual !== 'cancelada');
+    const emAndamento = (minhas ?? []).filter(
+      (o) => o.etapa_atual !== 'finalizada' && o.etapa_atual !== 'cancelada',
+    );
     const valorTotalPipeline = emAndamento.reduce((a, o) => a + Number(o.valor_total || 0), 0);
     const finalizadas = (minhas ?? []).filter((o) => o.etapa_atual === 'finalizada').length;
 
@@ -122,11 +133,19 @@ export default async function DashboardPage() {
       <div>
         <Header primeiroNome={primeiroNome} perfilLabel="Broker" cta />
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Kpi label="Em andamento" valor={String(emAndamento.length)} sub="operações suas ativas" />
+          <Kpi
+            label="Em andamento"
+            valor={String(emAndamento.length)}
+            sub="operações suas ativas"
+          />
           <Kpi label="Pipeline" valor={fmtBRL(valorTotalPipeline)} sub="valor total em andamento" />
           <Kpi label="Finalizadas (recentes)" valor={String(finalizadas)} sub="nas últimas 10" />
         </div>
-        <SectionOps titulo="Suas operações recentes" ops={(minhas ?? []).slice(0, 5)} vazio="Você ainda não cadastrou nenhuma operação. Comece pelo botão acima." />
+        <SectionOps
+          titulo="Suas operações recentes"
+          ops={(minhas ?? []).slice(0, 5)}
+          vazio="Você ainda não cadastrou nenhuma operação. Comece pelo botão acima."
+        />
       </div>
     );
   }
@@ -135,51 +154,52 @@ export default async function DashboardPage() {
   const seteDiasAtras = new Date(Date.now() - 7 * 86400000).toISOString();
   const quatorzeDiasAtras = new Date(Date.now() - 14 * 86400000).toISOString();
 
-  const [abertas, aceitePendente, prontasPagamento, ddTravada, ultimasCriadas, leadsAbertos] = await Promise.all([
-    supabase
-      .from('operacoes')
-      .select('id, valor_total', { count: 'exact' })
-      .not('etapa_atual', 'in', '(finalizada,cancelada)')
-      .returns<{ id: string; valor_total: number }[]>(),
-    supabase
-      .from('operacoes')
-      .select(
-        'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
-      )
-      .eq('etapa_atual', 'aceite')
-      .lt('updated_at', seteDiasAtras)
-      .order('updated_at', { ascending: true })
-      .returns<OpResumo[]>(),
-    supabase
-      .from('operacoes')
-      .select(
-        'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
-      )
-      .eq('etapa_atual', 'pagamento')
-      .order('updated_at', { ascending: true })
-      .returns<OpResumo[]>(),
-    supabase
-      .from('operacoes')
-      .select(
-        'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
-      )
-      .in('etapa_atual', ['due_diligence_juridica', 'due_diligence_fiscal'])
-      .lt('updated_at', quatorzeDiasAtras)
-      .order('updated_at', { ascending: true })
-      .returns<OpResumo[]>(),
-    supabase
-      .from('operacoes')
-      .select(
-        'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
-      )
-      .order('created_at', { ascending: false })
-      .limit(5)
-      .returns<OpResumo[]>(),
-    supabase
-      .from('leads')
-      .select('id, status', { count: 'exact', head: true })
-      .not('status', 'in', '(ganho,perdido)'),
-  ]);
+  const [abertas, aceitePendente, prontasPagamento, ddTravada, ultimasCriadas, leadsAbertos] =
+    await Promise.all([
+      supabase
+        .from('operacoes')
+        .select('id, valor_total', { count: 'exact' })
+        .not('etapa_atual', 'in', '(finalizada,cancelada)')
+        .returns<{ id: string; valor_total: number }[]>(),
+      supabase
+        .from('operacoes')
+        .select(
+          'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
+        )
+        .eq('etapa_atual', 'aceite')
+        .lt('updated_at', seteDiasAtras)
+        .order('updated_at', { ascending: true })
+        .returns<OpResumo[]>(),
+      supabase
+        .from('operacoes')
+        .select(
+          'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
+        )
+        .eq('etapa_atual', 'pagamento')
+        .order('updated_at', { ascending: true })
+        .returns<OpResumo[]>(),
+      supabase
+        .from('operacoes')
+        .select(
+          'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
+        )
+        .in('etapa_atual', ['due_diligence_juridica', 'due_diligence_fiscal'])
+        .lt('updated_at', quatorzeDiasAtras)
+        .order('updated_at', { ascending: true })
+        .returns<OpResumo[]>(),
+      supabase
+        .from('operacoes')
+        .select(
+          'id, numero_processo, cedente_nome, tipo, etapa_atual, valor_total, preco_aceito, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
+        )
+        .order('created_at', { ascending: false })
+        .limit(5)
+        .returns<OpResumo[]>(),
+      supabase
+        .from('leads')
+        .select('id, status', { count: 'exact', head: true })
+        .not('status', 'in', '(ganho,perdido)'),
+    ]);
 
   const totalAbertas = abertas.count ?? 0;
   const totalPipeline = (abertas.data ?? []).reduce((a, o) => a + Number(o.valor_total || 0), 0);
@@ -189,17 +209,36 @@ export default async function DashboardPage() {
   const recentes = ultimasCriadas.data ?? [];
   const totalLeadsAbertos = leadsAbertos.count ?? 0;
 
-  const filaAtencao = [...aceitesAntigos, ...ddTravadas].sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  const filaAtencao = [...aceitesAntigos, ...ddTravadas].sort((a, b) =>
+    a.updated_at.localeCompare(b.updated_at),
+  );
 
   return (
     <div>
-      <Header primeiroNome={primeiroNome} perfilLabel={usuario?.perfis?.nome ?? 'Admin/Gestão'} cta />
+      <Header
+        primeiroNome={primeiroNome}
+        perfilLabel={usuario?.perfis?.nome ?? 'Admin/Gestão'}
+        cta
+      />
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Kpi label="Operações abertas" valor={String(totalAbertas)} sub="fora de finalizada/cancelada" />
+        <Kpi
+          label="Operações abertas"
+          valor={String(totalAbertas)}
+          sub="fora de finalizada/cancelada"
+        />
         <Kpi label="Pipeline" valor={fmtBRL(totalPipeline)} sub="valor total em andamento" />
-        <Kpi label="Prontas pra pagar" valor={String(prontas.length)} sub={prontas.length === 1 ? '1 operação' : `${prontas.length} operações`} />
-        <Kpi label="Leads em aberto" valor={String(totalLeadsAbertos)} sub="pipeline CRM" linkPara="/crm" />
+        <Kpi
+          label="Prontas pra pagar"
+          valor={String(prontas.length)}
+          sub={prontas.length === 1 ? '1 operação' : `${prontas.length} operações`}
+        />
+        <Kpi
+          label="Leads em aberto"
+          valor={String(totalLeadsAbertos)}
+          sub="pipeline CRM"
+          linkPara="/crm"
+        />
       </div>
 
       {filaAtencao.length > 0 && (
@@ -212,14 +251,14 @@ export default async function DashboardPage() {
       )}
 
       {prontas.length > 0 && (
-        <SectionOps
-          titulo="💰 Prontas pra pagamento"
-          ops={prontas}
-          vazio=""
-        />
+        <SectionOps titulo="💰 Prontas pra pagamento" ops={prontas} vazio="" />
       )}
 
-      <SectionOps titulo="🆕 Últimas cadastradas" ops={recentes} vazio="Nenhuma operação cadastrada ainda." />
+      <SectionOps
+        titulo="🆕 Últimas cadastradas"
+        ops={recentes}
+        vazio="Nenhuma operação cadastrada ainda."
+      />
     </div>
   );
 }
@@ -270,7 +309,7 @@ function Kpi({
 }) {
   const inner = (
     <div className="rounded-md border border-neutral-200 bg-white p-4 transition-shadow hover:shadow-sm">
-      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="text-xs tracking-wide text-neutral-500 uppercase">{label}</div>
       <div className="mt-1 text-2xl font-bold text-neutral-900">{valor}</div>
       {sub && <div className="mt-0.5 text-xs text-neutral-500">{sub}</div>}
     </div>
@@ -313,7 +352,8 @@ function SectionOps({
                       {op.numero_processo}
                     </Link>
                     <div className="text-xs text-neutral-500">
-                      {op.cedente_nome} · {TIPOS_ATIVO.find((t) => t.value === op.tipo)?.label ?? op.tipo}
+                      {op.cedente_nome} ·{' '}
+                      {TIPOS_ATIVO.find((t) => t.value === op.tipo)?.label ?? op.tipo}
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-right">
@@ -323,10 +363,12 @@ function SectionOps({
                     <div className="text-xs text-neutral-500">{op.dono?.nome ?? '—'}</div>
                   </td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${corEtapa(op.etapa_atual)}`}>
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${corEtapa(op.etapa_atual)}`}
+                    >
                       {labelEtapa(op.etapa_atual)}
                     </span>
-                    <div className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
+                    <div className="mt-0.5 text-[10px] tracking-wide text-neutral-400 uppercase">
                       {fmtRel(op.updated_at)}
                     </div>
                   </td>

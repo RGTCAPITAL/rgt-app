@@ -48,4 +48,3 @@ export function transicoesPermitidas(atual: string): Etapa[] {
 
   return opcoes;
 }
-

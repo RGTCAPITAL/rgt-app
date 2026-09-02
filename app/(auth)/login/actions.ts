@@ -21,9 +21,7 @@ export async function signIn(formData: FormData) {
     // Rate-limit e "email not confirmed" vão traduzidos; resto cai no genérico por segurança
     const lower = error.message.toLowerCase();
     const usuario_amigavel =
-      lower.includes('email not confirmed') ||
-      lower.includes('rate') ||
-      lower.includes('after')
+      lower.includes('email not confirmed') || lower.includes('rate') || lower.includes('after')
         ? traduzirErroAuth(error.message)
         : 'Email ou senha inválidos';
     redirect(`/login?error=${encodeURIComponent(usuario_amigavel)}&email=${emailParam}`);

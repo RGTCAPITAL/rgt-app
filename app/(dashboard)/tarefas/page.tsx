@@ -101,10 +101,30 @@ export default async function TarefasPage({
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Kpi label="Total abertas" valor={String(abertas.length)} sub="pendentes + em andamento" href="/tarefas" />
-        <Kpi label="Em andamento" valor={String(emAndamento.length)} sub="sendo trabalhadas" href="/tarefas?status=em_andamento" />
-        <Kpi label="Atrasadas" valor={String(atrasadas.length)} sub="prazo passou" alerta={atrasadas.length > 0} />
-        <Kpi label="Concluídas" valor={String(concluidas.length)} sub="últimas concluídas" href="/tarefas?status=concluida" />
+        <Kpi
+          label="Total abertas"
+          valor={String(abertas.length)}
+          sub="pendentes + em andamento"
+          href="/tarefas"
+        />
+        <Kpi
+          label="Em andamento"
+          valor={String(emAndamento.length)}
+          sub="sendo trabalhadas"
+          href="/tarefas?status=em_andamento"
+        />
+        <Kpi
+          label="Atrasadas"
+          valor={String(atrasadas.length)}
+          sub="prazo passou"
+          alerta={atrasadas.length > 0}
+        />
+        <Kpi
+          label="Concluídas"
+          valor={String(concluidas.length)}
+          sub="últimas concluídas"
+          href="/tarefas?status=concluida"
+        />
       </div>
 
       {listaFinal.length === 0 ? (
@@ -121,13 +141,17 @@ export default async function TarefasPage({
                 key={t.id}
                 href={`/operacoes/${t.operacao?.id ?? ''}`}
                 className={`block rounded-md border p-3 text-sm transition-colors ${
-                  atrasada ? 'border-red-300 bg-red-50/50 hover:bg-red-50' : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                  atrasada
+                    ? 'border-red-300 bg-red-50/50 hover:bg-red-50'
+                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${stat.cor}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${stat.cor}`}
+                      >
                         {stat.label}
                       </span>
                       {atrasada && (
@@ -182,11 +206,19 @@ function Kpi({
   }`;
   const inner = (
     <div className={cls}>
-      <div className={`text-xs uppercase tracking-wide ${alerta ? 'text-red-700' : 'text-neutral-500'}`}>
+      <div
+        className={`text-xs tracking-wide uppercase ${alerta ? 'text-red-700' : 'text-neutral-500'}`}
+      >
         {label}
       </div>
-      <div className={`mt-1 text-2xl font-bold ${alerta ? 'text-red-900' : 'text-neutral-900'}`}>{valor}</div>
-      {sub && <div className={`mt-0.5 text-xs ${alerta ? 'text-red-700' : 'text-neutral-500'}`}>{sub}</div>}
+      <div className={`mt-1 text-2xl font-bold ${alerta ? 'text-red-900' : 'text-neutral-900'}`}>
+        {valor}
+      </div>
+      {sub && (
+        <div className={`mt-0.5 text-xs ${alerta ? 'text-red-700' : 'text-neutral-500'}`}>
+          {sub}
+        </div>
+      )}
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;

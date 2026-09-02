@@ -20,7 +20,5 @@ export async function updatePassword(formData: FormData) {
     redirect(`/redefinir-senha?error=${encodeURIComponent(traduzirErroAuth(error.message))}`);
   }
 
-  redirect(
-    `/login?message=${encodeURIComponent('Senha atualizada. Entre com a nova senha.')}`,
-  );
+  redirect(`/login?message=${encodeURIComponent('Senha atualizada. Entre com a nova senha.')}`);
 }

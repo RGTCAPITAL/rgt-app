@@ -7,11 +7,7 @@ import { ORIGEM_LEAD } from '@/lib/leads';
 
 type SearchParams = { origem?: string; dono?: string };
 
-export default async function CrmPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
+export default async function CrmPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const supabase = await createClient();
   const {
@@ -36,9 +32,8 @@ export default async function CrmPage({
   if (params.origem) query = query.eq('origem', params.origem);
   if (params.dono) query = query.eq('dono_id', params.dono);
 
-  const { data: leads, error } = await query.returns<
-    (LeadCard & { dono: { id: string; nome: string | null } | null })[]
-  >();
+  const { data: leads, error } =
+    await query.returns<(LeadCard & { dono: { id: string; nome: string | null } | null })[]>();
 
   // Todos os donos possíveis (não só os que já têm lead) — pra dropdown do form
   const { data: donosTodos } = await supabase
@@ -51,9 +46,7 @@ export default async function CrmPage({
   // Filtro de dono usa só os que têm lead (evita ruído)
   const donosNoResultado = Array.from(
     new Map(
-      (leads ?? [])
-        .filter((l) => l.dono?.id)
-        .map((l) => [l.dono!.id, l.dono!.nome ?? '—']),
+      (leads ?? []).filter((l) => l.dono?.id).map((l) => [l.dono!.id, l.dono!.nome ?? '—']),
     ).entries(),
   );
 
@@ -124,12 +117,7 @@ export default async function CrmPage({
         </div>
       )}
 
-      <CrmShell
-        leads={leads ?? []}
-        donos={donosTodos ?? []}
-        meuId={user.id}
-        isAdmin={isAdmin}
-      />
+      <CrmShell leads={leads ?? []} donos={donosTodos ?? []} meuId={user.id} isAdmin={isAdmin} />
     </div>
   );
 }

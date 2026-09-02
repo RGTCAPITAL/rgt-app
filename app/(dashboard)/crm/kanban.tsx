@@ -33,7 +33,12 @@ function fmtRel(iso: string): string {
 
 function iniciais(nome: string | null): string {
   if (!nome) return '?';
-  return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
+  return nome
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
 }
 
 export function Kanban({
@@ -171,7 +176,9 @@ export function Kanban({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-medium text-neutral-900">{lead.nome}</span>
-                        <span className="text-[10px] text-neutral-400">{fmtRel(lead.created_at)}</span>
+                        <span className="text-[10px] text-neutral-400">
+                          {fmtRel(lead.created_at)}
+                        </span>
                       </div>
                       {(lead.telefone || lead.email) && (
                         <div className="mt-1 text-xs text-neutral-600">
@@ -203,7 +210,7 @@ export function Kanban({
                         </Link>
                       )}
                       {lead.status === 'perdido' && lead.motivo_perda && (
-                        <p className="mt-2 border-l-2 border-red-300 pl-2 text-[11px] italic text-neutral-600">
+                        <p className="mt-2 border-l-2 border-red-300 pl-2 text-[11px] text-neutral-600 italic">
                           {lead.motivo_perda}
                         </p>
                       )}

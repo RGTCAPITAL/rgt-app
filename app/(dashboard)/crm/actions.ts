@@ -37,7 +37,7 @@ export async function criarLead(payload: Record<string, unknown>): Promise<Resul
     cpf_cnpj: parsed.data.cpf_cnpj || null,
     origem: parsed.data.origem,
     notas: parsed.data.notas || null,
-    dono_id: isBroker ? user.id : (parsed.data.dono_id || null),
+    dono_id: isBroker ? user.id : parsed.data.dono_id || null,
     status: 'novo' as const,
   };
 

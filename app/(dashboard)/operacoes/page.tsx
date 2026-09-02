@@ -106,7 +106,10 @@ export default async function OperacoesPage({
   if (params.q) {
     // Sanitiza input: remove chars com semântica no PostgREST/ilike
     // ( ) , * = filtros lógicos; % _ = wildcards do LIKE; " ' \ = escape
-    const busca = params.q.trim().replace(/[,()*=%_\\"']/g, '').slice(0, 100);
+    const busca = params.q
+      .trim()
+      .replace(/[,()*=%_\\"']/g, '')
+      .slice(0, 100);
     if (busca) {
       query = query.or(`numero_processo.ilike.%${busca}%,cedente_nome.ilike.%${busca}%`);
     }
@@ -240,7 +243,7 @@ export default async function OperacoesPage({
         <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500">
+              <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs tracking-wide text-neutral-500 uppercase">
                 <tr>
                   <Th>Nº processo</Th>
                   <Th>Cedente</Th>
@@ -313,7 +316,15 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
   return <th className={`px-4 py-3 font-medium ${className ?? ''}`}>{children}</th>;
 }
 
-function Td({ children, className, title }: { children: React.ReactNode; className?: string; title?: string }) {
+function Td({
+  children,
+  className,
+  title,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
   return (
     <td className={`px-4 py-3 ${className ?? ''}`} title={title}>
       {children}

@@ -12,9 +12,7 @@ type PayloadNovaOperacao = {
   leadId?: string;
 };
 
-export type CriarOperacaoResult =
-  | { ok: true; id: string }
-  | { ok: false; error: string };
+export type CriarOperacaoResult = { ok: true; id: string } | { ok: false; error: string };
 
 function parseNumero(v: unknown): number {
   return Number(String(v ?? '').replace(',', '.'));
@@ -22,7 +20,8 @@ function parseNumero(v: unknown): number {
 
 export async function criarOperacao(payload: PayloadNovaOperacao): Promise<CriarOperacaoResult> {
   const s1 = step1Schema.safeParse(payload.step1);
-  if (!s1.success) return { ok: false, error: 'Dados do ativo inválidos: ' + s1.error.issues[0]?.message };
+  if (!s1.success)
+    return { ok: false, error: 'Dados do ativo inválidos: ' + s1.error.issues[0]?.message };
 
   const s2 = step2Schema.safeParse(payload.step2);
   if (!s2.success) return { ok: false, error: 'Valores inválidos: ' + s2.error.issues[0]?.message };
@@ -100,7 +99,10 @@ export async function criarOperacao(payload: PayloadNovaOperacao): Promise<Criar
       .eq('id', payload.leadId);
     if (leadErr) {
       // Operação foi criada; falha ao atualizar lead não é fatal — logamos
-      console.error(`Operação ${nova.id} criada mas falhou update do lead ${payload.leadId}:`, leadErr.message);
+      console.error(
+        `Operação ${nova.id} criada mas falhou update do lead ${payload.leadId}:`,
+        leadErr.message,
+      );
     }
     revalidatePath('/crm');
   }

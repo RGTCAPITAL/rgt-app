@@ -46,8 +46,7 @@ export async function mudarEtapa(
     };
   }
 
-  const saindoDeAceite =
-    op.etapa_atual === 'aceite' && novaEtapa === 'due_diligence_juridica';
+  const saindoDeAceite = op.etapa_atual === 'aceite' && novaEtapa === 'due_diligence_juridica';
   if (saindoDeAceite && op.preco_aceito !== true) {
     return {
       ok: false,

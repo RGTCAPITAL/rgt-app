@@ -90,60 +90,60 @@ export function AcoesEtapa({
   return (
     <>
       {(podeAvancar || emAceite) && (
-      <div className="flex items-center justify-between rounded-md border border-neutral-200 bg-white p-4">
-        <div>
-          <div className="text-sm font-medium text-neutral-900">Ações da operação</div>
-          <div className="text-xs text-neutral-500">
-            {terminal
-              ? etapaAtual === 'finalizada'
-                ? 'Operação finalizada — sem novas transições.'
-                : 'Operação cancelada — sem novas transições.'
-              : 'Mover a operação para outra etapa do workflow.'}
-          </div>
-          {emAceite && (
-            <div className="mt-2 text-xs text-neutral-600">
-              Preço:{' '}
-              {precoAceito === true
-                ? `✓ Aceito pelo credor${precoProposto ? ` — ${precoProposto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}`
-                : precoAceito === false
-                  ? '✗ Recusado pelo credor'
-                  : 'Aguardando resposta do credor'}
+        <div className="flex items-center justify-between rounded-md border border-neutral-200 bg-white p-4">
+          <div>
+            <div className="text-sm font-medium text-neutral-900">Ações da operação</div>
+            <div className="text-xs text-neutral-500">
+              {terminal
+                ? etapaAtual === 'finalizada'
+                  ? 'Operação finalizada — sem novas transições.'
+                  : 'Operação cancelada — sem novas transições.'
+                : 'Mover a operação para outra etapa do workflow.'}
             </div>
-          )}
+            {emAceite && (
+              <div className="mt-2 text-xs text-neutral-600">
+                Preço:{' '}
+                {precoAceito === true
+                  ? `✓ Aceito pelo credor${precoProposto ? ` — ${precoProposto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}`
+                  : precoAceito === false
+                    ? '✗ Recusado pelo credor'
+                    : 'Aguardando resposta do credor'}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {emAceite && precoAceito !== true && (
+              <button
+                type="button"
+                onClick={abrirAceite}
+                disabled={pending}
+                className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+              >
+                Registrar aceite
+              </button>
+            )}
+            {emAceite && precoAceito !== false && (
+              <button
+                type="button"
+                onClick={registrarRecusa}
+                disabled={pending}
+                className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
+              >
+                Registrar recusa
+              </button>
+            )}
+            {podeAvancar && (
+              <button
+                type="button"
+                onClick={abrir}
+                disabled={terminal}
+                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Mudar etapa →
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2">
-          {emAceite && precoAceito !== true && (
-            <button
-              type="button"
-              onClick={abrirAceite}
-              disabled={pending}
-              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
-            >
-              Registrar aceite
-            </button>
-          )}
-          {emAceite && precoAceito !== false && (
-            <button
-              type="button"
-              onClick={registrarRecusa}
-              disabled={pending}
-              className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
-            >
-              Registrar recusa
-            </button>
-          )}
-          {podeAvancar && (
-          <button
-            type="button"
-            onClick={abrir}
-            disabled={terminal}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Mudar etapa →
-          </button>
-          )}
-        </div>
-      </div>
       )}
 
       {erro && !modalOpen && (

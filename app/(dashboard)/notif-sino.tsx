@@ -62,19 +62,28 @@ export function NotifSino({ notifs }: { notifs: Notif[] }) {
           naoLidas > 0 ? 'text-neutral-900' : 'text-neutral-400'
         }`}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
           <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
         </svg>
         {naoLidas > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
             {naoLidas > 9 ? '9+' : naoLidas}
           </span>
         )}
       </button>
 
       {aberto && (
-        <div className="absolute right-0 top-12 z-50 w-80 rounded-md border border-neutral-200 bg-white shadow-lg">
+        <div className="absolute top-12 right-0 z-50 w-80 rounded-md border border-neutral-200 bg-white shadow-lg">
           <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2">
             <span className="text-sm font-semibold text-neutral-900">Notificações</span>
             {naoLidas > 0 && (
@@ -99,15 +108,21 @@ export function NotifSino({ notifs }: { notifs: Notif[] }) {
                 const naoLida = !n.lida_em;
                 const conteudo = (
                   <div className="flex gap-2 px-3 py-2.5 hover:bg-neutral-50">
-                    <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${naoLida ? 'bg-blue-600' : 'bg-transparent'}`} />
+                    <div
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${naoLida ? 'bg-blue-600' : 'bg-transparent'}`}
+                    />
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm ${naoLida ? 'font-semibold text-neutral-900' : 'text-neutral-700'}`}>
+                      <p
+                        className={`text-sm ${naoLida ? 'font-semibold text-neutral-900' : 'text-neutral-700'}`}
+                      >
                         {n.titulo}
                       </p>
                       {n.descricao && (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">{n.descricao}</p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">
+                          {n.descricao}
+                        </p>
                       )}
-                      <p className="mt-1 text-[10px] uppercase tracking-wide text-neutral-400">
+                      <p className="mt-1 text-[10px] tracking-wide text-neutral-400 uppercase">
                         {fmtRel(n.created_at)}
                       </p>
                     </div>

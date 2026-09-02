@@ -11,9 +11,7 @@ export default async function RedefinirSenhaPage({
   return (
     <div>
       <h1 className="mb-2 text-xl font-semibold">Nova senha</h1>
-      <p className="mb-6 text-sm text-neutral-600">
-        Escolha uma senha nova para sua conta.
-      </p>
+      <p className="mb-6 text-sm text-neutral-600">Escolha uma senha nova para sua conta.</p>
       <form action={updatePassword} className="space-y-4">
         <label className="block">
           <span className="text-sm font-medium text-neutral-700">Nova senha</span>
