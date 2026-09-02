@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { criarOperacao } from './actions';
 import {
   ESFERAS,
@@ -95,6 +95,48 @@ function parseNumero(v: string): number {
   return Number(v.replace(',', '.')) || 0;
 }
 
+const RASCUNHO_KEY = 'rgt:draft:nova-operacao';
+const RASCUNHO_DEBOUNCE_MS = 800;
+
+type RascunhoStorage = {
+  savedAt: number;
+  s1: Step1State;
+  s2: Step2State;
+  step: 1 | 2 | 3;
+};
+
+function lerRascunho(): RascunhoStorage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(RASCUNHO_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RascunhoStorage;
+    if (!parsed?.s1 || !parsed?.s2 || !parsed?.savedAt) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function limparRascunho() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(RASCUNHO_KEY);
+  } catch {
+    // ignore (private mode, quota exceeded, etc)
+  }
+}
+
+function fmtRascunhoIdade(savedAt: number): string {
+  const mins = Math.floor((Date.now() - savedAt) / 60000);
+  if (mins < 1) return 'agora';
+  if (mins < 60) return `${mins} min atrás`;
+  const horas = Math.floor(mins / 60);
+  if (horas < 24) return `${horas}h atrás`;
+  const dias = Math.floor(horas / 24);
+  return `${dias}d atrás`;
+}
+
 export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [s1, setS1] = useState<Step1State>(
@@ -107,6 +149,50 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroServer, setErroServer] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [rascunhoRestaurado, setRascunhoRestaurado] = useState<RascunhoStorage | null>(null);
+  const rascunhoInicializado = useRef(false);
+
+  // Restaura rascunho ao montar (uma vez, se não veio de lead)
+  useEffect(() => {
+    if (rascunhoInicializado.current) return;
+    rascunhoInicializado.current = true;
+    if (leadInicial) return; // lead tem prioridade sobre rascunho
+    const r = lerRascunho();
+    if (r) {
+      setS1(r.s1);
+      setS2(r.s2);
+      setStep(r.step);
+      setRascunhoRestaurado(r);
+    }
+  }, [leadInicial]);
+
+  // Auto-save com debounce (só depois de inicializado)
+  useEffect(() => {
+    if (!rascunhoInicializado.current) return;
+    const t = setTimeout(() => {
+      const isEmpty = !s1.cedente_nome && !s1.numero_processo && !s2.valor_principal;
+      if (isEmpty) return; // não polui localStorage com form vazio
+      try {
+        localStorage.setItem(
+          RASCUNHO_KEY,
+          JSON.stringify({ savedAt: Date.now(), s1, s2, step } satisfies RascunhoStorage),
+        );
+      } catch {
+        // ignore quota/private mode
+      }
+    }, RASCUNHO_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [s1, s2, step]);
+
+  function descartarRascunho() {
+    if (!confirm('Descartar rascunho e começar do zero?')) return;
+    limparRascunho();
+    setS1(initialStep1);
+    setS2(initialStep2);
+    setStep(1);
+    setRascunhoRestaurado(null);
+    setErros({});
+  }
 
   const esferasVisiveis = podeMunicipal ? ESFERAS : ESFERAS.filter((e) => e.value !== 'municipal');
 
@@ -198,13 +284,30 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
       if (res && !res.ok) {
         setErroServer(res.error);
         setStep(1);
+        return;
       }
-      // se ok, action já fez redirect
+      // Sucesso: limpa rascunho (action fez redirect)
+      limparRascunho();
     });
   }
 
   return (
     <div>
+      {rascunhoRestaurado && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <span>
+            ✓ Rascunho restaurado ({fmtRascunhoIdade(rascunhoRestaurado.savedAt)}). Continue de onde parou.
+          </span>
+          <button
+            type="button"
+            onClick={descartarRascunho}
+            className="shrink-0 text-xs text-emerald-700 underline hover:text-emerald-900"
+          >
+            Descartar rascunho
+          </button>
+        </div>
+      )}
+
       <StepIndicator step={step} />
 
       {erroServer && (
