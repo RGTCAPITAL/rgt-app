@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { WorkflowStepper } from './workflow-stepper';
 import { DetalheTabs } from './detalhe-tabs';
 import { AcoesEtapa } from './acoes-etapa';
+import { ToastNovaOperacao } from './toast-auto-hide';
 import { labelEtapa } from '@/lib/workflow';
 import { TIPOS_ATIVO, ESPECIES } from '../nova/schemas';
 
@@ -147,11 +148,7 @@ export default async function OperacaoDetalhePage({
         </Link>
       </div>
 
-      {sp.nova === '1' && (
-        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-          Operação cadastrada com sucesso.
-        </div>
-      )}
+      {sp.nova === '1' && <ToastNovaOperacao />}
 
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -240,7 +237,9 @@ export default async function OperacaoDetalhePage({
 
           <SideCard title="Responsáveis">
             <SideItem label="Dono" value={op.dono?.nome ?? '—'} />
-            <SideItem label="Broker" value={op.broker?.nome ?? '—'} />
+            {op.broker?.nome && op.broker.nome !== op.dono?.nome && (
+              <SideItem label="Broker" value={op.broker.nome} />
+            )}
           </SideCard>
 
           <SideCard title="Sistema">

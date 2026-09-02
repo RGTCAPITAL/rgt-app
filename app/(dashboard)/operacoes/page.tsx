@@ -80,11 +80,12 @@ export default async function OperacoesPage({
   // Filtro Esfera esconde Municipal pra quem não tem permissão (mesma flag do form).
   const { data: usuario } = await supabase
     .from('usuarios')
-    .select('perfil:perfis(permissoes)')
+    .select('perfil:perfis(slug, permissoes)')
     .eq('id', user.id)
-    .single<{ perfil: { permissoes: Record<string, unknown> | null } | null }>();
+    .single<{ perfil: { slug: string; permissoes: Record<string, unknown> | null } | null }>();
   const podeMunicipal = Boolean(usuario?.perfil?.permissoes?.['pode_esfera_municipal']);
   const esferasVisiveis = podeMunicipal ? ESFERAS : ESFERAS.filter((e) => e.value !== 'municipal');
+  const isBroker = usuario?.perfil?.slug === 'broker';
 
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
   const from = (page - 1) * PAGE_SIZE;
@@ -248,7 +249,7 @@ export default async function OperacoesPage({
                   <Th>Tribunal</Th>
                   <Th className="text-right">Valor</Th>
                   <Th>Etapa</Th>
-                  <Th>Dono</Th>
+                  {!isBroker && <Th>Dono</Th>}
                   <Th>Atualizado</Th>
                 </tr>
               </thead>
@@ -279,7 +280,7 @@ export default async function OperacoesPage({
                         {labelEtapa(op.etapa_atual)}
                       </span>
                     </Td>
-                    <Td className="text-neutral-700">{op.dono?.nome ?? '—'}</Td>
+                    {!isBroker && <Td className="text-neutral-700">{op.dono?.nome ?? '—'}</Td>}
                     <Td className="text-neutral-500">{fmtData(op.updated_at)}</Td>
                   </tr>
                 ))}

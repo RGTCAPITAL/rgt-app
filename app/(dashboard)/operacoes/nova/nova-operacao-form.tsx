@@ -77,13 +77,7 @@ const initialStep2: Step2State = {
   observacoes: '',
 };
 
-function fmtCPF(v: string): string {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 3) return d;
-  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
-  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-}
+import { maskCPF as fmtCPF, maskCNJ } from '@/lib/masks';
 
 function parseNumero(v: string): number {
   return Number(v.replace(',', '.')) || 0;
@@ -228,7 +222,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
           <FieldText
             label="Número do processo"
             value={s1.numero_processo}
-            onChange={(v) => updateS1('numero_processo', v)}
+            onChange={(v) => updateS1('numero_processo', maskCNJ(v))}
             placeholder="0000000-00.0000.0.00.0000"
             error={erros.numero_processo}
             required
@@ -372,7 +366,12 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                   onChange={(e) => updateS2('pss_ativo', e.target.checked)}
                   className="h-4 w-4"
                 />
-                <span>Ativar PSS (Plano de Seguridade Social)</span>
+                <span
+                  title="PSS = contribuição previdenciária retida pelo tribunal. Marque se o precatório do cedente sofre desconto de PSS (comum em servidores públicos). Percentual típico: 11%."
+                >
+                  Ativar PSS (Plano de Seguridade Social)
+                  <span className="ml-1 cursor-help text-neutral-400">ⓘ</span>
+                </span>
               </label>
               {s2.pss_ativo && (
                 <FieldText
@@ -380,6 +379,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                   value={s2.pss_pct}
                   onChange={(v) => updateS2('pss_pct', v)}
                   error={erros.pss_pct}
+                  placeholder="Ex: 11"
                   required
                 />
               )}
@@ -391,7 +391,12 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                   onChange={(e) => updateS2('rra_ativo', e.target.checked)}
                   className="h-4 w-4"
                 />
-                <span>Ativar IR / RRA (Rendimento Recebido Acumuladamente)</span>
+                <span
+                  title="RRA = Rendimento Recebido Acumuladamente. Marque quando o crédito acumula meses de atraso (regime especial de IR). 0 meses = IR fixo 3%. >0 meses = tabela progressiva sobre valor dividido pelo número de meses."
+                >
+                  Ativar IR / RRA (Rendimento Recebido Acumuladamente)
+                  <span className="ml-1 cursor-help text-neutral-400">ⓘ</span>
+                </span>
               </label>
               {s2.rra_ativo && (
                 <FieldText
@@ -400,6 +405,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                   onChange={(v) => updateS2('rra_meses', v)}
                   error={erros.rra_meses}
                   hint="0 = IR fixo 3%. >0 = cálculo por meses acumulados."
+                  placeholder="Ex: 60"
                   required
                 />
               )}

@@ -89,6 +89,7 @@ export function AcoesEtapa({
 
   return (
     <>
+      {(podeAvancar || emAceite) && (
       <div className="flex items-center justify-between rounded-md border border-neutral-200 bg-white p-4">
         <div>
           <div className="text-sm font-medium text-neutral-900">Ações da operação</div>
@@ -97,9 +98,7 @@ export function AcoesEtapa({
               ? etapaAtual === 'finalizada'
                 ? 'Operação finalizada — sem novas transições.'
                 : 'Operação cancelada — sem novas transições.'
-              : podeAvancar
-                ? 'Mover a operação para outra etapa do workflow.'
-                : 'Somente admin/gestão podem mudar etapas.'}
+              : 'Mover a operação para outra etapa do workflow.'}
           </div>
           {emAceite && (
             <div className="mt-2 text-xs text-neutral-600">
@@ -133,16 +132,19 @@ export function AcoesEtapa({
               Registrar recusa
             </button>
           )}
+          {podeAvancar && (
           <button
             type="button"
             onClick={abrir}
-            disabled={terminal || !podeAvancar}
+            disabled={terminal}
             className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Mudar etapa →
           </button>
+          )}
         </div>
       </div>
+      )}
 
       {erro && !modalOpen && (
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
