@@ -1,7 +1,19 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Search, FileText, ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { ESFERAS, TIPOS_ATIVO } from './nova/schemas';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const ETAPAS = [
   { value: 'precificacao', label: 'Precificação' },
@@ -58,11 +70,15 @@ function labelTipo(v: string): string {
   return TIPOS_ATIVO.find((t) => t.value === v)?.label ?? v;
 }
 
-function corEtapa(etapa: string): string {
-  if (etapa === 'finalizada') return 'bg-emerald-100 text-emerald-800';
-  if (etapa === 'cancelada') return 'bg-red-100 text-red-800';
-  if (etapa === 'pagamento') return 'bg-blue-100 text-blue-800';
-  return 'bg-neutral-100 text-neutral-700';
+/** Cores por etapa. Como Badge shadcn cobre só primary/secondary/destructive,
+ *  aplicamos classes explícitas para os estados customizados. */
+function classesEtapa(etapa: string): string {
+  if (etapa === 'finalizada')
+    return 'border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-100';
+  if (etapa === 'cancelada') return 'border-transparent bg-red-100 text-red-800 hover:bg-red-100';
+  if (etapa === 'pagamento')
+    return 'border-transparent bg-blue-100 text-blue-800 hover:bg-blue-100';
+  return 'border-transparent bg-neutral-100 text-neutral-700 hover:bg-neutral-100';
 }
 
 export default async function OperacoesPage({
@@ -77,7 +93,6 @@ export default async function OperacoesPage({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // Filtro Esfera esconde Municipal pra quem não tem permissão (mesma flag do form).
   const { data: usuario } = await supabase
     .from('usuarios')
     .select('perfil:perfis(slug, permissoes)')
@@ -104,8 +119,6 @@ export default async function OperacoesPage({
   if (params.esfera) query = query.eq('esfera', params.esfera);
   if (params.tipo) query = query.eq('tipo', params.tipo);
   if (params.q) {
-    // Sanitiza input: remove chars com semântica no PostgREST/ilike
-    // ( ) , * = filtros lógicos; % _ = wildcards do LIKE; " ' \ = escape
     const busca = params.q
       .trim()
       .replace(/[,()*=%_\\"']/g, '')
@@ -124,8 +137,8 @@ export default async function OperacoesPage({
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Operações</h1>
-          <p className="mt-2 text-sm text-neutral-600">
+          <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">Operações</h1>
+          <p className="mt-1 text-sm text-neutral-600">
             {count === null || count === undefined
               ? 'Gestão de operações de precatórios.'
               : count === 1
@@ -133,85 +146,64 @@ export default async function OperacoesPage({
                 : `${count} operações encontradas.`}
           </p>
         </div>
-        <Link
-          href="/operacoes/nova"
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-        >
-          + Nova operação
+        <Link href="/operacoes/nova" className={cn(buttonVariants({ size: 'lg' }))}>
+          <Plus className="size-4" />
+          Nova operação
         </Link>
       </div>
 
-      <form className="mt-6 flex flex-wrap items-end gap-3 rounded-md border border-neutral-200 bg-white p-4">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-neutral-700">Buscar</span>
-          <input
-            type="text"
-            name="q"
-            defaultValue={params.q ?? ''}
-            placeholder="Nº processo ou nome do cedente"
-            className="w-72 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-neutral-700">Etapa</span>
-          <select
-            name="etapa"
-            defaultValue={params.etapa ?? ''}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
-          >
+      <form
+        className="mt-6 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"
+        method="get"
+      >
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-neutral-700">Buscar</span>
+            <div className="relative">
+              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                name="q"
+                defaultValue={params.q ?? ''}
+                placeholder="Nº processo ou nome do cedente"
+                className="h-9 w-72 rounded-md border border-neutral-200 bg-white pr-3 pl-8 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+              />
+            </div>
+          </label>
+          <FiltroSelect label="Etapa" name="etapa" defaultValue={params.etapa ?? ''}>
             <option value="">Todas</option>
             {ETAPAS.map((e) => (
               <option key={e.value} value={e.value}>
                 {e.label}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-neutral-700">Esfera</span>
-          <select
-            name="esfera"
-            defaultValue={params.esfera ?? ''}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
-          >
+          </FiltroSelect>
+          <FiltroSelect label="Esfera" name="esfera" defaultValue={params.esfera ?? ''}>
             <option value="">Todas</option>
             {esferasVisiveis.map((e) => (
               <option key={e.value} value={e.value}>
                 {e.label}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-neutral-700">Tipo</span>
-          <select
-            name="tipo"
-            defaultValue={params.tipo ?? ''}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
-          >
+          </FiltroSelect>
+          <FiltroSelect label="Tipo" name="tipo" defaultValue={params.tipo ?? ''}>
             <option value="">Todos</option>
             {TIPOS_ATIVO.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
-          </select>
-        </label>
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-          >
-            Filtrar
-          </button>
-          {temFiltro && (
-            <Link
-              href="/operacoes"
-              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
-            >
-              Limpar
-            </Link>
-          )}
+          </FiltroSelect>
+          <div className="flex gap-2">
+            <button type="submit" className={cn(buttonVariants({ variant: 'default' }))}>
+              Filtrar
+            </button>
+            {temFiltro && (
+              <Link href="/operacoes" className={cn(buttonVariants({ variant: 'outline' }))}>
+                Limpar
+              </Link>
+            )}
+          </div>
         </div>
       </form>
 
@@ -222,7 +214,10 @@ export default async function OperacoesPage({
       )}
 
       {!error && operacoes && operacoes.length === 0 && (
-        <div className="mt-6 rounded-md border border-dashed border-neutral-300 bg-white p-10 text-center">
+        <div className="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-neutral-300 bg-white p-12 text-center shadow-sm">
+          <div className="flex size-12 items-center justify-center rounded-full bg-neutral-100">
+            <FileText className="size-6 text-neutral-500" />
+          </div>
           <p className="text-sm text-neutral-600">
             {temFiltro
               ? 'Nenhuma operação encontrada com esses filtros.'
@@ -231,8 +226,9 @@ export default async function OperacoesPage({
           {!temFiltro && (
             <Link
               href="/operacoes/nova"
-              className="mt-4 inline-block rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+              className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'mt-2')}
             >
+              <Plus className="size-4" />
               Cadastrar a primeira
             </Link>
           )}
@@ -240,56 +236,57 @@ export default async function OperacoesPage({
       )}
 
       {!error && operacoes && operacoes.length > 0 && (
-        <div className="mt-6 overflow-hidden rounded-md border border-neutral-200 bg-white">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs tracking-wide text-neutral-500 uppercase">
-                <tr>
-                  <Th>Nº processo</Th>
-                  <Th>Cedente</Th>
-                  <Th>Tipo</Th>
-                  <Th>Esfera</Th>
-                  <Th>Tribunal</Th>
-                  <Th className="text-right">Valor</Th>
-                  <Th>Etapa</Th>
-                  {!isBroker && <Th>Dono</Th>}
-                  <Th>Atualizado</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {operacoes.map((op) => (
-                  <tr key={op.id} className="hover:bg-neutral-50">
-                    <Td>
-                      <Link
-                        href={`/operacoes/${op.id}`}
-                        className="font-medium text-neutral-900 hover:underline"
-                      >
-                        {op.numero_processo}
-                      </Link>
-                    </Td>
-                    <Td className="text-neutral-700">{op.cedente_nome}</Td>
-                    <Td className="text-neutral-700">{labelTipo(op.tipo)}</Td>
-                    <Td className="text-neutral-700 capitalize">{op.esfera}</Td>
-                    <Td className="max-w-[200px] truncate text-neutral-700" title={op.tribunal}>
-                      {op.tribunal}
-                    </Td>
-                    <Td className="text-right font-medium text-neutral-900">
-                      {fmtBRL(op.valor_total)}
-                    </Td>
-                    <Td>
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${corEtapa(op.etapa_atual)}`}
-                      >
-                        {labelEtapa(op.etapa_atual)}
-                      </span>
-                    </Td>
-                    {!isBroker && <Td className="text-neutral-700">{op.dono?.nome ?? '—'}</Td>}
-                    <Td className="text-neutral-500">{fmtData(op.updated_at)}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="mt-6 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-neutral-50 hover:bg-neutral-50">
+                <TableHead>Nº processo</TableHead>
+                <TableHead>Cedente</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Esfera</TableHead>
+                <TableHead>Tribunal</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead>Etapa</TableHead>
+                {!isBroker && <TableHead>Dono</TableHead>}
+                <TableHead>Atualizado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {operacoes.map((op) => (
+                <TableRow key={op.id}>
+                  <TableCell className="py-3">
+                    <Link
+                      href={`/operacoes/${op.id}`}
+                      className="font-medium text-neutral-900 hover:underline"
+                    >
+                      {op.numero_processo}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="py-3 text-neutral-700">{op.cedente_nome}</TableCell>
+                  <TableCell className="py-3 text-neutral-700">{labelTipo(op.tipo)}</TableCell>
+                  <TableCell className="py-3 text-neutral-700 capitalize">{op.esfera}</TableCell>
+                  <TableCell
+                    className="max-w-[220px] truncate py-3 text-neutral-700"
+                    title={op.tribunal}
+                  >
+                    {op.tribunal}
+                  </TableCell>
+                  <TableCell className="py-3 text-right font-medium text-neutral-900">
+                    {fmtBRL(op.valor_total)}
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <Badge className={classesEtapa(op.etapa_atual)}>
+                      {labelEtapa(op.etapa_atual)}
+                    </Badge>
+                  </TableCell>
+                  {!isBroker && (
+                    <TableCell className="py-3 text-neutral-700">{op.dono?.nome ?? '—'}</TableCell>
+                  )}
+                  <TableCell className="py-3 text-neutral-500">{fmtData(op.updated_at)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
 
           {totalPaginas > 1 && (
             <div className="flex items-center justify-between border-t border-neutral-200 px-4 py-3 text-sm text-neutral-600">
@@ -298,10 +295,12 @@ export default async function OperacoesPage({
               </span>
               <div className="flex gap-2">
                 <PageLink params={params} page={page - 1} disabled={page === 1}>
-                  ← Anterior
+                  <ArrowLeft className="size-3.5" />
+                  Anterior
                 </PageLink>
                 <PageLink params={params} page={page + 1} disabled={page === totalPaginas}>
-                  Próxima →
+                  Próxima
+                  <ArrowRight className="size-3.5" />
                 </PageLink>
               </div>
             </div>
@@ -312,23 +311,28 @@ export default async function OperacoesPage({
   );
 }
 
-function Th({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-4 py-3 font-medium ${className ?? ''}`}>{children}</th>;
-}
-
-function Td({
+function FiltroSelect({
+  label,
+  name,
+  defaultValue,
   children,
-  className,
-  title,
 }: {
+  label: string;
+  name: string;
+  defaultValue: string;
   children: React.ReactNode;
-  className?: string;
-  title?: string;
 }) {
   return (
-    <td className={`px-4 py-3 ${className ?? ''}`} title={title}>
-      {children}
-    </td>
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-neutral-700">{label}</span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+      >
+        {children}
+      </select>
+    </label>
   );
 }
 
@@ -345,7 +349,12 @@ function PageLink({
 }) {
   if (disabled) {
     return (
-      <span className="rounded-md border border-neutral-200 px-3 py-1.5 text-neutral-400">
+      <span
+        className={cn(
+          buttonVariants({ variant: 'outline', size: 'sm' }),
+          'pointer-events-none opacity-40',
+        )}
+      >
         {children}
       </span>
     );
@@ -359,7 +368,7 @@ function PageLink({
   return (
     <Link
       href={`/operacoes?${search.toString()}`}
-      className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-neutral-700 hover:bg-neutral-100"
+      className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
     >
       {children}
     </Link>

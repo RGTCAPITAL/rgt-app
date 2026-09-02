@@ -1,8 +1,20 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { ArrowRight, Check, X } from 'lucide-react';
 import { mudarEtapa, registrarAceite } from './actions';
 import { labelEtapa, transicoesPermitidas, type Etapa } from '@/lib/workflow';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 type Props = {
   operacaoId: string;
@@ -11,6 +23,10 @@ type Props = {
   precoAceito: boolean | null;
   precoProposto: number | null;
 };
+
+function fmtBRL(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 
 export function AcoesEtapa({
   operacaoId,
@@ -36,11 +52,6 @@ export function AcoesEtapa({
     setObservacao('');
     setErro(null);
     setModalOpen(true);
-  }
-
-  function fechar() {
-    if (pending) return;
-    setModalOpen(false);
   }
 
   function confirmar() {
@@ -87,11 +98,13 @@ export function AcoesEtapa({
     });
   }
 
+  if (!podeAvancar && !emAceite) return null;
+
   return (
     <>
-      {(podeAvancar || emAceite) && (
-        <div className="flex items-center justify-between rounded-md border border-neutral-200 bg-white p-4">
-          <div>
+      <Card>
+        <CardContent className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
             <div className="text-sm font-medium text-neutral-900">Ações da operação</div>
             <div className="text-xs text-neutral-500">
               {terminal
@@ -104,185 +117,154 @@ export function AcoesEtapa({
               <div className="mt-2 text-xs text-neutral-600">
                 Preço:{' '}
                 {precoAceito === true
-                  ? `✓ Aceito pelo credor${precoProposto ? ` — ${precoProposto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}`
+                  ? `✓ Aceito pelo credor${precoProposto ? ` — ${fmtBRL(precoProposto)}` : ''}`
                   : precoAceito === false
                     ? '✗ Recusado pelo credor'
                     : 'Aguardando resposta do credor'}
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             {emAceite && precoAceito !== true && (
-              <button
-                type="button"
+              <Button
                 onClick={abrirAceite}
                 disabled={pending}
-                className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
               >
+                <Check className="size-4" />
                 Registrar aceite
-              </button>
+              </Button>
             )}
             {emAceite && precoAceito !== false && (
-              <button
-                type="button"
-                onClick={registrarRecusa}
-                disabled={pending}
-                className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
-              >
+              <Button variant="outline" onClick={registrarRecusa} disabled={pending}>
+                <X className="size-4" />
                 Registrar recusa
-              </button>
+              </Button>
             )}
             {podeAvancar && (
-              <button
-                type="button"
-                onClick={abrir}
-                disabled={terminal}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Mudar etapa →
-              </button>
+              <Button onClick={abrir} disabled={terminal}>
+                Mudar etapa
+                <ArrowRight className="size-4" />
+              </Button>
             )}
           </div>
-        </div>
-      )}
+        </CardContent>
+      </Card>
 
-      {erro && !modalOpen && (
+      {erro && !modalOpen && !aceiteModalOpen && (
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {erro}
         </div>
       )}
 
-      {modalOpen && (
-        <Modal onClose={fechar}>
-          <h2 className="text-lg font-semibold text-neutral-900">Mudar etapa</h2>
-          <p className="mt-1 text-sm text-neutral-600">
-            Etapa atual: <strong>{labelEtapa(etapaAtual)}</strong>
-          </p>
+      <Dialog open={modalOpen} onOpenChange={(open) => !pending && setModalOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mudar etapa</DialogTitle>
+            <DialogDescription>
+              Etapa atual: <strong className="text-neutral-900">{labelEtapa(etapaAtual)}</strong>
+            </DialogDescription>
+          </DialogHeader>
 
-          <label className="mt-4 flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-neutral-700">Nova etapa *</span>
-            <select
-              value={novaEtapa}
-              onChange={(e) => setNovaEtapa(e.target.value as Etapa)}
-              disabled={pending}
-              className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
-            >
-              {opcoes.map((et) => (
-                <option key={et} value={et}>
-                  {labelEtapa(et)}
-                  {et === 'cancelada' ? ' (cancelar operação)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="mt-4 flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-neutral-700">Observação (opcional)</span>
-            <textarea
-              value={observacao}
-              onChange={(e) => setObservacao(e.target.value)}
-              rows={3}
-              disabled={pending}
-              placeholder="Ex: cliente aprovou por telefone, aguardar assinatura"
-              className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
-            />
-            <span className="text-xs text-neutral-500">
-              Fica gravada no histórico junto com a mudança.
-            </span>
-          </label>
-
-          {erro && (
-            <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {erro}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nova-etapa">Nova etapa *</Label>
+              <select
+                id="nova-etapa"
+                value={novaEtapa}
+                onChange={(e) => setNovaEtapa(e.target.value as Etapa)}
+                disabled={pending}
+                className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+              >
+                {opcoes.map((et) => (
+                  <option key={et} value={et}>
+                    {labelEtapa(et)}
+                    {et === 'cancelada' ? ' (cancelar operação)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
 
-          <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={fechar}
-              disabled={pending}
-              className="rounded-md px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={confirmar}
-              disabled={pending || !novaEtapa}
-              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-            >
-              {pending ? 'Salvando…' : 'Confirmar mudança'}
-            </button>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="observacao">Observação (opcional)</Label>
+              <textarea
+                id="observacao"
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                rows={3}
+                disabled={pending}
+                placeholder="Ex: cliente aprovou por telefone, aguardar assinatura"
+                className="rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+              />
+              <span className="text-xs text-neutral-500">
+                Fica gravada no histórico junto com a mudança.
+              </span>
+            </div>
+
+            {erro && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                {erro}
+              </div>
+            )}
           </div>
-        </Modal>
-      )}
 
-      {aceiteModalOpen && (
-        <Modal onClose={() => !pending && setAceiteModalOpen(false)}>
-          <h2 className="text-lg font-semibold text-neutral-900">Registrar aceite do credor</h2>
-          <p className="mt-1 text-sm text-neutral-600">
-            Informe o preço proposto que o credor aceitou. Esse valor fica gravado como
-            <code className="mx-1 rounded bg-neutral-100 px-1 text-xs">preco_proposto</code>
-            na operação.
-          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setModalOpen(false)} disabled={pending}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmar} disabled={pending || !novaEtapa}>
+              {pending ? 'Salvando…' : 'Confirmar mudança'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          <label className="mt-4 flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-neutral-700">Preço proposto (R$) *</span>
+      <Dialog open={aceiteModalOpen} onOpenChange={(open) => !pending && setAceiteModalOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar aceite do credor</DialogTitle>
+            <DialogDescription>
+              Informe o preço proposto que o credor aceitou. Fica gravado como{' '}
+              <code className="rounded bg-neutral-100 px-1 text-xs">preco_proposto</code> na
+              operação.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="preco">Preço proposto (R$) *</Label>
             <input
+              id="preco"
               type="text"
               inputMode="decimal"
               value={precoInput}
               onChange={(e) => setPrecoInput(e.target.value)}
               disabled={pending}
               placeholder="Ex: 30000"
-              className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+              className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-900 outline-none focus:border-neutral-900"
               autoFocus
             />
-          </label>
+          </div>
 
           {erro && (
-            <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {erro}
             </div>
           )}
 
-          <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setAceiteModalOpen(false)}
-              disabled={pending}
-              className="rounded-md px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
-            >
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAceiteModalOpen(false)} disabled={pending}>
               Cancelar
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={confirmarAceite}
               disabled={pending || !precoInput}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
               {pending ? 'Salvando…' : 'Confirmar aceite'}
-            </button>
-          </div>
-        </Modal>
-      )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
-  );
-}
-
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-md border border-neutral-200 bg-white p-6 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
   );
 }

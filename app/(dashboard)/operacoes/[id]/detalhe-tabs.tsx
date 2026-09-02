@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
 import { labelEtapa } from '@/lib/workflow';
 import { fmtDataBR } from '@/lib/formatters';
 import { TabComentarios, type Comentario } from './tab-comentarios';
 import { TabDocumentos, type Documento } from './tab-documentos';
 import { TabTarefas, type Tarefa, type UsuarioOpt } from './tab-tarefas';
 import type { ContextoCedente } from '@/lib/documentos-checklist';
+import { Card } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type EtapaHistorico = {
   id: string;
@@ -58,8 +59,6 @@ const TABS = [
   { key: 'historico', label: 'Histórico' },
 ] as const;
 
-type TabKey = (typeof TABS)[number]['key'];
-
 function fmtBRL(v: number | null | undefined): string {
   if (v === null || v === undefined) return '—';
   return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -100,32 +99,21 @@ export function DetalheTabs({
   usuarioAtualId,
   isAdmin,
 }: Props) {
-  const [tab, setTab] = useState<TabKey>('detalhes');
-
   return (
-    <div className="rounded-md border border-neutral-200 bg-white">
-      <div className="flex border-b border-neutral-200">
-        {TABS.map((t) => {
-          const active = tab === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`border-b-2 px-4 py-3 text-sm ${
-                active
-                  ? 'border-neutral-900 font-medium text-neutral-900'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-900'
-              }`}
-            >
+    <Card className="p-0">
+      <Tabs defaultValue="detalhes" className="gap-0">
+        <TabsList variant="line" className="border-b border-neutral-200 px-4 pt-2">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.key} value={t.key}>
               {t.label}
-            </button>
-          );
-        })}
-      </div>
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      <div className="p-6">
-        {tab === 'detalhes' && <TabDetalhes op={operacao} />}
-        {tab === 'documentos' && (
+        <TabsContent value="detalhes" className="p-6">
+          <TabDetalhes op={operacao} />
+        </TabsContent>
+        <TabsContent value="documentos" className="p-6">
           <TabDocumentos
             operacaoId={operacaoId}
             tipoAtivo={tipoAtivo}
@@ -134,26 +122,28 @@ export function DetalheTabs({
             isAdmin={isAdmin}
             documentos={documentos}
           />
-        )}
-        {tab === 'tarefas' && (
+        </TabsContent>
+        <TabsContent value="tarefas" className="p-6">
           <TabTarefas
             operacaoId={operacaoId}
             tarefas={tarefas}
             usuarios={usuariosOpt}
             meuId={usuarioAtualId}
           />
-        )}
-        {tab === 'comentarios' && (
+        </TabsContent>
+        <TabsContent value="comentarios" className="p-6">
           <TabComentarios
             operacaoId={operacaoId}
             usuarioAtualId={usuarioAtualId}
             isAdmin={isAdmin}
             comentarios={comentarios}
           />
-        )}
-        {tab === 'historico' && <TabHistorico historico={historico} />}
-      </div>
-    </div>
+        </TabsContent>
+        <TabsContent value="historico" className="p-6">
+          <TabHistorico historico={historico} />
+        </TabsContent>
+      </Tabs>
+    </Card>
   );
 }
 
@@ -265,16 +255,6 @@ function TabHistorico({ historico }: { historico: EtapaHistorico[] }) {
         );
       })}
     </ol>
-  );
-}
-
-function PlaceholderTab({ issue, descricao }: { issue: string; descricao: string }) {
-  return (
-    <div className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center">
-      <p className="text-sm text-neutral-600">
-        Implementação de <strong>{descricao}</strong> pendente na issue <strong>{issue}</strong>.
-      </p>
-    </div>
   );
 }
 

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { WorkflowStepper } from './workflow-stepper';
@@ -8,6 +7,8 @@ import { ToastNovaOperacao } from './toast-auto-hide';
 import { labelEtapa } from '@/lib/workflow';
 import { TIPOS_ATIVO, ESPECIES } from '../nova/schemas';
 import { fmtDataBR } from '@/lib/formatters';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 type Operacao = {
   id: string;
@@ -66,11 +67,13 @@ function labelTipo(v: string): string {
   return TIPOS_ATIVO.find((t) => t.value === v)?.label ?? v;
 }
 
-function corEtapa(etapa: string): string {
-  if (etapa === 'finalizada') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-  if (etapa === 'cancelada') return 'bg-red-100 text-red-800 border-red-200';
-  if (etapa === 'pagamento') return 'bg-blue-100 text-blue-800 border-blue-200';
-  return 'bg-neutral-100 text-neutral-800 border-neutral-200';
+function classesEtapa(etapa: string): string {
+  if (etapa === 'finalizada')
+    return 'border-transparent bg-emerald-100 text-emerald-800 hover:bg-emerald-100';
+  if (etapa === 'cancelada') return 'border-transparent bg-red-100 text-red-800 hover:bg-red-100';
+  if (etapa === 'pagamento')
+    return 'border-transparent bg-blue-100 text-blue-800 hover:bg-blue-100';
+  return 'border-transparent bg-neutral-100 text-neutral-800 hover:bg-neutral-100';
 }
 
 export default async function OperacaoDetalhePage({
@@ -192,33 +195,23 @@ export default async function OperacaoDetalhePage({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-4">
-        <Link href="/operacoes" className="text-sm text-neutral-500 hover:text-neutral-900">
-          ← Operações
-        </Link>
-      </div>
-
       {sp.nova === '1' && <ToastNovaOperacao />}
 
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
-            {op.numero_processo}
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
+              {op.numero_processo}
+            </h1>
+            <Badge className={classesEtapa(op.etapa_atual)}>{labelEtapa(op.etapa_atual)}</Badge>
+          </div>
           <p className="mt-1 text-sm text-neutral-600">
             {op.cedente_nome} · {labelTipo(op.tipo)} · {op.tribunal}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="text-xs tracking-wide text-neutral-500 uppercase">Valor total</div>
-            <div className="text-lg font-semibold text-neutral-900">{fmtBRL(op.valor_total)}</div>
-          </div>
-          <span
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${corEtapa(op.etapa_atual)}`}
-          >
-            {labelEtapa(op.etapa_atual)}
-          </span>
+        <div className="text-right">
+          <div className="text-xs tracking-wide text-neutral-500 uppercase">Valor total</div>
+          <div className="text-2xl font-semibold text-neutral-900">{fmtBRL(op.valor_total)}</div>
         </div>
       </header>
 
@@ -313,12 +306,16 @@ export default async function OperacaoDetalhePage({
 
 function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-neutral-200 bg-white p-4">
-      <h3 className="mb-3 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
-        {title}
-      </h3>
-      <dl className="space-y-2 text-sm">{children}</dl>
-    </div>
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-xs font-medium tracking-wide text-neutral-500 uppercase">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="space-y-2 text-sm">{children}</dl>
+      </CardContent>
+    </Card>
   );
 }
 
