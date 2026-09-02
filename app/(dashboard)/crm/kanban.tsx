@@ -162,6 +162,9 @@ export function Kanban({
                           origem: lead.origem,
                           dono_id: lead.dono_id,
                           notas: null,
+                          status: lead.status,
+                          operacao_id: lead.operacao_id,
+                          motivo_perda: lead.motivo_perda,
                         })
                       }
                       className="cursor-grab rounded-md border border-neutral-200 bg-white p-3 text-sm shadow-sm hover:shadow active:cursor-grabbing"

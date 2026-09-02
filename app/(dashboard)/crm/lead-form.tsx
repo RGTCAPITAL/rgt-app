@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { criarLead, atualizarLead } from './actions';
-import { ORIGEM_LEAD } from '@/lib/leads';
+import { ORIGEM_LEAD, STATUS_LEAD } from '@/lib/leads';
 
 export type DonoOption = { id: string; nome: string | null };
 
@@ -15,6 +15,9 @@ export type LeadEdit = {
   origem: string;
   dono_id: string | null;
   notas: string | null;
+  status: string;
+  operacao_id: string | null;
+  motivo_perda: string | null;
 };
 
 type Props = {
@@ -97,6 +100,8 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
         <h2 className="text-lg font-semibold text-neutral-900">
           {editando ? 'Editar lead' : 'Novo lead'}
         </h2>
+
+        {editando && <StatusVinculo lead={editando} />}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Field label="Nome *" full>
@@ -222,5 +227,53 @@ function Field({
       <span className="text-xs font-medium text-neutral-700">{label}</span>
       {children}
     </label>
+  );
+}
+
+function StatusVinculo({ lead }: { lead: LeadEdit }) {
+  const stat = STATUS_LEAD.find((s) => s.value === lead.status);
+  const podeConverter = lead.status === 'qualificado' || lead.status === 'proposta_enviada';
+  const jaGanho = lead.status === 'ganho' && lead.operacao_id;
+  const perdido = lead.status === 'perdido' && lead.motivo_perda;
+
+  function converter(e: React.MouseEvent) {
+    if (!confirm(`Converter "${lead.nome}" em operação? Você será levado ao formulário com os dados pré-preenchidos.`)) {
+      e.preventDefault();
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-neutral-500">Status:</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${stat?.cor ?? 'bg-neutral-100 text-neutral-700'}`}>
+            {stat?.label ?? lead.status}
+          </span>
+        </div>
+        {podeConverter && (
+          <a
+            href={`/operacoes/nova?lead_id=${lead.id}`}
+            onClick={converter}
+            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+          >
+            → Virar operação
+          </a>
+        )}
+        {jaGanho && (
+          <a
+            href={`/operacoes/${lead.operacao_id}`}
+            className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+          >
+            → Ver operação vinculada
+          </a>
+        )}
+      </div>
+      {perdido && (
+        <p className="mt-2 border-l-2 border-red-300 pl-2 text-xs italic text-neutral-600">
+          Motivo: {lead.motivo_perda}
+        </p>
+      )}
+    </div>
   );
 }
