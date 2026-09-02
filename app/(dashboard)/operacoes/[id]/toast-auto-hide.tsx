@@ -1,25 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 /**
- * Auto-hide após 5s. NÃO faz router.replace pra evitar race com
- * revalidatePath do server action (que remontaria o toast). O ?nova=1
- * na URL some naturalmente na próxima navegação do user.
+ * Dispara toast do sonner ao montar. Renderiza nada — só efeito colateral.
+ * Mantém o comportamento anterior (?nova=1 → toast) sem banner inline.
  */
 export function ToastNovaOperacao() {
-  const [visivel, setVisivel] = useState(true);
-
   useEffect(() => {
-    const t = setTimeout(() => setVisivel(false), 5000);
-    return () => clearTimeout(t);
+    toast.success('Operação cadastrada com sucesso.');
   }, []);
 
-  if (!visivel) return null;
-
-  return (
-    <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-      Operação cadastrada com sucesso.
-    </div>
-  );
+  return null;
 }
