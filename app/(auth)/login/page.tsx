@@ -4,9 +4,9 @@ import { signIn } from './actions';
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; email?: string }>;
 }) {
-  const { error, message } = await searchParams;
+  const { error, message, email } = await searchParams;
 
   return (
     <div>
@@ -19,6 +19,7 @@ export default async function LoginPage({
             type="email"
             required
             autoComplete="email"
+            defaultValue={email ?? ''}
             className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
           />
         </label>

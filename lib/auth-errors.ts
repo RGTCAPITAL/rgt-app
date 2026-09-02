@@ -19,6 +19,9 @@ export function traduzirErroAuth(msg: string): string {
   if (m.includes('user already registered') || m.includes('already been registered')) {
     return 'Este email já está cadastrado. Tente entrar ou recuperar a senha.';
   }
+  if (m.includes('database error finding user') || m.includes('database error saving new user')) {
+    return 'Não foi possível processar seu cadastro. Se você já tem conta, tente entrar.';
+  }
   if (m.includes('signup') && m.includes('disabled')) {
     return 'Cadastros estão desativados temporariamente. Fale com o admin.';
   }
