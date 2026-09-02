@@ -11,8 +11,8 @@ export function traduzirErroAuth(msg: string): string {
     const s = Number(rate[1]);
     return `Muitas tentativas — aguarde ${s} segundo${s === 1 ? '' : 's'} antes de tentar novamente.`;
   }
-  if (m.includes('email rate limit')) {
-    return 'Muitos emails enviados em pouco tempo. Aguarde alguns minutos.';
+  if (m.includes('email rate limit') || m.includes('over_email_send_rate_limit')) {
+    return 'Limite de emails do servidor atingido (plano do Supabase). Fale com o admin — precisa configurar SMTP próprio ou aguarde ~1 hora.';
   }
 
   // Signup
