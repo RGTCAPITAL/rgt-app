@@ -130,6 +130,15 @@ export default async function OperacaoDetalhePage({
       { id: string; texto: string; etapa: string | null; created_at: string; autor: { id: string; nome: string | null } | null }[]
     >();
 
+  const { data: documentos } = await supabase
+    .from('documentos')
+    .select('id, tipo, nome_original, storage_path, tamanho_bytes, uploaded_at, uploaded_by, uploader:usuarios!documentos_uploaded_by_fkey(nome)')
+    .eq('operacao_id', id)
+    .order('uploaded_at', { ascending: false })
+    .returns<
+      { id: string; tipo: string; nome_original: string; storage_path: string; tamanho_bytes: number | null; uploaded_at: string; uploaded_by: string | null; uploader: { nome: string | null } | null }[]
+    >();
+
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-4">
@@ -184,9 +193,11 @@ export default async function OperacaoDetalhePage({
         <div>
           <DetalheTabs
             operacaoId={op.id}
+            tipoAtivo={op.tipo}
             usuarioAtualId={user.id}
             isAdmin={isAdmin}
             comentarios={comentarios ?? []}
+            documentos={documentos ?? []}
             operacao={{
               valor_total: op.valor_total,
               valor_principal: op.valor_principal,

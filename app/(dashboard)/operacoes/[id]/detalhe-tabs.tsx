@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { labelEtapa } from '@/lib/workflow';
 import { TabComentarios, type Comentario } from './tab-comentarios';
+import { TabDocumentos, type Documento } from './tab-documentos';
 
 type EtapaHistorico = {
   id: string;
@@ -34,9 +35,11 @@ type OperacaoDetalhes = {
 
 type Props = {
   operacaoId: string;
+  tipoAtivo: string;
   operacao: OperacaoDetalhes;
   historico: EtapaHistorico[];
   comentarios: Comentario[];
+  documentos: Documento[];
   usuarioAtualId: string;
   isAdmin: boolean;
 };
@@ -80,9 +83,11 @@ function diffDuracao(inicio: string, fim: string | null): string {
 
 export function DetalheTabs({
   operacaoId,
+  tipoAtivo,
   operacao,
   historico,
   comentarios,
+  documentos,
   usuarioAtualId,
   isAdmin,
 }: Props) {
@@ -111,7 +116,15 @@ export function DetalheTabs({
 
       <div className="p-6">
         {tab === 'detalhes' && <TabDetalhes op={operacao} />}
-        {tab === 'documentos' && <PlaceholderTab issue="RGT-22" descricao="upload de documentos via Supabase Storage" />}
+        {tab === 'documentos' && (
+          <TabDocumentos
+            operacaoId={operacaoId}
+            tipoAtivo={tipoAtivo}
+            usuarioAtualId={usuarioAtualId}
+            isAdmin={isAdmin}
+            documentos={documentos}
+          />
+        )}
         {tab === 'comentarios' && (
           <TabComentarios
             operacaoId={operacaoId}
