@@ -144,6 +144,24 @@ export default async function OperacaoDetalhePage({
       { id: string; tipo: string; nome_original: string; storage_path: string; tamanho_bytes: number | null; uploaded_at: string; uploaded_by: string | null; uploader: { nome: string | null } | null }[]
     >();
 
+  const { data: tarefas } = await supabase
+    .from('tarefas')
+    .select(
+      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome)',
+    )
+    .eq('operacao_id', id)
+    .order('created_at', { ascending: false })
+    .returns<
+      { id: string; titulo: string; descricao: string | null; destinatario_perfil: string | null; destinatario_id: string | null; prazo: string | null; status: string; created_at: string; criado_por: { nome: string | null } | null; destinatario: { nome: string | null } | null }[]
+    >();
+
+  const { data: usuariosOpt } = await supabase
+    .from('usuarios')
+    .select('id, nome')
+    .eq('ativo', true)
+    .order('nome')
+    .returns<{ id: string; nome: string | null }[]>();
+
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-4">
@@ -203,6 +221,8 @@ export default async function OperacaoDetalhePage({
             isAdmin={isAdmin}
             comentarios={comentarios ?? []}
             documentos={documentos ?? []}
+            tarefas={tarefas ?? []}
+            usuariosOpt={usuariosOpt ?? []}
             operacao={{
               valor_total: op.valor_total,
               valor_principal: op.valor_principal,

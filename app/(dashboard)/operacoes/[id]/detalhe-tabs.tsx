@@ -5,6 +5,7 @@ import { labelEtapa } from '@/lib/workflow';
 import { fmtDataBR } from '@/lib/formatters';
 import { TabComentarios, type Comentario } from './tab-comentarios';
 import { TabDocumentos, type Documento } from './tab-documentos';
+import { TabTarefas, type Tarefa, type UsuarioOpt } from './tab-tarefas';
 import type { ContextoCedente } from '@/lib/documentos-checklist';
 
 type EtapaHistorico = {
@@ -43,6 +44,8 @@ type Props = {
   historico: EtapaHistorico[];
   comentarios: Comentario[];
   documentos: Documento[];
+  tarefas: Tarefa[];
+  usuariosOpt: UsuarioOpt[];
   usuarioAtualId: string;
   isAdmin: boolean;
 };
@@ -50,6 +53,7 @@ type Props = {
 const TABS = [
   { key: 'detalhes', label: 'Detalhes' },
   { key: 'documentos', label: 'Documentos' },
+  { key: 'tarefas', label: 'Tarefas' },
   { key: 'comentarios', label: 'Comentários' },
   { key: 'historico', label: 'Histórico' },
 ] as const;
@@ -91,6 +95,8 @@ export function DetalheTabs({
   historico,
   comentarios,
   documentos,
+  tarefas,
+  usuariosOpt,
   usuarioAtualId,
   isAdmin,
 }: Props) {
@@ -127,6 +133,14 @@ export function DetalheTabs({
             usuarioAtualId={usuarioAtualId}
             isAdmin={isAdmin}
             documentos={documentos}
+          />
+        )}
+        {tab === 'tarefas' && (
+          <TabTarefas
+            operacaoId={operacaoId}
+            tarefas={tarefas}
+            usuarios={usuariosOpt}
+            meuId={usuarioAtualId}
           />
         )}
         {tab === 'comentarios' && (

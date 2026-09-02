@@ -19,6 +19,11 @@ const IconBriefcase = () => (
     <rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
   </svg>
 );
+const IconCheckSquare = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+);
 const IconShield = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -29,6 +34,7 @@ const menuBase = [
   { label: 'Dashboard', href: '/', icon: IconHome },
   { label: 'CRM', href: '/crm', icon: IconUsers },
   { label: 'Operações', href: '/operacoes', icon: IconBriefcase },
+  { label: 'Tarefas', href: '/tarefas', icon: IconCheckSquare },
 ];
 
 const menuAdmin = [{ label: 'Usuários', href: '/admin/usuarios', icon: IconShield }];
