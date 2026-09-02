@@ -3,6 +3,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { traduzirErroAuth } from '@/lib/auth-errors';
 
 export async function signUp(formData: FormData) {
   const nome = String(formData.get('nome') ?? '').trim();
@@ -30,7 +31,7 @@ export async function signUp(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/cadastro?error=${encodeURIComponent(error.message)}`);
+    redirect(`/cadastro?error=${encodeURIComponent(traduzirErroAuth(error.message))}`);
   }
 
   redirect(`/verifique-email?email=${encodeURIComponent(email)}`);

@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { traduzirErroAuth } from '@/lib/auth-errors';
 
 export async function updatePassword(formData: FormData) {
   const password = String(formData.get('password') ?? '');
@@ -16,7 +17,7 @@ export async function updatePassword(formData: FormData) {
   const { error } = await supabase.auth.updateUser({ password });
 
   if (error) {
-    redirect(`/redefinir-senha?error=${encodeURIComponent(error.message)}`);
+    redirect(`/redefinir-senha?error=${encodeURIComponent(traduzirErroAuth(error.message))}`);
   }
 
   redirect(
