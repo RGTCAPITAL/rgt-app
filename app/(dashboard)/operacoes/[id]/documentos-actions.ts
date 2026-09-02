@@ -79,19 +79,36 @@ export async function deletarDocumento(
 
   const { data: doc, error: fetchErr } = await supabase
     .from('documentos')
-    .select('storage_path, uploaded_by')
+    .select('operacao_id, storage_path, uploaded_by')
     .eq('id', documentoId)
-    .single<{ storage_path: string; uploaded_by: string | null }>();
+    .maybeSingle<{ operacao_id: string; storage_path: string; uploaded_by: string | null }>();
 
-  if (fetchErr || !doc) return { ok: false, error: 'Documento não encontrado.' };
+  if (fetchErr) return { ok: false, error: 'Erro ao localizar documento.' };
+  if (!doc) return { ok: false, error: 'Documento não encontrado.' };
 
-  // RLS de storage.objects e documentos já valida (uploader ou admin), mas checa cedo
-  const { error: delDbErr } = await supabase.from('documentos').delete().eq('id', documentoId);
-  if (delDbErr) return { ok: false, error: `RLS bloqueou: ${delDbErr.message}` };
+  // Cross-check: garante que o operacaoId passado bate com o dono real do doc.
+  // Sem isso, cliente malicioso passa operacaoId errado e revalidatePath vai pra página errada.
+  if (doc.operacao_id !== operacaoId) {
+    return { ok: false, error: 'Documento não pertence a esta operação.' };
+  }
+
+  // Deleta com .select().maybeSingle() pra distinguir "não existe" de "RLS bloqueou":
+  // - erro real → { error }
+  // - RLS bloqueou → { data: null, error: null }  ← precisamos detectar
+  // - sucesso → { data: { id } }
+  const { data: deleted, error: delDbErr } = await supabase
+    .from('documentos')
+    .delete()
+    .eq('id', documentoId)
+    .select('id')
+    .maybeSingle();
+
+  if (delDbErr) return { ok: false, error: delDbErr.message };
+  if (!deleted) return { ok: false, error: 'Sem permissão pra apagar este documento (só o uploader ou admin).' };
 
   const { error: delStorageErr } = await supabase.storage.from(BUCKET).remove([doc.storage_path]);
   if (delStorageErr) {
-    // Metadata já foi deletado — arquivo órfão no storage. Ok, admin pode limpar depois.
+    // Metadata já foi deletada — arquivo órfão no storage. Admin pode limpar depois.
     console.error('Metadata deletada mas arquivo ficou órfão:', delStorageErr.message);
   }
 
