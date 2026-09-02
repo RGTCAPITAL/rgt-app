@@ -5,6 +5,7 @@ import { criarOperacao } from './actions';
 import {
   ESFERAS,
   ESPECIES,
+  ESTADOS_CIVIS,
   NATUREZAS,
   TIPOS_ATIVO,
   step1Schema,
@@ -24,6 +25,8 @@ type Props = {
 type Step1State = {
   cedente_nome: string;
   cedente_cpf: string;
+  cedente_data_nascimento: string;
+  cedente_estado_civil: string;
   numero_processo: string;
   tipo: string;
   natureza: string;
@@ -52,6 +55,8 @@ type Step2State = {
 const initialStep1: Step1State = {
   cedente_nome: '',
   cedente_cpf: '',
+  cedente_data_nascimento: '',
+  cedente_estado_civil: '',
   numero_processo: '',
   tipo: '',
   natureza: '',
@@ -219,6 +224,22 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
             placeholder="000.000.000-00"
             error={erros.cedente_cpf}
             required
+          />
+          <FieldText
+            label="Data de nascimento"
+            value={s1.cedente_data_nascimento}
+            onChange={(v) => updateS1('cedente_data_nascimento', v)}
+            type="date"
+            hint="Opcional. Se >75 anos, laudo médico vira obrigatório na aba Documentos."
+            error={erros.cedente_data_nascimento}
+          />
+          <FieldSelect
+            label="Estado civil"
+            value={s1.cedente_estado_civil}
+            onChange={(v) => updateS1('cedente_estado_civil', v)}
+            options={ESTADOS_CIVIS}
+            hint="Opcional. Casado exige certidão casamento; senão, certidão nascimento."
+            error={erros.cedente_estado_civil}
           />
           <FieldText
             label="Número do processo"
@@ -437,6 +458,8 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
             <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
               <ReviewItem label="Cedente" value={s1.cedente_nome} />
               <ReviewItem label="CPF" value={s1.cedente_cpf} />
+              <ReviewItem label="Nascimento" value={fmtDataBR(s1.cedente_data_nascimento)} />
+              <ReviewItem label="Estado civil" value={ESTADOS_CIVIS.find((e) => e.value === s1.cedente_estado_civil)?.label ?? '—'} />
               <ReviewItem label="Processo" value={s1.numero_processo} />
               <ReviewItem label="Tipo" value={TIPOS_ATIVO.find((t) => t.value === s1.tipo)?.label ?? '—'} />
               <ReviewItem label="Natureza" value={NATUREZAS.find((n) => n.value === s1.natureza)?.label ?? '—'} />

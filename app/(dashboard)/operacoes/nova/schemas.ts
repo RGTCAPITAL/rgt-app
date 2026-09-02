@@ -26,6 +26,14 @@ export const ESPECIES = [
   { value: 'honorarios', label: 'Honorários' },
 ] as const;
 
+export const ESTADOS_CIVIS = [
+  { value: 'solteiro', label: 'Solteiro(a)' },
+  { value: 'casado', label: 'Casado(a)' },
+  { value: 'divorciado', label: 'Divorciado(a)' },
+  { value: 'viuvo', label: 'Viúvo(a)' },
+  { value: 'uniao_estavel', label: 'União estável' },
+] as const;
+
 const somenteDigitos = (s: string) => s.replace(/\D/g, '');
 
 export const step1Schema = z.object({
@@ -34,6 +42,22 @@ export const step1Schema = z.object({
     .string()
     .transform(somenteDigitos)
     .refine((v) => v.length === 11, 'CPF deve ter 11 dígitos'),
+  cedente_data_nascimento: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine(
+      (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v),
+      'Data de nascimento deve estar em formato yyyy-mm-dd',
+    ),
+  cedente_estado_civil: z
+    .string()
+    .optional()
+    .or(z.literal(''))
+    .refine(
+      (v) => !v || ['solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel'].includes(v),
+      'Estado civil inválido',
+    ),
   numero_processo: z.string().trim().min(20, 'Número do processo parece inválido'),
   tipo: z.enum(['precatorio', 'rpv', 'pre_precatorio', 'pre_rpv', 'direito_creditorio']),
   natureza: z.enum(['alimentar', 'comum', 'tributaria']),

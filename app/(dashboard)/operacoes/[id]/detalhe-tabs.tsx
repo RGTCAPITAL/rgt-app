@@ -5,6 +5,7 @@ import { labelEtapa } from '@/lib/workflow';
 import { fmtDataBR } from '@/lib/formatters';
 import { TabComentarios, type Comentario } from './tab-comentarios';
 import { TabDocumentos, type Documento } from './tab-documentos';
+import type { ContextoCedente } from '@/lib/documentos-checklist';
 
 type EtapaHistorico = {
   id: string;
@@ -37,6 +38,7 @@ type OperacaoDetalhes = {
 type Props = {
   operacaoId: string;
   tipoAtivo: string;
+  ctxCedente?: ContextoCedente;
   operacao: OperacaoDetalhes;
   historico: EtapaHistorico[];
   comentarios: Comentario[];
@@ -84,6 +86,7 @@ function diffDuracao(inicio: string, fim: string | null): string {
 export function DetalheTabs({
   operacaoId,
   tipoAtivo,
+  ctxCedente,
   operacao,
   historico,
   comentarios,
@@ -120,6 +123,7 @@ export function DetalheTabs({
           <TabDocumentos
             operacaoId={operacaoId}
             tipoAtivo={tipoAtivo}
+            ctxCedente={ctxCedente}
             usuarioAtualId={usuarioAtualId}
             isAdmin={isAdmin}
             documentos={documentos}

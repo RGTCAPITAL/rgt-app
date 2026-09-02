@@ -7,7 +7,9 @@ import {
   TIPOS_DOCUMENTO,
   labelTipoDoc,
   tiposObrigatorios,
+  avisosCedente,
   type TipoDocumento,
+  type ContextoCedente,
 } from '@/lib/documentos-checklist';
 
 export type Documento = {
@@ -24,6 +26,7 @@ export type Documento = {
 type Props = {
   operacaoId: string;
   tipoAtivo: string;
+  ctxCedente?: ContextoCedente;
   usuarioAtualId: string;
   isAdmin: boolean;
   documentos: Documento[];
@@ -36,8 +39,9 @@ function fmtTamanho(b: number | null): string {
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function TabDocumentos({ operacaoId, tipoAtivo, usuarioAtualId, isAdmin, documentos }: Props) {
-  const obrigatorios = new Set(tiposObrigatorios(tipoAtivo));
+export function TabDocumentos({ operacaoId, tipoAtivo, ctxCedente, usuarioAtualId, isAdmin, documentos }: Props) {
+  const obrigatorios = new Set(tiposObrigatorios(tipoAtivo, ctxCedente));
+  const avisos = avisosCedente(ctxCedente);
   const [erro, setErro] = useState<string | null>(null);
 
   // Agrupa documentos existentes por tipo (várias versões possíveis do mesmo tipo)
@@ -68,6 +72,16 @@ export function TabDocumentos({ operacaoId, tipoAtivo, usuarioAtualId, isAdmin, 
           </span>
         )}
       </div>
+
+      {avisos.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <ul className="space-y-1">
+            {avisos.map((a) => (
+              <li key={a}>⚠️ {a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {erro && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">

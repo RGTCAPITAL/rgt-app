@@ -39,22 +39,75 @@ export function labelTipoDoc(tipo: string): string {
 }
 
 /**
- * Retorna quais tipos são obrigatórios pra este tipo de operação.
- * Regras que dependem de campos não modelados (data nascimento, estado civil)
- * ficam de fora — Ver desvios da RGT-22.
+ * Contexto do cedente pra derivar obrigatórios contextuais.
  */
-export function tiposObrigatorios(tipoAtivo: string): TipoDocumento[] {
+export type ContextoCedente = {
+  dataNascimento?: string | null;  // ISO yyyy-mm-dd
+  estadoCivil?: string | null;     // 'solteiro' | 'casado' | ...
+};
+
+function calcularIdade(dataNascISO: string): number {
+  // Sem timezone shift: parseia componentes locais
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dataNascISO);
+  if (!m) return 0;
+  const [, y, mo, d] = m.map(Number) as [string, number, number, number];
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - Number(y);
+  const mesAtual = hoje.getMonth() + 1;
+  const diaAtual = hoje.getDate();
+  if (mesAtual < mo || (mesAtual === mo && diaAtual < d)) idade--;
+  return idade;
+}
+
+/**
+ * Retorna quais tipos são obrigatórios pra este tipo de operação.
+ * Se contexto do cedente fornecido, adiciona regras derivadas:
+ *   - idade > 75 → laudo_medico
+ *   - casado → certidao_casamento; senão → certidao_nascimento
+ */
+export function tiposObrigatorios(tipoAtivo: string, ctx?: ContextoCedente): TipoDocumento[] {
   const base: TipoDocumento[] = ['rg', 'cpf', 'comprovante_residencia', 'dados_bancarios'];
+  const obrig = [...base];
 
   if (tipoAtivo === 'precatorio' || tipoAtivo === 'rpv') {
-    return [...base, 'oficio_requisitorio'];
+    obrig.push('oficio_requisitorio');
   }
   if (
     tipoAtivo === 'direito_creditorio' ||
     tipoAtivo === 'pre_precatorio' ||
     tipoAtivo === 'pre_rpv'
   ) {
-    return [...base, 'decisao_homologatoria', 'calculos'];
+    obrig.push('decisao_homologatoria', 'calculos');
   }
-  return base;
+
+  if (ctx?.dataNascimento) {
+    const idade = calcularIdade(ctx.dataNascimento);
+    if (idade > 75) obrig.push('laudo_medico');
+  }
+
+  if (ctx?.estadoCivil) {
+    if (ctx.estadoCivil === 'casado') obrig.push('certidao_casamento');
+    else obrig.push('certidao_nascimento');
+  }
+
+  return obrig;
+}
+
+/**
+ * Retorna mensagens de aviso contextual (pra exibir no topo do checklist).
+ */
+export function avisosCedente(ctx?: ContextoCedente): string[] {
+  const avisos: string[] = [];
+  if (ctx?.dataNascimento) {
+    const idade = calcularIdade(ctx.dataNascimento);
+    if (idade > 75) {
+      avisos.push(`Cedente tem ${idade} anos (>75) → laudo médico obrigatório.`);
+    }
+  }
+  if (ctx?.estadoCivil === 'casado') {
+    avisos.push('Cedente casado → certidão de casamento obrigatória.');
+  } else if (ctx?.estadoCivil) {
+    avisos.push('Cedente não casado → certidão de nascimento obrigatória.');
+  }
+  return avisos;
 }

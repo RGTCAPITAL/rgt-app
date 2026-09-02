@@ -75,6 +75,8 @@ export async function criarOperacao(payload: PayloadNovaOperacao): Promise<Criar
     loa: s1.data.loa ? Number(s1.data.loa) : null,
     cedente_nome: titleCase(s1.data.cedente_nome),
     cedente_cpf: s1.data.cedente_cpf,
+    cedente_data_nascimento: s1.data.cedente_data_nascimento || null,
+    cedente_estado_civil: s1.data.cedente_estado_civil || null,
     observacoes: s2.data.observacoes || null,
     dono_id: user.id,
     broker_id: isBroker ? user.id : null,

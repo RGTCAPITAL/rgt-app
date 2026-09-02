@@ -32,6 +32,8 @@ type Operacao = {
   loa: number | null;
   cedente_nome: string;
   cedente_cpf: string;
+  cedente_data_nascimento: string | null;
+  cedente_estado_civil: string | null;
   observacoes: string | null;
   preco_aceito: boolean | null;
   preco_proposto: number | null;
@@ -95,7 +97,8 @@ export default async function OperacaoDetalhePage({
        retencao_honorarios_pct, percentual_aquisicao,
        pss_ativo, pss_pct, rra_ativo, rra_meses,
        data_base, data_autuacao, loa,
-       cedente_nome, cedente_cpf, observacoes, preco_aceito, preco_proposto,
+       cedente_nome, cedente_cpf, cedente_data_nascimento, cedente_estado_civil,
+       observacoes, preco_aceito, preco_proposto,
        etapa_atual, created_at, updated_at,
        dono:usuarios!operacoes_dono_id_fkey(nome),
        broker:usuarios!operacoes_broker_id_fkey(nome),
@@ -192,6 +195,10 @@ export default async function OperacaoDetalhePage({
           <DetalheTabs
             operacaoId={op.id}
             tipoAtivo={op.tipo}
+            ctxCedente={{
+              dataNascimento: op.cedente_data_nascimento,
+              estadoCivil: op.cedente_estado_civil,
+            }}
             usuarioAtualId={user.id}
             isAdmin={isAdmin}
             comentarios={comentarios ?? []}
