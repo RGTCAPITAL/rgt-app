@@ -94,7 +94,9 @@ export default async function OperacoesPage({
   if (params.esfera) query = query.eq('esfera', params.esfera);
   if (params.tipo) query = query.eq('tipo', params.tipo);
   if (params.q) {
-    const busca = params.q.trim();
+    // Sanitiza input: remove chars com semântica no PostgREST/ilike
+    // ( ) , * = filtros lógicos; % _ = wildcards do LIKE; " ' \ = escape
+    const busca = params.q.trim().replace(/[,()*=%_\\"']/g, '').slice(0, 100);
     if (busca) {
       query = query.or(`numero_processo.ilike.%${busca}%,cedente_nome.ilike.%${busca}%`);
     }
