@@ -3,17 +3,27 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { NotifSino, type Notif } from './notif-sino';
 
-const menu = [
+const menuBase = [
   { label: 'Dashboard', href: '/' },
   { label: 'CRM', href: '/crm' },
   { label: 'Operações', href: '/operacoes' },
 ];
+
+const menuAdmin = [{ label: 'Usuários', href: '/admin/usuarios' }];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) redirect('/login');
+
+  const { data: meuPerfil } = await supabase
+    .from('usuarios')
+    .select('perfil:perfis(slug)')
+    .eq('id', user.id)
+    .single<{ perfil: { slug: string } | null }>();
+  const isAdmin = meuPerfil?.perfil?.slug === 'admin';
+  const menu = isAdmin ? [...menuBase, ...menuAdmin] : menuBase;
 
   const { data: notifs } = await supabase
     .from('notificacoes')
