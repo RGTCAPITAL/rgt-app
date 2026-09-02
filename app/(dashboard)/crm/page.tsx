@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { Kanban, type LeadCard } from './kanban';
+import { type LeadCard } from './kanban';
+import { CrmShell } from './crm-shell';
 import { ORIGEM_LEAD } from '@/lib/leads';
 
 type SearchParams = { origem?: string; dono?: string };
@@ -18,10 +19,17 @@ export default async function CrmPage({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  const { data: meuPerfil } = await supabase
+    .from('usuarios')
+    .select('perfil:perfis(slug)')
+    .eq('id', user.id)
+    .single<{ perfil: { slug: string } | null }>();
+  const isAdmin = meuPerfil?.perfil?.slug === 'admin';
+
   let query = supabase
     .from('leads')
     .select(
-      'id, nome, telefone, email, origem, status, created_at, motivo_perda, operacao_id, dono:usuarios!leads_dono_id_fkey(id, nome)',
+      'id, nome, telefone, email, cpf_cnpj, origem, status, created_at, motivo_perda, operacao_id, dono_id, dono:usuarios!leads_dono_id_fkey(id, nome)',
     )
     .order('created_at', { ascending: false });
 
@@ -32,8 +40,16 @@ export default async function CrmPage({
     (LeadCard & { dono: { id: string; nome: string | null } | null })[]
   >();
 
-  // Lista de donos únicos pra filtro (a partir do resultado — evita query extra)
-  const donosUnicos = Array.from(
+  // Todos os donos possíveis (não só os que já têm lead) — pra dropdown do form
+  const { data: donosTodos } = await supabase
+    .from('usuarios')
+    .select('id, nome')
+    .eq('ativo', true)
+    .order('nome')
+    .returns<{ id: string; nome: string | null }[]>();
+
+  // Filtro de dono usa só os que têm lead (evita ruído)
+  const donosNoResultado = Array.from(
     new Map(
       (leads ?? [])
         .filter((l) => l.dono?.id)
@@ -45,22 +61,12 @@ export default async function CrmPage({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900">CRM</h1>
-          <p className="mt-2 text-sm text-neutral-600">
-            {leads?.length ?? 0} lead{(leads?.length ?? 0) === 1 ? '' : 's'} no pipeline. Arraste
-            entre colunas pra mudar status.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled
-          title="Formulário de novo lead: implementação em RGT-62"
-          className="cursor-not-allowed rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white opacity-40"
-        >
-          + Novo lead
-        </button>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">CRM</h1>
+        <p className="mt-2 text-sm text-neutral-600">
+          {leads?.length ?? 0} lead{(leads?.length ?? 0) === 1 ? '' : 's'} no pipeline. Arraste
+          entre colunas pra mudar status. Clique num card pra editar.
+        </p>
       </div>
 
       <form className="mb-4 flex flex-wrap items-end gap-3 rounded-md border border-neutral-200 bg-white p-3">
@@ -87,7 +93,7 @@ export default async function CrmPage({
             className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-900 outline-none focus:border-neutral-900"
           >
             <option value="">Todos</option>
-            {donosUnicos.map(([id, nome]) => (
+            {donosNoResultado.map(([id, nome]) => (
               <option key={id} value={id}>
                 {nome}
               </option>
@@ -118,7 +124,12 @@ export default async function CrmPage({
         </div>
       )}
 
-      <Kanban leads={leads ?? []} />
+      <CrmShell
+        leads={leads ?? []}
+        donos={donosTodos ?? []}
+        meuId={user.id}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }

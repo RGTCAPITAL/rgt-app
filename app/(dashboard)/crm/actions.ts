@@ -3,10 +3,87 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { STATUS_LEAD, type StatusLead } from '@/lib/leads';
+import { leadFormSchema } from './lead-schemas';
 
-type Result = { ok: true } | { ok: false; error: string };
+type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
 const STATUS_VALIDOS = STATUS_LEAD.map((s) => s.value) as readonly StatusLead[];
+
+export async function criarLead(payload: Record<string, unknown>): Promise<Result<{ id: string }>> {
+  const parsed = leadFormSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'Sessão expirada.' };
+
+  // Broker só cria pra si mesmo — força dono_id = self
+  const { data: usuario } = await supabase
+    .from('usuarios')
+    .select('perfil:perfis(slug)')
+    .eq('id', user.id)
+    .single<{ perfil: { slug: string } | null }>();
+  const isBroker = usuario?.perfil?.slug === 'broker';
+
+  const insert = {
+    nome: parsed.data.nome,
+    telefone: parsed.data.telefone || null,
+    email: parsed.data.email || null,
+    cpf_cnpj: parsed.data.cpf_cnpj || null,
+    origem: parsed.data.origem,
+    notas: parsed.data.notas || null,
+    dono_id: isBroker ? user.id : (parsed.data.dono_id || null),
+    status: 'novo' as const,
+  };
+
+  const { data, error } = await supabase.from('leads').insert(insert).select('id').single();
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/crm');
+  return { ok: true, data: { id: data.id } };
+}
+
+export async function atualizarLead(
+  leadId: string,
+  payload: Record<string, unknown>,
+): Promise<Result> {
+  const parsed = leadFormSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'Sessão expirada.' };
+
+  const update = {
+    nome: parsed.data.nome,
+    telefone: parsed.data.telefone || null,
+    email: parsed.data.email || null,
+    cpf_cnpj: parsed.data.cpf_cnpj || null,
+    origem: parsed.data.origem,
+    notas: parsed.data.notas || null,
+    dono_id: parsed.data.dono_id || null,
+  };
+
+  const { data, error } = await supabase
+    .from('leads')
+    .update(update)
+    .eq('id', leadId)
+    .select('id')
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: 'Lead não encontrado ou sem permissão.' };
+
+  revalidatePath('/crm');
+  return { ok: true };
+}
 
 export async function mudarStatusLead(
   leadId: string,

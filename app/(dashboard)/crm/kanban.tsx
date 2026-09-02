@@ -3,17 +3,20 @@
 import { useState, useTransition } from 'react';
 import { mudarStatusLead } from './actions';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
+import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
 
 export type LeadCard = {
   id: string;
   nome: string;
   telefone: string | null;
   email: string | null;
+  cpf_cnpj: string | null;
   origem: string;
   status: StatusLead;
   created_at: string;
   motivo_perda: string | null;
   operacao_id: string | null;
+  dono_id: string | null;
   dono: { nome: string | null } | null;
 };
 
@@ -32,11 +35,26 @@ function iniciais(nome: string | null): string {
   return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
 }
 
-export function Kanban({ leads }: { leads: LeadCard[] }) {
+export function Kanban({
+  leads,
+  donos,
+  meuId,
+  isAdmin,
+  abrirNovo,
+  onNovoFechado,
+}: {
+  leads: LeadCard[];
+  donos: DonoOption[];
+  meuId: string;
+  isAdmin: boolean;
+  abrirNovo: boolean;
+  onNovoFechado: () => void;
+}) {
   const [erro, setErro] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<StatusLead | null>(null);
   const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
+  const [editandoLead, setEditandoLead] = useState<LeadEdit | null>(null);
   const [_, startTransition] = useTransition();
 
   function onDragStart(e: React.DragEvent, leadId: string) {
@@ -129,6 +147,18 @@ export function Kanban({ leads }: { leads: LeadCard[] }) {
                       key={lead.id}
                       draggable
                       onDragStart={(e) => onDragStart(e, lead.id)}
+                      onClick={() =>
+                        setEditandoLead({
+                          id: lead.id,
+                          nome: lead.nome,
+                          telefone: lead.telefone,
+                          email: lead.email,
+                          cpf_cnpj: lead.cpf_cnpj,
+                          origem: lead.origem,
+                          dono_id: lead.dono_id,
+                          notas: null,
+                        })
+                      }
                       className="cursor-grab rounded-md border border-neutral-200 bg-white p-3 text-sm shadow-sm hover:shadow active:cursor-grabbing"
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -176,6 +206,25 @@ export function Kanban({ leads }: { leads: LeadCard[] }) {
           );
         })}
       </div>
+
+      <LeadForm
+        aberto={abrirNovo}
+        onClose={onNovoFechado}
+        donos={donos}
+        meuId={meuId}
+        isAdmin={isAdmin}
+      />
+
+      {editandoLead && (
+        <LeadForm
+          aberto={true}
+          onClose={() => setEditandoLead(null)}
+          donos={donos}
+          meuId={meuId}
+          isAdmin={isAdmin}
+          editando={editandoLead}
+        />
+      )}
 
       {modalPerdido && (
         <div
