@@ -29,11 +29,11 @@ export default async function NovaOperacaoPage({
 
   const { data: entes } = await supabase
     .from('entes_devedores')
-    .select('id, nome, esfera, uf')
+    .select('id, nome, esfera, uf, situacao')
     .eq('ativo', true)
     .order('esfera')
     .order('nome')
-    .returns<{ id: string; nome: string; esfera: Esfera; uf: string | null }[]>();
+    .returns<{ id: string; nome: string; esfera: Esfera; uf: string | null; situacao: string }[]>();
 
   // Se veio de um lead, pré-preenche cedente
   let leadInicial: { id: string; nome: string; cpf: string } | null = null;

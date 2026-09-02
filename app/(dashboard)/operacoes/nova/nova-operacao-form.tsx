@@ -14,7 +14,13 @@ import {
 } from './schemas';
 import { TRIBUNAIS_POR_ESFERA, type Esfera } from '@/lib/tribunais';
 
-type EnteDevedor = { id: string; nome: string; esfera: Esfera; uf: string | null };
+type EnteDevedor = {
+  id: string;
+  nome: string;
+  esfera: Esfera;
+  uf: string | null;
+  situacao: string;
+};
 
 type Props = {
   entesDevedores: EnteDevedor[];
@@ -289,12 +295,20 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
             onChange={(v) => updateS1('ente_devedor_id', v)}
             options={entesFiltrados.map((e) => ({
               value: e.id,
-              label: e.uf ? `${e.nome} (${e.uf})` : e.nome,
+              label: `${e.uf ? `${e.nome} (${e.uf})` : e.nome}${
+                e.situacao === 'regime_especial' ? '  ⚠️ REGIME ESPECIAL' : ''
+              }`,
             }))}
             error={erros.ente_devedor_id}
             required
             disabled={!s1.esfera}
-            hint={!s1.esfera ? 'Selecione a esfera primeiro' : undefined}
+            hint={
+              !s1.esfera
+                ? 'Selecione a esfera primeiro'
+                : entesFiltrados.find((e) => e.id === s1.ente_devedor_id)?.situacao === 'regime_especial'
+                  ? '⚠️ Este ente está em regime especial — RGT normalmente não opera. Só admin consegue salvar.'
+                  : undefined
+            }
           />
           <FieldSelect
             label="Espécie"
