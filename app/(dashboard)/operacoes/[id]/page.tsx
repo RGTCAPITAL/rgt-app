@@ -1,9 +1,80 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { WorkflowStepper } from './workflow-stepper';
+import { DetalheTabs } from './detalhe-tabs';
+import { labelEtapa } from '@/lib/workflow';
+import { TIPOS_ATIVO } from '../nova/schemas';
 
-export default async function OperacaoDetalhePage({ params }: { params: Promise<{ id: string }> }) {
+type Operacao = {
+  id: string;
+  numero_processo: string;
+  tipo: string;
+  esfera: string;
+  natureza: string;
+  especie: string;
+  tribunal: string;
+  valor_total: number;
+  valor_principal: number | null;
+  valor_juros: number | null;
+  valor_selic: number | null;
+  retencao_honorarios_pct: number;
+  percentual_aquisicao: number;
+  pss_ativo: boolean;
+  pss_pct: number | null;
+  rra_ativo: boolean;
+  rra_meses: number | null;
+  data_base: string;
+  data_autuacao: string | null;
+  loa: number | null;
+  cedente_nome: string;
+  cedente_cpf: string;
+  observacoes: string | null;
+  etapa_atual: string;
+  created_at: string;
+  updated_at: string;
+  dono: { nome: string | null } | null;
+  broker: { nome: string | null } | null;
+  ente_devedor: { nome: string } | null;
+};
+
+type EtapaHist = {
+  id: string;
+  etapa: string;
+  entrou_em: string;
+  saiu_em: string | null;
+  observacao: string | null;
+  autorizado_por: { nome: string | null } | null;
+};
+
+function fmtBRL(v: number): string {
+  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function fmtCPF(cpf: string): string {
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function labelTipo(v: string): string {
+  return TIPOS_ATIVO.find((t) => t.value === v)?.label ?? v;
+}
+
+function corEtapa(etapa: string): string {
+  if (etapa === 'finalizada') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+  if (etapa === 'cancelada') return 'bg-red-100 text-red-800 border-red-200';
+  if (etapa === 'pagamento') return 'bg-blue-100 text-blue-800 border-blue-200';
+  return 'bg-neutral-100 text-neutral-800 border-neutral-200';
+}
+
+export default async function OperacaoDetalhePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ nova?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -14,74 +85,160 @@ export default async function OperacaoDetalhePage({ params }: { params: Promise<
   const { data: op, error } = await supabase
     .from('operacoes')
     .select(
-      'id, numero_processo, tipo, esfera, natureza, especie, tribunal, valor_total, cedente_nome, cedente_cpf, etapa_atual, created_at, ente_devedor:entes_devedores(nome)',
+      `id, numero_processo, tipo, esfera, natureza, especie, tribunal,
+       valor_total, valor_principal, valor_juros, valor_selic,
+       retencao_honorarios_pct, percentual_aquisicao,
+       pss_ativo, pss_pct, rra_ativo, rra_meses,
+       data_base, data_autuacao, loa,
+       cedente_nome, cedente_cpf, observacoes,
+       etapa_atual, created_at, updated_at,
+       dono:usuarios!operacoes_dono_id_fkey(nome),
+       broker:usuarios!operacoes_broker_id_fkey(nome),
+       ente_devedor:entes_devedores(nome)`,
     )
     .eq('id', id)
-    .single<{
-      id: string;
-      numero_processo: string;
-      tipo: string;
-      esfera: string;
-      natureza: string;
-      especie: string;
-      tribunal: string;
-      valor_total: number;
-      cedente_nome: string;
-      cedente_cpf: string;
-      etapa_atual: string;
-      created_at: string;
-      ente_devedor: { nome: string } | null;
-    }>();
+    .single<Operacao>();
 
   if (error || !op) notFound();
 
+  const { data: usuario } = await supabase
+    .from('usuarios')
+    .select('perfil:perfis(slug)')
+    .eq('id', user.id)
+    .single<{ perfil: { slug: string } | null }>();
+
+  const podeAvancar = ['admin', 'gestao'].includes(usuario?.perfil?.slug ?? '');
+
+  const { data: historico } = await supabase
+    .from('etapas_operacao')
+    .select('id, etapa, entrou_em, saiu_em, observacao, autorizado_por:usuarios(nome)')
+    .eq('operacao_id', id)
+    .order('entrou_em', { ascending: false })
+    .returns<EtapaHist[]>();
+
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-6">
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-4">
         <Link href="/operacoes" className="text-sm text-neutral-500 hover:text-neutral-900">
           ← Operações
         </Link>
       </div>
 
-      <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-        Operação cadastrada com sucesso.
+      {sp.nova === '1' && (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          Operação cadastrada com sucesso.
+        </div>
+      )}
+
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+            {op.numero_processo}
+          </h1>
+          <p className="mt-1 text-sm text-neutral-600">
+            {op.cedente_nome} · {labelTipo(op.tipo)} · {op.tribunal}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-wide text-neutral-500">Valor total</div>
+            <div className="text-lg font-semibold text-neutral-900">{fmtBRL(op.valor_total)}</div>
+          </div>
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${corEtapa(op.etapa_atual)}`}
+          >
+            {labelEtapa(op.etapa_atual)}
+          </span>
+        </div>
+      </header>
+
+      <div className="mb-6">
+        <WorkflowStepper etapaAtual={op.etapa_atual} />
       </div>
 
-      <h1 className="text-2xl font-bold tracking-tight">Operação {op.numero_processo}</h1>
-      <p className="mt-1 text-sm text-neutral-600">
-        Cedente: <strong>{op.cedente_nome}</strong> — Etapa atual:{' '}
-        <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium">{op.etapa_atual}</span>
-      </p>
+      <div className="mb-6 flex items-center justify-between rounded-md border border-neutral-200 bg-white p-4">
+        <div>
+          <div className="text-sm font-medium text-neutral-900">Ações da operação</div>
+          <div className="text-xs text-neutral-500">
+            {podeAvancar
+              ? 'Mover a operação para a próxima etapa do workflow.'
+              : 'Somente admin/gestão podem mudar etapas.'}
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled
+          title="Fluxo completo de mudança de etapa será implementado na RGT-20."
+          className="cursor-not-allowed rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white opacity-40"
+        >
+          Avançar etapa →
+        </button>
+      </div>
 
-      <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-neutral-200 p-4 text-sm">
-        <Item label="Tipo" value={op.tipo} />
-        <Item label="Esfera" value={op.esfera} />
-        <Item label="Natureza" value={op.natureza} />
-        <Item label="Espécie" value={op.especie} />
-        <Item label="Tribunal" value={op.tribunal} />
-        <Item label="Ente devedor" value={op.ente_devedor?.nome ?? '—'} />
-        <Item
-          label="Valor total"
-          value={Number(op.valor_total).toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-          })}
-        />
-        <Item label="Criada em" value={new Date(op.created_at).toLocaleString('pt-BR')} />
-      </dl>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        <div>
+          <DetalheTabs operacao={op} historico={historico ?? []} />
+        </div>
 
-      <p className="mt-6 text-xs text-neutral-500">
-        Workflow visual e histórico de etapas: implementação em RGT-19.
-      </p>
+        <aside className="space-y-4">
+          <SideCard title="Identificação">
+            <SideItem label="Tipo" value={labelTipo(op.tipo)} />
+            <SideItem label="Esfera" value={<span className="capitalize">{op.esfera}</span>} />
+            <SideItem label="Natureza" value={<span className="capitalize">{op.natureza}</span>} />
+            <SideItem label="Espécie" value={op.especie.replace('_', ' ')} />
+          </SideCard>
+
+          <SideCard title="Cedente">
+            <SideItem label="Nome" value={op.cedente_nome} />
+            <SideItem label="CPF" value={fmtCPF(op.cedente_cpf)} />
+          </SideCard>
+
+          <SideCard title="Devedor & tribunal">
+            <SideItem label="Ente" value={op.ente_devedor?.nome ?? '—'} />
+            <SideItem label="Tribunal" value={op.tribunal} />
+          </SideCard>
+
+          <SideCard title="Responsáveis">
+            <SideItem label="Dono" value={op.dono?.nome ?? '—'} />
+            <SideItem label="Broker" value={op.broker?.nome ?? '—'} />
+          </SideCard>
+
+          <SideCard title="Sistema">
+            <SideItem
+              label="Criada em"
+              value={new Date(op.created_at).toLocaleDateString('pt-BR')}
+            />
+            <SideItem
+              label="Atualizada"
+              value={new Date(op.updated_at).toLocaleDateString('pt-BR')}
+            />
+          </SideCard>
+
+          <p className="px-1 text-xs text-neutral-500">
+            Edição inline dos campos: escopo futuro (não RGT-19).
+          </p>
+        </aside>
+      </div>
     </div>
   );
 }
 
-function Item({ label, value }: { label: string; value: string }) {
+function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <>
-      <dt className="text-neutral-500">{label}</dt>
+    <div className="rounded-md border border-neutral-200 bg-white p-4">
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        {title}
+      </h3>
+      <dl className="space-y-2 text-sm">{children}</dl>
+    </div>
+  );
+}
+
+function SideItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs text-neutral-500">{label}</dt>
       <dd className="font-medium text-neutral-900">{value}</dd>
-    </>
+    </div>
   );
 }

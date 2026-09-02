@@ -89,5 +89,5 @@ export async function criarOperacao(payload: PayloadNovaOperacao): Promise<Criar
   }
 
   revalidatePath('/operacoes');
-  redirect(`/operacoes/${nova.id}`);
+  redirect(`/operacoes/${nova.id}?nova=1`);
 }
