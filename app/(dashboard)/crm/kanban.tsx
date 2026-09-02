@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { mudarStatusLead } from './actions';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
@@ -185,6 +186,15 @@ export function Kanban({
                           </span>
                         )}
                       </div>
+                      {(lead.status === 'qualificado' || lead.status === 'proposta_enviada') && (
+                        <Link
+                          href={`/operacoes/nova?lead_id=${lead.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-2 inline-block rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-700"
+                        >
+                          → Virar operação
+                        </Link>
+                      )}
                       {lead.status === 'perdido' && lead.motivo_perda && (
                         <p className="mt-2 border-l-2 border-red-300 pl-2 text-[11px] italic text-neutral-600">
                           {lead.motivo_perda}

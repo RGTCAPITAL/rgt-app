@@ -8,6 +8,7 @@ import { step1Schema, step2Schema } from './schemas';
 type PayloadNovaOperacao = {
   step1: Record<string, unknown>;
   step2: Record<string, unknown>;
+  leadId?: string;
 };
 
 export type CriarOperacaoResult =
@@ -86,6 +87,19 @@ export async function criarOperacao(payload: PayloadNovaOperacao): Promise<Criar
 
   if (insertError) {
     return { ok: false, error: insertError.message };
+  }
+
+  // Se veio de um lead, marca ele como 'ganho' + linka operacao
+  if (payload.leadId) {
+    const { error: leadErr } = await supabase
+      .from('leads')
+      .update({ status: 'ganho', operacao_id: nova.id })
+      .eq('id', payload.leadId);
+    if (leadErr) {
+      // Operação foi criada; falha ao atualizar lead não é fatal — logamos
+      console.error(`Operação ${nova.id} criada mas falhou update do lead ${payload.leadId}:`, leadErr.message);
+    }
+    revalidatePath('/crm');
   }
 
   revalidatePath('/operacoes');

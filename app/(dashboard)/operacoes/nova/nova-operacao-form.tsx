@@ -18,6 +18,7 @@ type EnteDevedor = { id: string; nome: string; esfera: Esfera; uf: string | null
 type Props = {
   entesDevedores: EnteDevedor[];
   podeMunicipal: boolean;
+  leadInicial?: { id: string; nome: string; cpf: string } | null;
 };
 
 type Step1State = {
@@ -88,9 +89,13 @@ function parseNumero(v: string): number {
   return Number(v.replace(',', '.')) || 0;
 }
 
-export function NovaOperacaoForm({ entesDevedores, podeMunicipal }: Props) {
+export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [s1, setS1] = useState<Step1State>(initialStep1);
+  const [s1, setS1] = useState<Step1State>(
+    leadInicial
+      ? { ...initialStep1, cedente_nome: leadInicial.nome, cedente_cpf: fmtCPF(leadInicial.cpf) }
+      : initialStep1,
+  );
   const [s2, setS2] = useState<Step2State>(initialStep2);
   const [aceite, setAceite] = useState(false);
   const [erros, setErros] = useState<Record<string, string>>({});
@@ -179,7 +184,11 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal }: Props) {
     const step1Payload = { ...s1, cedente_cpf: s1.cedente_cpf.replace(/\D/g, '') };
 
     startTransition(async () => {
-      const res = await criarOperacao({ step1: step1Payload, step2: s2 });
+      const res = await criarOperacao({
+        step1: step1Payload,
+        step2: s2,
+        leadId: leadInicial?.id,
+      });
       if (res && !res.ok) {
         setErroServer(res.error);
         setStep(1);
