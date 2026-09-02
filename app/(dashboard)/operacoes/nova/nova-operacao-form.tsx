@@ -78,6 +78,7 @@ const initialStep2: Step2State = {
 };
 
 import { maskCPF as fmtCPF, maskCNJ } from '@/lib/masks';
+import { fmtDataBR } from '@/lib/formatters';
 
 function parseNumero(v: string): number {
   return Number(v.replace(',', '.')) || 0;
@@ -446,7 +447,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 value={entesDevedores.find((e) => e.id === s1.ente_devedor_id)?.nome ?? '—'}
               />
               <ReviewItem label="Espécie" value={ESPECIES.find((e) => e.value === s1.especie)?.label ?? '—'} />
-              <ReviewItem label="Data-base" value={s1.data_base ? new Date(s1.data_base).toLocaleDateString('pt-BR') : '—'} />
+              <ReviewItem label="Data-base" value={fmtDataBR(s1.data_base)} />
               <ReviewItem label="LOA" value={s1.loa || '—'} />
               <ReviewItem
                 label="Principal"
@@ -469,7 +470,15 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
             </dl>
           </div>
 
-          <label className="flex items-start gap-2 text-sm">
+          <label
+            className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm transition-colors ${
+              aceite
+                ? 'border-emerald-300 bg-emerald-50'
+                : erros.aceite_termos
+                  ? 'border-red-400 bg-red-50'
+                  : 'border-amber-300 bg-amber-50'
+            }`}
+          >
             <input
               type="checkbox"
               checked={aceite}
@@ -479,8 +488,9 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
               }}
               className="mt-0.5 h-4 w-4"
             />
-            <span>
+            <span className="font-medium">
               Confirmo que os dados acima estão corretos e desejo enviar a solicitação de operação.
+              {!aceite && <span className="ml-1 text-red-600">*</span>}
             </span>
           </label>
           {erros.aceite_termos && (
@@ -512,8 +522,9 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
           <button
             type="button"
             onClick={submeter}
-            disabled={pending}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+            disabled={pending || !aceite}
+            title={!aceite ? 'Marque a confirmação acima primeiro' : undefined}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:opacity-100"
           >
             {pending ? 'Enviando…' : 'Enviar solicitação'}
           </button>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { labelEtapa } from '@/lib/workflow';
+import { fmtDataBR } from '@/lib/formatters';
 import { TabComentarios, type Comentario } from './tab-comentarios';
 import { TabDocumentos, type Documento } from './tab-documentos';
 
@@ -64,8 +65,7 @@ function fmtPct(v: number | null | undefined): string {
 }
 
 function fmtData(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('pt-BR');
+  return fmtDataBR(iso);
 }
 
 function fmtDataHora(iso: string): string {

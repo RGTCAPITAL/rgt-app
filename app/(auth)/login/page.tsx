@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { signIn } from './actions';
+import { LoginError } from './login-error';
 
 export default async function LoginPage({
   searchParams,
@@ -33,7 +34,7 @@ export default async function LoginPage({
             className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
           />
         </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        <LoginError initialError={error ?? null} />
         {message && <p className="text-sm text-green-700">{message}</p>}
         <button
           type="submit"

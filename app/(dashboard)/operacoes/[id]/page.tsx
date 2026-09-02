@@ -7,6 +7,7 @@ import { AcoesEtapa } from './acoes-etapa';
 import { ToastNovaOperacao } from './toast-auto-hide';
 import { labelEtapa } from '@/lib/workflow';
 import { TIPOS_ATIVO, ESPECIES } from '../nova/schemas';
+import { fmtDataBR } from '@/lib/formatters';
 
 type Operacao = {
   id: string;
@@ -243,14 +244,8 @@ export default async function OperacaoDetalhePage({
           </SideCard>
 
           <SideCard title="Sistema">
-            <SideItem
-              label="Criada em"
-              value={new Date(op.created_at).toLocaleDateString('pt-BR')}
-            />
-            <SideItem
-              label="Atualizada"
-              value={new Date(op.updated_at).toLocaleDateString('pt-BR')}
-            />
+            <SideItem label="Criada em" value={fmtDataBR(op.created_at)} />
+            <SideItem label="Atualizada" value={fmtDataBR(op.updated_at)} />
           </SideCard>
 
         </aside>
