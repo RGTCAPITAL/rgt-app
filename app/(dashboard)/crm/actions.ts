@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { STATUS_LEAD, type StatusLead } from '@/lib/leads';
 import { leadFormSchema } from './lead-schemas';
+import { titleCase } from '@/lib/formatters';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -30,7 +31,7 @@ export async function criarLead(payload: Record<string, unknown>): Promise<Resul
   const isBroker = usuario?.perfil?.slug === 'broker';
 
   const insert = {
-    nome: parsed.data.nome,
+    nome: titleCase(parsed.data.nome),
     telefone: parsed.data.telefone || null,
     email: parsed.data.email || null,
     cpf_cnpj: parsed.data.cpf_cnpj || null,
@@ -63,7 +64,7 @@ export async function atualizarLead(
   if (!user) return { ok: false, error: 'Sessão expirada.' };
 
   const update = {
-    nome: parsed.data.nome,
+    nome: titleCase(parsed.data.nome),
     telefone: parsed.data.telefone || null,
     email: parsed.data.email || null,
     cpf_cnpj: parsed.data.cpf_cnpj || null,

@@ -133,7 +133,11 @@ export function Kanban({
               }`}
             >
               <div className="mb-2 flex items-center justify-between px-1">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${col.cor}`}>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    leadsDaCol.length === 0 ? col.corVazio : col.cor
+                  }`}
+                >
                   {col.label}
                 </span>
                 <span className="text-xs text-neutral-500">{leadsDaCol.length}</span>

@@ -58,7 +58,9 @@ export function NotifSino({ notifs }: { notifs: Notif[] }) {
         type="button"
         onClick={() => setAberto((v) => !v)}
         aria-label="Notificações"
-        className="relative rounded-md p-2 text-neutral-700 hover:bg-neutral-100"
+        className={`relative rounded-md p-2 hover:bg-neutral-100 ${
+          naoLidas > 0 ? 'text-neutral-900' : 'text-neutral-400'
+        }`}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />

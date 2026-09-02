@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { step1Schema, step2Schema } from './schemas';
+import { titleCase } from '@/lib/formatters';
 
 type PayloadNovaOperacao = {
   step1: Record<string, unknown>;
@@ -72,7 +73,7 @@ export async function criarOperacao(payload: PayloadNovaOperacao): Promise<Criar
     data_base: s1.data.data_base,
     data_autuacao: s1.data.data_autuacao || null,
     loa: s1.data.loa ? Number(s1.data.loa) : null,
-    cedente_nome: s1.data.cedente_nome,
+    cedente_nome: titleCase(s1.data.cedente_nome),
     cedente_cpf: s1.data.cedente_cpf,
     observacoes: s2.data.observacoes || null,
     dono_id: user.id,

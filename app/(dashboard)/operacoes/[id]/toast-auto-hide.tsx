@@ -1,21 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
 
+/**
+ * Auto-hide após 5s. NÃO faz router.replace pra evitar race com
+ * revalidatePath do server action (que remontaria o toast). O ?nova=1
+ * na URL some naturalmente na próxima navegação do user.
+ */
 export function ToastNovaOperacao() {
   const [visivel, setVisivel] = useState(true);
-  const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      setVisivel(false);
-      // Remove ?nova=1 da URL sem recarregar (só cosmético)
-      router.replace(pathname);
-    }, 5000);
+    const t = setTimeout(() => setVisivel(false), 5000);
     return () => clearTimeout(t);
-  }, [router, pathname]);
+  }, []);
 
   if (!visivel) return null;
 

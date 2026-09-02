@@ -31,3 +31,22 @@ export function fmtDataHoraBR(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('pt-BR');
 }
+
+/**
+ * Title Case pra nome de pessoa/empresa.
+ * Preserva conectivos minúsculos comuns em pt-BR (de, da, do, das, dos, e).
+ * Ex: "pedro da silva" → "Pedro da Silva"
+ */
+export function titleCase(v: string): string {
+  const lower = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du']);
+  return v
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w, i) => {
+      if (i > 0 && lower.has(w)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(' ');
+}
+
