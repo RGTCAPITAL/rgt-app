@@ -77,6 +77,15 @@ export default async function OperacoesPage({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  // Filtro Esfera esconde Municipal pra quem não tem permissão (mesma flag do form).
+  const { data: usuario } = await supabase
+    .from('usuarios')
+    .select('perfil:perfis(permissoes)')
+    .eq('id', user.id)
+    .single<{ perfil: { permissoes: Record<string, unknown> | null } | null }>();
+  const podeMunicipal = Boolean(usuario?.perfil?.permissoes?.['pode_esfera_municipal']);
+  const esferasVisiveis = podeMunicipal ? ESFERAS : ESFERAS.filter((e) => e.value !== 'municipal');
+
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -162,7 +171,7 @@ export default async function OperacoesPage({
             className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
           >
             <option value="">Todas</option>
-            {ESFERAS.map((e) => (
+            {esferasVisiveis.map((e) => (
               <option key={e.value} value={e.value}>
                 {e.label}
               </option>
