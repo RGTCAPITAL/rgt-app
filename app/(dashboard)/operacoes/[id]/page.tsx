@@ -1,9 +1,9 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { WorkflowStepper } from './workflow-stepper';
 import { DetalheTabs } from './detalhe-tabs';
 import { AcoesEtapa } from './acoes-etapa';
 import { ToastNovaOperacao } from './toast-auto-hide';
+import { ProgressoTimeline } from './progresso-timeline';
 import { labelEtapa } from '@/lib/workflow';
 import { TIPOS_ATIVO, ESPECIES } from '../nova/schemas';
 import { fmtDataBR } from '@/lib/formatters';
@@ -216,10 +216,6 @@ export default async function OperacaoDetalhePage({
       </header>
 
       <div className="mb-6">
-        <WorkflowStepper etapaAtual={op.etapa_atual} />
-      </div>
-
-      <div className="mb-6">
         <AcoesEtapa
           operacaoId={op.id}
           etapaAtual={op.etapa_atual}
@@ -267,6 +263,8 @@ export default async function OperacaoDetalhePage({
         </div>
 
         <aside className="space-y-4">
+          <ProgressoTimeline etapaAtual={op.etapa_atual} historico={historico ?? []} />
+
           <SideCard title="Identificação">
             <SideItem label="Tipo" value={labelTipo(op.tipo)} />
             <SideItem label="Esfera" value={<span className="capitalize">{op.esfera}</span>} />

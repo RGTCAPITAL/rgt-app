@@ -1,6 +1,17 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Search, FileText, ArrowLeft, ArrowRight, Plus } from 'lucide-react';
+import {
+  Search,
+  FileText,
+  ArrowLeft,
+  ArrowRight,
+  Plus,
+  Briefcase,
+  Clock,
+  TrendingUp,
+  CheckCircle,
+  XCircle,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { ESFERAS, TIPOS_ATIVO } from './nova/schemas';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { buttonVariants } from '@/components/ui/button';
-import { SectionHero } from '@/components/ui/section-hero';
+import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
 
 const ETAPAS = [
@@ -134,17 +145,72 @@ export default async function OperacoesPage({
   const totalPaginas = count ? Math.max(1, Math.ceil(count / PAGE_SIZE)) : 1;
   const temFiltro = Boolean(params.etapa || params.esfera || params.tipo || params.q);
 
+  // Queries agregadas pros KPIs + Resumo Financeiro (rodam em paralelo)
+  const [
+    { count: totalCount },
+    { count: pendentesCount },
+    { count: emAndamentoCount },
+    { count: concluidasCount },
+    { count: canceladasCount },
+    { data: pipelineData },
+    { data: aceitasData },
+  ] = await Promise.all([
+    supabase.from('operacoes').select('id', { count: 'exact', head: true }),
+    supabase
+      .from('operacoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('etapa_atual', 'precificacao'),
+    supabase
+      .from('operacoes')
+      .select('id', { count: 'exact', head: true })
+      .in('etapa_atual', [
+        'aceite',
+        'due_diligence_juridica',
+        'due_diligence_fiscal',
+        'analise_investimento',
+        'cartorio',
+        'pagamento',
+      ]),
+    supabase
+      .from('operacoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('etapa_atual', 'finalizada'),
+    supabase
+      .from('operacoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('etapa_atual', 'cancelada'),
+    supabase
+      .from('operacoes')
+      .select('valor_total')
+      .not('etapa_atual', 'in', '(finalizada,cancelada)')
+      .returns<{ valor_total: number }[]>(),
+    supabase
+      .from('operacoes')
+      .select('valor_total')
+      .eq('preco_aceito', true)
+      .returns<{ valor_total: number }[]>(),
+  ]);
+
+  const volumePipeline = (pipelineData ?? []).reduce(
+    (acc, o) => acc + Number(o.valor_total || 0),
+    0,
+  );
+  const volumeAceito = (aceitasData ?? []).reduce((acc, o) => acc + Number(o.valor_total || 0), 0);
+  const taxaSucesso =
+    totalCount && totalCount > 0 ? ((concluidasCount ?? 0) / totalCount) * 100 : 0;
+
+  const fmtBRLShort = (v: number) =>
+    v.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      maximumFractionDigits: 0,
+    });
+
   return (
     <div>
       <SectionHero
         title="Operações"
-        subtitle={
-          count === null || count === undefined
-            ? 'Acompanhe suas operações de precatórios em um fluxo unificado.'
-            : count === 1
-              ? '1 operação encontrada'
-              : `${count} operações encontradas`
-        }
+        subtitle="Acompanhe suas operações de precatórios em um fluxo unificado."
         color="emerald"
         action={
           <Link
@@ -156,6 +222,67 @@ export default async function OperacoesPage({
           </Link>
         }
       />
+
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
+        <KpiTile
+          label="Total de Operações"
+          value={String(totalCount ?? 0)}
+          icon={Briefcase}
+          color="blue"
+        />
+        <KpiTile label="Pendentes" value={String(pendentesCount ?? 0)} icon={Clock} color="amber" />
+        <KpiTile
+          label="Em Andamento"
+          value={String(emAndamentoCount ?? 0)}
+          icon={TrendingUp}
+          color="violet"
+        />
+        <KpiTile
+          label="Concluídas"
+          value={String(concluidasCount ?? 0)}
+          icon={CheckCircle}
+          color="emerald"
+        />
+        <KpiTile
+          label="Recusadas"
+          value={String(canceladasCount ?? 0)}
+          icon={XCircle}
+          color="rose"
+        />
+      </div>
+
+      <div className="mb-6 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-4 text-sm font-semibold text-neutral-900">Resumo Financeiro</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <div className="text-xs font-medium text-neutral-600">Volume Total em Pipeline</div>
+            <div className="mt-2 text-3xl font-bold text-emerald-700">
+              {fmtBRLShort(volumePipeline)}
+            </div>
+            <div className="mt-1 text-xs text-neutral-500">
+              {(pipelineData ?? []).length} operação
+              {(pipelineData ?? []).length === 1 ? '' : 'ões'} em pipeline
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-medium text-neutral-600">Volume Aceito</div>
+            <div className="mt-2 text-3xl font-bold text-blue-700">{fmtBRLShort(volumeAceito)}</div>
+            <div className="mt-1 text-xs text-neutral-500">
+              {(aceitasData ?? []).length} propostas aceitas
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-medium text-neutral-600">Taxa de Sucesso</div>
+            <div className="mt-2 flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-violet-700">{taxaSucesso.toFixed(1)}%</span>
+              <span className="text-sm text-neutral-500">conclusão</span>
+            </div>
+            <div className="mt-1 text-xs text-neutral-500">
+              {concluidasCount ?? 0} de {totalCount ?? 0} operações
+            </div>
+          </div>
+        </div>
+      </div>
 
       <form
         className="mt-6 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"

@@ -6,8 +6,23 @@ import { TabComentarios, type Comentario } from './tab-comentarios';
 import { TabDocumentos, type Documento } from './tab-documentos';
 import { TabTarefas, type Tarefa, type UsuarioOpt } from './tab-tarefas';
 import type { ContextoCedente } from '@/lib/documentos-checklist';
+import { cn } from '@/lib/utils';
+import { Info } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+function fmtRelativoBR(iso: string): string {
+  const d = new Date(iso).getTime();
+  const diff = Date.now() - d;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'agora mesmo';
+  if (mins < 60) return `há ${mins} min`;
+  const horas = Math.floor(mins / 60);
+  if (horas < 24) return `há cerca de ${horas} hora${horas > 1 ? 's' : ''}`;
+  const dias = Math.floor(horas / 24);
+  if (dias < 30) return `há ${dias} dia${dias > 1 ? 's' : ''}`;
+  return new Date(iso).toLocaleDateString('pt-BR');
+}
 
 type EtapaHistorico = {
   id: string;
@@ -269,45 +284,66 @@ function FinanceTile({
 
 function TabHistorico({ historico }: { historico: EtapaHistorico[] }) {
   if (historico.length === 0) {
-    return <p className="text-sm text-neutral-500">Nenhum histórico registrado ainda.</p>;
+    return (
+      <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center text-sm text-neutral-500">
+        Nenhum evento registrado ainda.
+      </div>
+    );
   }
+
   return (
-    <ol className="space-y-4">
-      {historico.map((h) => {
+    <div className="space-y-3">
+      {historico.map((h, i) => {
         const atual = h.saiu_em === null;
+        const anterior = historico[i + 1];
         return (
-          <li key={h.id} className="flex gap-3">
-            <div className="flex flex-col items-center">
-              <div
-                className={`h-3 w-3 rounded-full ${
-                  atual ? 'bg-neutral-900 ring-4 ring-neutral-900/10' : 'bg-emerald-600'
-                }`}
-              />
-              <div className="mt-1 h-full w-px bg-neutral-200" />
-            </div>
-            <div className="flex-1 pb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-neutral-900">{labelEtapa(h.etapa)}</span>
+          <div
+            key={h.id}
+            className="flex gap-3 rounded-lg border border-neutral-100 bg-white p-4 transition-colors hover:bg-neutral-50/60"
+          >
+            <span
+              className={cn(
+                'flex size-8 shrink-0 items-center justify-center rounded-full',
+                atual ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700',
+              )}
+            >
+              <Info className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500">
+                <span className="font-medium text-neutral-900">
+                  {h.autorizado_por?.nome ?? 'Sistema'}
+                </span>
+                <span>·</span>
+                <span>{fmtRelativoBR(h.entrou_em)}</span>
+                <span>·</span>
+                <span>{fmtDataHora(h.entrou_em)}</span>
                 {atual && (
-                  <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-medium tracking-wide text-white uppercase">
-                    Atual
+                  <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                    em andamento
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-neutral-500">
-                Entrou em {fmtDataHora(h.entrou_em)}
-                {h.autorizado_por?.nome && ` · por ${h.autorizado_por.nome}`}
-                {' · '}
-                {atual
-                  ? `há ${diffDuracao(h.entrou_em, null)}`
-                  : `permaneceu ${diffDuracao(h.entrou_em, h.saiu_em)}`}
-              </p>
-              {h.observacao && <p className="mt-1 text-sm text-neutral-700">{h.observacao}</p>}
+              <div className="mt-1 text-sm text-neutral-900">
+                Status alterado para{' '}
+                <strong className="font-semibold">{labelEtapa(h.etapa)}</strong>
+              </div>
+              <div className="mt-0.5 text-xs text-neutral-600">
+                {anterior
+                  ? `Status alterado de "${labelEtapa(anterior.etapa)}" para "${labelEtapa(h.etapa)}"`
+                  : 'Operação criada com status ' + labelEtapa(h.etapa)}
+                {!atual && ` · permaneceu ${diffDuracao(h.entrou_em, h.saiu_em)}`}
+              </div>
+              {h.observacao && (
+                <p className="mt-2 rounded-md bg-neutral-50 p-2 text-xs whitespace-pre-wrap text-neutral-700">
+                  {h.observacao}
+                </p>
+              )}
             </div>
-          </li>
+          </div>
         );
       })}
-    </ol>
+    </div>
   );
 }
 
