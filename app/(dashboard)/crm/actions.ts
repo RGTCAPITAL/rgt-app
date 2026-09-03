@@ -86,6 +86,90 @@ export async function atualizarLead(
   return { ok: true };
 }
 
+type ImportRow = {
+  nome: string;
+  telefone?: string;
+  email?: string;
+  cpf_cnpj?: string;
+  notas?: string;
+};
+
+export async function importarLeadsBatch(
+  rows: ImportRow[],
+  origem: string,
+): Promise<Result<{ criados: number; erros: string[] }>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'Sessão expirada.' };
+
+  const { data: usuario } = await supabase
+    .from('usuarios')
+    .select('perfil:perfis(slug)')
+    .eq('id', user.id)
+    .single<{ perfil: { slug: string } | null }>();
+  const role = usuario?.perfil?.slug;
+  if (role !== 'admin' && role !== 'gestao') {
+    return { ok: false, error: 'Apenas admin ou gestão pode importar em massa.' };
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { ok: false, error: 'CSV vazio ou inválido.' };
+  }
+  if (rows.length > 1000) {
+    return { ok: false, error: 'Limite de 1000 linhas por importação.' };
+  }
+
+  const somenteDigitos = (s?: string) => (s ?? '').replace(/\D/g, '');
+  const inserts: Record<string, unknown>[] = [];
+  const erros: string[] = [];
+
+  rows.forEach((row, i) => {
+    const linha = i + 2; // +2 = 1 pelo header + 1 pra virar 1-indexed
+    const nome = (row.nome || '').trim();
+    if (nome.length < 2) {
+      erros.push(`Linha ${linha}: nome ausente ou muito curto`);
+      return;
+    }
+    const telefone = somenteDigitos(row.telefone);
+    if (telefone && (telefone.length < 10 || telefone.length > 13)) {
+      erros.push(`Linha ${linha}: telefone inválido (${telefone.length} dígitos)`);
+      return;
+    }
+    const cpf = somenteDigitos(row.cpf_cnpj);
+    if (cpf && cpf.length !== 11 && cpf.length !== 14) {
+      erros.push(`Linha ${linha}: CPF/CNPJ deve ter 11 ou 14 dígitos`);
+      return;
+    }
+    const email = (row.email || '').trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      erros.push(`Linha ${linha}: email inválido`);
+      return;
+    }
+    inserts.push({
+      nome: titleCase(nome),
+      telefone: telefone || null,
+      email: email || null,
+      cpf_cnpj: cpf || null,
+      origem,
+      notas: (row.notas || '').trim() || null,
+      status: 'novo',
+      dono_id: role === 'admin' ? null : user.id,
+    });
+  });
+
+  if (inserts.length === 0) {
+    return { ok: false, error: 'Nenhuma linha válida. ' + erros.slice(0, 3).join(' · ') };
+  }
+
+  const { error, count } = await supabase.from('leads').insert(inserts, { count: 'exact' });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/crm');
+  return { ok: true, data: { criados: count ?? inserts.length, erros } };
+}
+
 export async function mudarStatusLead(
   leadId: string,
   novoStatus: StatusLead,

@@ -113,7 +113,13 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         </div>
       )}
 
-      <CrmShell leads={leads ?? []} donos={donosTodos ?? []} meuId={user.id} isAdmin={isAdmin} />
+      <CrmShell
+        leads={leads ?? []}
+        donos={donosTodos ?? []}
+        meuId={user.id}
+        isAdmin={isAdmin}
+        podeImportar={meuPerfil?.perfil?.slug === 'admin' || meuPerfil?.perfil?.slug === 'gestao'}
+      />
     </div>
   );
 }
