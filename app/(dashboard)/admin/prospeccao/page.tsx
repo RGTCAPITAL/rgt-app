@@ -49,7 +49,7 @@ export default async function ProspeccaoPage({
   let query = supabase
     .from('prospeccao_precatorios')
     .select(
-      'id, numero_processo, tribunal, ente_devedor_nome, valor_face, vencimento_ano, vara_origem, judit_status, cedente_nome_provavel, advogado_nome, advogado_oab, red_flags, status, fonte_lote, lead_id, responsavel_id',
+      'id, numero_processo, tribunal, ente_devedor_nome, valor_face, vencimento_ano, vara_origem, judit_status, cedente_nome_provavel, advogado_nome, advogado_oab, red_flags, status, fonte_lote, lead_id, responsavel_id, qtd_rps',
     )
     .order('valor_face', { ascending: false, nullsFirst: false })
     .limit(PAGE_SIZE);

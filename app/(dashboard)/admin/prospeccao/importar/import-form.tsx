@@ -73,7 +73,8 @@ function parseTRT19(sheet: XLSX.WorkSheet): {
     return { linhas: [], erroLayout: 'Coluna "Nº do Processo" não encontrada.' };
   }
 
-  const linhas: LinhaProspeccao[] = [];
+  // Agregação por CNJ: mesmo processo pode ter múltiplas RPs (juros, honorários, etc)
+  const agrupadas = new Map<string, LinhaProspeccao>();
   for (let i = headerIdx + 1; i < aoa.length; i++) {
     const r = aoa[i];
     if (!r || r.every((c) => c === null || c === '')) continue;
@@ -116,26 +117,38 @@ function parseTRT19(sheet: XLSX.WorkSheet): {
           : null;
 
     // Detecta tribunal pela vara ou natureza — TRT19 é o default aqui
-    // (pode ser expandido futuramente)
     const tribunal = 'TRT19';
+    const cnjKey = String(processo);
+    const existente = agrupadas.get(cnjKey);
 
-    linhas.push({
-      numero_processo: String(processo),
-      numero_precatorio: col.precatorio !== -1 ? (r[col.precatorio] as string | null) : null,
-      numero_rp: col.rp !== -1 ? (r[col.rp] as string | null) : null,
-      tribunal,
-      esfera: col.esfera !== -1 ? (r[col.esfera] as string | null) : null,
-      ente_devedor_nome: col.ente !== -1 ? (r[col.ente] as string | null) : null,
-      natureza_credito: col.natureza !== -1 ? (r[col.natureza] as string | null) : null,
-      tipo_requisicao: col.tipoReq !== -1 ? (r[col.tipoReq] as string | null) : null,
-      valor_face: valor,
-      autuacao_data: autuacaoIso,
-      vencimento_ano: vencimentoAno,
-      vara_origem: col.vara !== -1 ? (r[col.vara] as string | null) : null,
-    });
+    if (existente) {
+      // Segunda+ ocorrência do mesmo processo → soma valor + incrementa qtd
+      existente.valor_face = (existente.valor_face ?? 0) + (valor ?? 0);
+      existente.qtd_rps += 1;
+      // Autuação: mantém a mais antiga
+      if (autuacaoIso && (!existente.autuacao_data || autuacaoIso < existente.autuacao_data)) {
+        existente.autuacao_data = autuacaoIso;
+      }
+    } else {
+      agrupadas.set(cnjKey, {
+        numero_processo: cnjKey,
+        numero_precatorio: col.precatorio !== -1 ? (r[col.precatorio] as string | null) : null,
+        numero_rp: col.rp !== -1 ? (r[col.rp] as string | null) : null,
+        tribunal,
+        esfera: col.esfera !== -1 ? (r[col.esfera] as string | null) : null,
+        ente_devedor_nome: col.ente !== -1 ? (r[col.ente] as string | null) : null,
+        natureza_credito: col.natureza !== -1 ? (r[col.natureza] as string | null) : null,
+        tipo_requisicao: col.tipoReq !== -1 ? (r[col.tipoReq] as string | null) : null,
+        valor_face: valor,
+        autuacao_data: autuacaoIso,
+        vencimento_ano: vencimentoAno,
+        vara_origem: col.vara !== -1 ? (r[col.vara] as string | null) : null,
+        qtd_rps: 1,
+      });
+    }
   }
 
-  return { linhas, erroLayout: null };
+  return { linhas: Array.from(agrupadas.values()), erroLayout: null };
 }
 
 export function ImportForm() {
@@ -202,6 +215,8 @@ export function ImportForm() {
   const previewRows = rows?.slice(0, 5) ?? [];
   const totalRows = rows?.length ?? 0;
   const somaValor = rows?.reduce((s, r) => s + (r.valor_face ?? 0), 0) ?? 0;
+  const totalRPs = rows?.reduce((s, r) => s + r.qtd_rps, 0) ?? 0;
+  const rpsAgregados = totalRPs - totalRows;
 
   return (
     <div>
@@ -254,11 +269,18 @@ export function ImportForm() {
               <Card>
                 <CardHeader>
                   <CardTitle>
-                    2. Preview ({totalRows} precatório{totalRows === 1 ? '' : 's'} · R${' '}
+                    2. Preview ({totalRows} processo{totalRows === 1 ? '' : 's'} · R${' '}
                     {somaValor.toLocaleString('pt-BR', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
+                    {rpsAgregados > 0 && (
+                      <span className="ml-2 text-xs font-normal text-neutral-500">
+                        · {rpsAgregados} RP{rpsAgregados === 1 ? '' : 's'} adicional
+                        {rpsAgregados === 1 ? '' : 'is'} agregado
+                        {rpsAgregados === 1 ? '' : 's'}
+                      </span>
+                    )}
                     )
                   </CardTitle>
                 </CardHeader>
@@ -268,6 +290,7 @@ export function ImportForm() {
                       <thead className="border-b border-neutral-200 bg-neutral-50 text-xs tracking-wide text-neutral-500 uppercase">
                         <tr>
                           <th className="px-3 py-2 text-left font-medium">Nº Processo</th>
+                          <th className="px-3 py-2 text-left font-medium">RPs</th>
                           <th className="px-3 py-2 text-left font-medium">Valor</th>
                           <th className="px-3 py-2 text-left font-medium">Ente</th>
                           <th className="px-3 py-2 text-left font-medium">Venc</th>
@@ -278,6 +301,15 @@ export function ImportForm() {
                         {previewRows.map((r, i) => (
                           <tr key={i}>
                             <td className="px-3 py-2 font-mono text-xs">{r.numero_processo}</td>
+                            <td className="px-3 py-2 tabular-nums">
+                              {r.qtd_rps > 1 ? (
+                                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                  {r.qtd_rps}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-neutral-400">1</span>
+                              )}
+                            </td>
                             <td className="px-3 py-2 text-right tabular-nums">
                               {r.valor_face
                                 ? `R$ ${r.valor_face.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`

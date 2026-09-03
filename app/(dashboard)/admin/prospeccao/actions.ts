@@ -3,20 +3,25 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 
-/** Payload de UMA linha da planilha TRT19 já parseada no cliente. */
+/**
+ * Payload de UMA prospecção já agregada por CNJ (soma de N RPs do mesmo processo).
+ * Um processo trabalhista pode ter várias linhas na planilha TRT (juros, honorários,
+ * principal atualizado). Broker prospecta o credor uma vez só — agregamos.
+ */
 export type LinhaProspeccao = {
   numero_processo: string;
-  numero_precatorio: string | null;
-  numero_rp: string | null;
+  numero_precatorio: string | null; // primeiro RP encontrado (referência)
+  numero_rp: string | null; // primeiro Nº RP encontrado
   tribunal: string;
   esfera: string | null;
   ente_devedor_nome: string | null;
   natureza_credito: string | null;
   tipo_requisicao: string | null;
-  valor_face: number | null;
-  autuacao_data: string | null; // ISO YYYY-MM-DD
+  valor_face: number | null; // SOMA de todos os RPs deste processo
+  autuacao_data: string | null; // ISO YYYY-MM-DD (mais antiga)
   vencimento_ano: number | null;
   vara_origem: string | null;
+  qtd_rps: number; // quantidade de RPs agregadas (>= 1)
 };
 
 const MAX_LINHAS = 5000;
@@ -83,6 +88,7 @@ export async function importarLoteProspeccao(
         autuacao_data: r.autuacao_data,
         vencimento_ano: r.vencimento_ano,
         vara_origem: r.vara_origem,
+        qtd_rps: r.qtd_rps,
         fonte_lote: fonteLote,
         criado_por: user.id,
       };

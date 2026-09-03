@@ -48,6 +48,7 @@ type Row = {
   fonte_lote: string;
   lead_id: string | null;
   responsavel_id: string | null;
+  qtd_rps: number;
 };
 
 type Props = {
@@ -319,7 +320,15 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                         )}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
-                        {fmtBRL(r.valor_face)}
+                        <div>{fmtBRL(r.valor_face)}</div>
+                        {r.qtd_rps > 1 && (
+                          <div
+                            className="text-[10px] font-normal text-blue-600"
+                            title="Soma de múltiplos RPs (juros/honorários/principal) do mesmo processo"
+                          >
+                            {r.qtd_rps} RPs
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs">{r.vencimento_ano ?? '—'}</TableCell>
                       <TableCell className="text-xs">{r.ente_devedor_nome ?? '—'}</TableCell>
