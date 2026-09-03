@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, Users, Briefcase, CheckSquare, Shield, type LucideIcon } from 'lucide-react';
+import { Home, Users, Briefcase, CheckSquare, Shield, Search, type LucideIcon } from 'lucide-react';
 
 export type NavItem = {
   label: string;
@@ -13,6 +13,7 @@ export type NavItem = {
 
 export const NAV_BASE: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: Home },
+  { label: 'Prospecção', href: '/admin/prospeccao', icon: Search },
   { label: 'CRM', href: '/crm', icon: Users },
   { label: 'Operações', href: '/operacoes', icon: Briefcase },
   { label: 'Tarefas', href: '/tarefas', icon: CheckSquare },
