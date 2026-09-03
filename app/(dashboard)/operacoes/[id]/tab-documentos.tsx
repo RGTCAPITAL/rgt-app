@@ -23,6 +23,9 @@ export type Documento = {
   uploader: { nome: string | null } | null;
 };
 
+import { JuditCard } from './judit-card';
+import type { RedFlag } from '@/lib/judit/types';
+
 type Props = {
   operacaoId: string;
   tipoAtivo: string;
@@ -30,6 +33,12 @@ type Props = {
   usuarioAtualId: string;
   isAdmin: boolean;
   documentos: Documento[];
+  juditProps: {
+    numeroProcesso: string;
+    atualizadoEm: string | null;
+    redFlags: RedFlag[];
+    juditConfigurada: boolean;
+  };
 };
 
 function fmtTamanho(b: number | null): string {
@@ -46,6 +55,7 @@ export function TabDocumentos({
   usuarioAtualId,
   isAdmin,
   documentos,
+  juditProps,
 }: Props) {
   const obrigatorios = new Set(tiposObrigatorios(tipoAtivo, ctxCedente));
   const avisos = avisosCedente(ctxCedente);
@@ -65,6 +75,8 @@ export function TabDocumentos({
 
   return (
     <div className="space-y-6">
+      <JuditCard operacaoId={operacaoId} {...juditProps} />
+
       <div className="flex items-center justify-between rounded-md bg-neutral-50 p-3 text-sm">
         <div>
           <strong className="text-neutral-900">{enviados}</strong>

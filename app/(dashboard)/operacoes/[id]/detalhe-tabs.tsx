@@ -6,6 +6,7 @@ import { TabComentarios, type Comentario } from './tab-comentarios';
 import { TabDocumentos, type Documento } from './tab-documentos';
 import { TabTarefas, type Tarefa, type UsuarioOpt } from './tab-tarefas';
 import type { ContextoCedente } from '@/lib/documentos-checklist';
+import type { RedFlag } from '@/lib/judit/types';
 import { cn } from '@/lib/utils';
 import { Info } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -64,6 +65,12 @@ type Props = {
   usuariosOpt: UsuarioOpt[];
   usuarioAtualId: string;
   isAdmin: boolean;
+  juditProps: {
+    numeroProcesso: string;
+    atualizadoEm: string | null;
+    redFlags: RedFlag[];
+    juditConfigurada: boolean;
+  };
 };
 
 const TABS = [
@@ -113,6 +120,7 @@ export function DetalheTabs({
   usuariosOpt,
   usuarioAtualId,
   isAdmin,
+  juditProps,
 }: Props) {
   return (
     <Card className="p-0">
@@ -136,6 +144,7 @@ export function DetalheTabs({
             usuarioAtualId={usuarioAtualId}
             isAdmin={isAdmin}
             documentos={documentos}
+            juditProps={juditProps}
           />
         </TabsContent>
         <TabsContent value="tarefas" className="p-6">

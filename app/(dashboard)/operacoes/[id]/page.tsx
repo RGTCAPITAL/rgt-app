@@ -44,6 +44,8 @@ type Operacao = {
   dono: { nome: string | null } | null;
   broker: { nome: string | null } | null;
   ente_devedor: { nome: string } | null;
+  dd_judit_atualizado_em: string | null;
+  dd_judit_red_flags: string[] | null;
 };
 
 type EtapaHist = {
@@ -103,6 +105,7 @@ export default async function OperacaoDetalhePage({
        cedente_nome, cedente_cpf, cedente_data_nascimento, cedente_estado_civil,
        observacoes, preco_aceito, preco_proposto,
        etapa_atual, created_at, updated_at,
+       dd_judit_atualizado_em, dd_judit_red_flags,
        dono:usuarios!operacoes_dono_id_fkey(nome),
        broker:usuarios!operacoes_broker_id_fkey(nome),
        ente_devedor:entes_devedores(nome)`,
@@ -269,6 +272,12 @@ export default async function OperacaoDetalhePage({
             documentos={documentos ?? []}
             tarefas={tarefas ?? []}
             usuariosOpt={usuariosOpt ?? []}
+            juditProps={{
+              numeroProcesso: op.numero_processo,
+              atualizadoEm: op.dd_judit_atualizado_em,
+              redFlags: (op.dd_judit_red_flags ?? []) as never,
+              juditConfigurada: Boolean(process.env.JUDIT_API_KEY),
+            }}
             operacao={{
               valor_total: op.valor_total,
               valor_principal: op.valor_principal,
