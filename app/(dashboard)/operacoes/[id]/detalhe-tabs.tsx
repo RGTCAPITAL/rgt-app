@@ -148,49 +148,68 @@ export function DetalheTabs({
 }
 
 function TabDetalhes({ op }: { op: OperacaoDetalhes }) {
+  const totalPct = (v: number | null | undefined) =>
+    op.valor_total > 0 && v ? `${((v / op.valor_total) * 100).toFixed(2)}% do total` : '—';
   return (
     <div className="space-y-6">
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-neutral-900">Valores</h3>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <Item label="Valor total" value={fmtBRL(op.valor_total)} />
-          <Item label="Valor principal" value={fmtBRL(op.valor_principal)} />
-          <Item label="Valor dos juros" value={fmtBRL(op.valor_juros)} />
-          <Item label="Valor SELIC" value={fmtBRL(op.valor_selic)} />
-          <Item
-            label="Preço proposto"
-            value={
-              op.preco_proposto
-                ? `${fmtBRL(op.preco_proposto)}${
-                    op.preco_aceito === true
-                      ? ' · aceito'
-                      : op.preco_aceito === false
-                        ? ' · recusado'
-                        : ' · pendente'
-                  }`
-                : '—'
-            }
+        <h3 className="mb-3 text-sm font-semibold text-neutral-900">Valores do crédito</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <FinanceTile
+            label="Valor Principal"
+            value={fmtBRL(op.valor_principal)}
+            sub={totalPct(op.valor_principal)}
           />
-        </dl>
+          <FinanceTile
+            label="Valor dos Juros"
+            value={fmtBRL(op.valor_juros)}
+            sub={totalPct(op.valor_juros)}
+          />
+          <FinanceTile
+            label="Valor SELIC"
+            value={fmtBRL(op.valor_selic)}
+            sub={totalPct(op.valor_selic)}
+          />
+          <FinanceTile
+            label="Valor Total do Crédito"
+            value={fmtBRL(op.valor_total)}
+            sub="100% do crédito"
+            color="emerald"
+          />
+        </div>
       </section>
 
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-neutral-900">Deduções</h3>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <Item label="Retenção de honorários" value={fmtPct(op.retencao_honorarios_pct)} />
-          <Item label="Percentual de aquisição" value={fmtPct(op.percentual_aquisicao)} />
-          <Item label="PSS" value={op.pss_ativo ? `Ativo — ${fmtPct(op.pss_pct)}` : 'Não aplica'} />
-          <Item
-            label="IR / RRA"
-            value={
-              op.rra_ativo
-                ? op.rra_meses === 0
-                  ? 'Ativo — IR fixo 3%'
-                  : `Ativo — ${op.rra_meses} meses acumulados`
-                : 'Não aplica'
-            }
+        <h3 className="mb-3 text-sm font-semibold text-neutral-900">Deduções e líquido</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <FinanceTile
+            label="Retenção Honorários"
+            value={fmtPct(op.retencao_honorarios_pct)}
+            color="rose"
           />
-        </dl>
+          <FinanceTile
+            label="RRA / IR"
+            value={
+              op.rra_ativo ? (op.rra_meses === 0 ? 'IR fixo 3%' : `${op.rra_meses} meses`) : '—'
+            }
+            color="rose"
+          />
+          <FinanceTile label="PSS" value={op.pss_ativo ? fmtPct(op.pss_pct) : '—'} color="rose" />
+          <FinanceTile
+            label="Preço Proposto"
+            value={op.preco_proposto ? fmtBRL(op.preco_proposto) : '—'}
+            sub={
+              op.preco_proposto
+                ? op.preco_aceito === true
+                  ? 'aceito pelo credor'
+                  : op.preco_aceito === false
+                    ? 'recusado pelo credor'
+                    : 'aguardando resposta'
+                : undefined
+            }
+            color="blue"
+          />
+        </div>
       </section>
 
       <section>
@@ -210,6 +229,40 @@ function TabDetalhes({ op }: { op: OperacaoDetalhes }) {
           </p>
         </section>
       )}
+    </div>
+  );
+}
+
+function FinanceTile({
+  label,
+  value,
+  sub,
+  color = 'neutral',
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color?: 'emerald' | 'rose' | 'blue' | 'amber' | 'neutral';
+}) {
+  const bg: Record<string, string> = {
+    emerald: 'bg-emerald-50 ring-emerald-200',
+    rose: 'bg-rose-50 ring-rose-200',
+    blue: 'bg-blue-50 ring-blue-200',
+    amber: 'bg-amber-50 ring-amber-200',
+    neutral: 'bg-neutral-50 ring-neutral-200',
+  };
+  const valueColor: Record<string, string> = {
+    emerald: 'text-emerald-700',
+    rose: 'text-rose-700',
+    blue: 'text-blue-700',
+    amber: 'text-amber-700',
+    neutral: 'text-neutral-900',
+  };
+  return (
+    <div className={`rounded-lg px-3 py-3 ring-1 ${bg[color]}`}>
+      <div className="text-xs font-medium text-neutral-600">{label}</div>
+      <div className={`mt-1 text-lg font-bold ${valueColor[color]}`}>{value}</div>
+      {sub && <div className="mt-0.5 text-[10px] text-neutral-500">{sub}</div>}
     </div>
   );
 }
