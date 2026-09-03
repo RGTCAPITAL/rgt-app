@@ -46,7 +46,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Breadcrumbs />
           <NotifSino notifs={notifs ?? []} />
         </header>
-        <main className="p-8">{children}</main>
+        <main className="p-10 lg:p-12">{children}</main>
       </div>
     </div>
   );

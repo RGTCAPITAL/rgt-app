@@ -15,7 +15,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   /* Verde floresta RGT (Lajedo-like #234428) */
-  --primary: oklch(0.32 0.052 149);
+  --primary: oklch(0.55 0.15 149);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -26,21 +26,24 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.32 0.052 149);
+  --ring: oklch(0.55 0.15 149);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.375rem;
+  /* Shadow inspirada na Lajedo — difusa e profunda pra dar profundidade */
+  --shadow-card: 0 18px 55px 0 rgb(9 16 11 / 0.08);
+  --shadow-card-hover: 0 24px 70px 0 rgb(9 16 11 / 0.12);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.32 0.052 149);
+  --sidebar-primary: oklch(0.55 0.15 149);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.32 0.052 149);
+  --sidebar-ring: oklch(0.55 0.15 149);
 
   /* Tokens extras da marca — usar em highlights especiais */
   --gold: #c3a765;

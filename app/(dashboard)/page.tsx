@@ -17,6 +17,7 @@ import { TIPOS_ATIVO } from './operacoes/nova/schemas';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
+import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
 
 type UsuarioComPerfil = {
@@ -79,7 +80,7 @@ export default async function DashboardPage() {
   if (!perfil) {
     return (
       <div className="mx-auto max-w-2xl">
-        <h1 className="text-3xl font-semibold tracking-tight">Bem-vindo</h1>
+        <h1 className="text-4xl font-semibold tracking-tight">Bem-vindo</h1>
         <div className="mt-6 flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
           <AlertTriangle className="size-5 shrink-0" />
           <div>
@@ -253,37 +254,50 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <Header
-        primeiroNome={primeiroNome}
-        perfilLabel={usuario?.perfis?.nome ?? 'Admin/Gestão'}
-        cta
+      <SectionHero
+        title={primeiroNome ? `Olá, ${primeiroNome}` : 'Bem-vindo'}
+        subtitle={`Painel ${usuario?.perfis?.nome ?? 'Admin/Gestão'} · Panorama do que precisa da sua atenção agora.`}
+        color="emerald"
+        action={
+          <Link
+            href="/operacoes/nova"
+            className="inline-flex items-center gap-2 rounded-lg bg-white/95 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition-colors hover:bg-white"
+          >
+            <Plus className="size-4" />
+            Nova operação
+          </Link>
+        }
       />
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Kpi
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiTile
           label="Operações abertas"
-          valor={String(totalAbertas)}
+          value={String(totalAbertas)}
           sub="fora de finalizada/cancelada"
           icon={Briefcase}
+          color="blue"
         />
-        <Kpi
+        <KpiTile
           label="Pipeline"
-          valor={fmtBRL(totalPipeline)}
+          value={fmtBRL(totalPipeline)}
           sub="valor total em andamento"
           icon={TrendingUp}
+          color="emerald"
         />
-        <Kpi
+        <KpiTile
           label="Prontas pra pagar"
-          valor={String(prontas.length)}
+          value={String(prontas.length)}
           sub={prontas.length === 1 ? '1 operação' : `${prontas.length} operações`}
           icon={Wallet}
+          color="amber"
         />
-        <Kpi
+        <KpiTile
           label="Leads em aberto"
-          valor={String(totalLeadsAbertos)}
+          value={String(totalLeadsAbertos)}
           sub="pipeline CRM"
           icon={Users}
-          linkPara="/crm"
+          color="violet"
+          href="/crm"
         />
       </div>
 
@@ -294,12 +308,18 @@ export default async function DashboardPage() {
           descricao="Aceite pendente há mais de 7 dias · DD travada há mais de 14 dias"
           ops={filaAtencao}
           vazio=""
-          highlight
+          color="amber"
         />
       )}
 
       {prontas.length > 0 && (
-        <SectionOps titulo="Prontas pra pagamento" icon={Wallet} ops={prontas} vazio="" />
+        <SectionOps
+          titulo="Prontas pra pagamento"
+          icon={Wallet}
+          ops={prontas}
+          vazio=""
+          color="emerald"
+        />
       )}
 
       <SectionOps
@@ -307,6 +327,7 @@ export default async function DashboardPage() {
         icon={Sparkles}
         ops={recentes}
         vazio="Nenhuma operação cadastrada ainda."
+        color="blue"
       />
     </div>
   );
@@ -326,7 +347,7 @@ function Header({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
+        <h1 className="text-4xl font-semibold tracking-tight text-neutral-900">
           {primeiroNome ? `Olá, ${primeiroNome}` : 'Bem-vindo'}
         </h1>
         <p className="mt-1 text-sm text-neutral-600">
@@ -389,25 +410,52 @@ function SectionOps({
   ops,
   vazio,
   icon: Icon,
-  highlight,
+  color = 'neutral',
 }: {
   titulo: string;
   descricao?: string;
   ops: OpResumo[];
   vazio: string;
   icon: LucideIcon;
-  highlight?: boolean;
+  color?: 'emerald' | 'amber' | 'blue' | 'violet' | 'neutral';
 }) {
+  const headerBg: Record<string, string> = {
+    emerald: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-800',
+    blue: 'bg-blue-50 text-blue-700',
+    violet: 'bg-violet-50 text-violet-700',
+    neutral: 'bg-neutral-50 text-neutral-700',
+  };
+  const borderColor: Record<string, string> = {
+    emerald: 'border-l-emerald-500',
+    amber: 'border-l-amber-500',
+    blue: 'border-l-blue-500',
+    violet: 'border-l-violet-500',
+    neutral: 'border-l-neutral-400',
+  };
+  const iconBg: Record<string, string> = {
+    emerald: 'bg-emerald-100 text-emerald-700',
+    amber: 'bg-amber-100 text-amber-700',
+    blue: 'bg-blue-100 text-blue-700',
+    violet: 'bg-violet-100 text-violet-700',
+    neutral: 'bg-neutral-200 text-neutral-700',
+  };
+
   return (
     <section className="mt-8">
-      <div className="mb-3 flex items-start gap-2">
-        <Icon
-          className={cn('size-4 shrink-0', highlight ? 'text-amber-600' : 'text-neutral-500')}
-          aria-hidden
-        />
+      <div
+        className={cn(
+          'mb-3 flex items-center gap-3 rounded-lg border-l-4 px-4 py-3',
+          headerBg[color],
+          borderColor[color],
+        )}
+      >
+        <span className={cn('flex size-8 items-center justify-center rounded-full', iconBg[color])}>
+          <Icon className="size-4" />
+        </span>
         <div>
-          <h2 className="text-sm font-semibold text-neutral-900">{titulo}</h2>
-          {descricao && <p className="text-xs text-neutral-500">{descricao}</p>}
+          <h2 className="text-sm font-semibold">{titulo}</h2>
+          {descricao && <p className="text-xs opacity-80">{descricao}</p>}
         </div>
       </div>
       {ops.length === 0 ? (
@@ -422,13 +470,13 @@ function SectionOps({
           </Card>
         ) : null
       ) : (
-        <Card className={cn(highlight && 'ring-amber-200')}>
+        <Card>
           <div className="divide-y divide-neutral-100">
             {ops.map((op) => (
               <Link
                 key={op.id}
                 href={`/operacoes/${op.id}`}
-                className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-neutral-50"
+                className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-emerald-50/60"
               >
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-neutral-900">{op.numero_processo}</div>

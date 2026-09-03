@@ -52,9 +52,9 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       href={item.href}
       className={cn(
-        'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+        'relative flex items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors',
         active
-          ? 'bg-primary text-primary-foreground font-medium'
+          ? 'bg-emerald-50 font-semibold text-emerald-700'
           : 'text-neutral-700 hover:bg-neutral-100',
       )}
     >

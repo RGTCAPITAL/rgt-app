@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { CheckSquare, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { fmtDataBR } from '@/lib/formatters';
+import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 
 type SearchParams = { status?: string };
 
@@ -92,37 +94,42 @@ export default async function TarefasPage({
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Tarefas</h1>
-        <p className="mt-2 text-sm text-neutral-600">
-          Ações estruturadas de todas as operações que você vê. Clique numa tarefa pra abrir a
-          operação e gerenciar.
-        </p>
-      </div>
+      <SectionHero
+        title="Central de Tarefas"
+        subtitle="Ações estruturadas de todas as operações que você vê. Clique numa tarefa pra abrir a operação e gerenciar."
+        color="amber"
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Kpi
+        <KpiTile
           label="Total abertas"
-          valor={String(abertas.length)}
+          value={String(abertas.length)}
           sub="pendentes + em andamento"
+          icon={CheckSquare}
+          color="blue"
           href="/tarefas"
         />
-        <Kpi
+        <KpiTile
           label="Em andamento"
-          valor={String(emAndamento.length)}
+          value={String(emAndamento.length)}
           sub="sendo trabalhadas"
+          icon={Clock}
+          color="amber"
           href="/tarefas?status=em_andamento"
         />
-        <Kpi
+        <KpiTile
           label="Atrasadas"
-          valor={String(atrasadas.length)}
+          value={String(atrasadas.length)}
           sub="prazo passou"
-          alerta={atrasadas.length > 0}
+          icon={AlertTriangle}
+          color="rose"
         />
-        <Kpi
+        <KpiTile
           label="Concluídas"
-          valor={String(concluidas.length)}
+          value={String(concluidas.length)}
           sub="últimas concluídas"
+          icon={CheckCircle}
+          color="emerald"
           href="/tarefas?status=concluida"
         />
       </div>

@@ -13,6 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { buttonVariants } from '@/components/ui/button';
+import { SectionHero } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
 
 const ETAPAS = [
@@ -135,22 +136,26 @@ export default async function OperacoesPage({
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">Operações</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            {count === null || count === undefined
-              ? 'Gestão de operações de precatórios.'
-              : count === 1
-                ? '1 operação encontrada.'
-                : `${count} operações encontradas.`}
-          </p>
-        </div>
-        <Link href="/operacoes/nova" className={cn(buttonVariants({ size: 'lg' }))}>
-          <Plus className="size-4" />
-          Nova operação
-        </Link>
-      </div>
+      <SectionHero
+        title="Operações"
+        subtitle={
+          count === null || count === undefined
+            ? 'Acompanhe suas operações de precatórios em um fluxo unificado.'
+            : count === 1
+              ? '1 operação encontrada'
+              : `${count} operações encontradas`
+        }
+        color="emerald"
+        action={
+          <Link
+            href="/operacoes/nova"
+            className="inline-flex items-center gap-2 rounded-lg bg-white/95 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition-colors hover:bg-white"
+          >
+            <Plus className="size-4" />
+            Nova operação
+          </Link>
+        }
+      />
 
       <form
         className="mt-6 rounded-lg border border-neutral-200 bg-white p-4 shadow-sm"

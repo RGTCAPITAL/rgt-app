@@ -200,7 +200,7 @@ export default async function OperacaoDetalhePage({
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
+            <h1 className="text-4xl font-semibold tracking-tight text-neutral-900">
               {op.numero_processo}
             </h1>
             <Badge className={classesEtapa(op.etapa_atual)}>{labelEtapa(op.etapa_atual)}</Badge>
