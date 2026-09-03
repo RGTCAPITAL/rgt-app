@@ -53,6 +53,15 @@ function iniciais(nome: string | null): string {
     .join('');
 }
 
+const COLUNA_BORDER: Record<string, string> = {
+  novo: 'border-t-neutral-400',
+  em_contato: 'border-t-blue-500',
+  qualificado: 'border-t-amber-500',
+  proposta_enviada: 'border-t-violet-500',
+  ganho: 'border-t-emerald-500',
+  perdido: 'border-t-rose-500',
+};
+
 export function Kanban({
   leads,
   donos,
@@ -145,7 +154,8 @@ export function Kanban({
               onDragLeave={onDragLeave}
               onDrop={(e) => onDrop(e, col.value)}
               className={cn(
-                'flex min-h-[60vh] flex-col rounded-lg border bg-neutral-50 p-2 transition-colors',
+                'flex min-h-[60vh] flex-col rounded-lg border border-t-4 bg-white/70 p-2 transition-colors',
+                COLUNA_BORDER[col.value] ?? 'border-t-neutral-400',
                 highlight ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-200',
               )}
             >

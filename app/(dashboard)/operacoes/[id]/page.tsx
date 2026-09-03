@@ -197,21 +197,50 @@ export default async function OperacaoDetalhePage({
     <div className="mx-auto max-w-6xl">
       {sp.nova === '1' && <ToastNovaOperacao />}
 
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-4xl font-semibold tracking-tight text-neutral-900">
-              {op.numero_processo}
-            </h1>
-            <Badge className={classesEtapa(op.etapa_atual)}>{labelEtapa(op.etapa_atual)}</Badge>
+      <header className="mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-4xl font-semibold tracking-tight text-neutral-900">
+                {op.cedente_nome}
+              </h1>
+              <Badge className={classesEtapa(op.etapa_atual)}>{labelEtapa(op.etapa_atual)}</Badge>
+            </div>
+            <p className="mt-1 text-sm text-neutral-600">
+              {labelTipo(op.tipo)} · <span className="capitalize">{op.esfera}</span> · {op.tribunal}
+            </p>
           </div>
-          <p className="mt-1 text-sm text-neutral-600">
-            {op.cedente_nome} · {labelTipo(op.tipo)} · {op.tribunal}
-          </p>
+          <div className="text-right">
+            <div className="text-xs tracking-wide text-neutral-500 uppercase">Valor total</div>
+            <div className="text-2xl font-semibold text-neutral-900">{fmtBRL(op.valor_total)}</div>
+          </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs tracking-wide text-neutral-500 uppercase">Valor total</div>
-          <div className="text-2xl font-semibold text-neutral-900">{fmtBRL(op.valor_total)}</div>
+
+        <div className="mt-6 grid grid-cols-1 gap-4 border-t border-neutral-200 pt-4 sm:grid-cols-3">
+          <div>
+            <div className="text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
+              Nº Processo
+            </div>
+            <div className="mt-0.5 font-mono text-sm font-medium text-neutral-900">
+              {op.numero_processo}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
+              CPF do Cedente
+            </div>
+            <div className="mt-0.5 font-mono text-sm font-medium text-neutral-900">
+              {fmtCPF(op.cedente_cpf)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-medium tracking-wide text-neutral-500 uppercase">
+              Ente Devedor
+            </div>
+            <div className="mt-0.5 text-sm font-medium text-neutral-900">
+              {op.ente_devedor?.nome ?? '—'}
+            </div>
+          </div>
         </div>
       </header>
 
