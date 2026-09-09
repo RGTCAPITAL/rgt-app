@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { UserPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { atualizarPerfil, toggleAtivo } from './actions';
+import { ConvidarDialog } from './convidar-dialog';
 
 export type UsuarioRow = {
   id: string;
@@ -38,6 +41,7 @@ function corPerfil(slug: string | null): string {
 export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meuId: string }) {
   const [erro, setErro] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [convidando, setConvidando] = useState(false);
   const [_, startTransition] = useTransition();
 
   function mudarPerfil(userId: string, novoPerfil: string) {
@@ -67,6 +71,13 @@ export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meu
           {erro}
         </div>
       )}
+
+      <div className="mb-4 flex justify-end">
+        <Button onClick={() => setConvidando(true)}>
+          <UserPlus className="size-4" />
+          Convidar usuário
+        </Button>
+      </div>
 
       <div className="overflow-hidden rounded-md border border-neutral-200 bg-white">
         <div className="overflow-x-auto">
@@ -154,8 +165,11 @@ export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meu
 
       <p className="mt-4 text-xs text-neutral-500">
         Mudanças aplicam imediatamente. O único admin ativo não pode se rebaixar nem se desativar
-        (proteção contra lock-out).
+        (proteção contra lock-out). Não existe cadastro aberto: todo usuário entra por convite
+        daqui.
       </p>
+
+      {convidando && <ConvidarDialog onClose={() => setConvidando(false)} />}
     </div>
   );
 }

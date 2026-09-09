@@ -49,12 +49,7 @@ export default async function LoginPage({
             Esqueci minha senha
           </Link>
         </div>
-        <div className="text-neutral-600">
-          Não tem conta?{' '}
-          <Link href="/cadastro" className="font-medium text-neutral-900 hover:underline">
-            Cadastre-se
-          </Link>
-        </div>
+        <div className="text-neutral-600">O acesso é por convite. Fale com um admin da RGT.</div>
       </div>
     </div>
   );

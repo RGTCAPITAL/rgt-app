@@ -1,13 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const AUTH_ROUTES = [
-  '/login',
-  '/cadastro',
-  '/esqueci-senha',
-  '/redefinir-senha',
-  '/verifique-email',
-];
+// Sem /cadastro: não há auto-registro. Usuário entra por convite de admin
+// (/admin/usuarios), que já define o perfil.
+const AUTH_ROUTES = ['/login', '/esqueci-senha', '/redefinir-senha', '/verifique-email'];
 const PUBLIC_ROUTES = [...AUTH_ROUTES, '/auth/callback', '/auth/signout', '/api/leads/webhook'];
 
 export async function proxy(request: NextRequest) {

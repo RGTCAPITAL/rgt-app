@@ -1,7 +1,9 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -26,6 +28,57 @@ async function requireAdmin() {
     user,
     isAdmin: usuario?.perfil?.slug === 'admin',
   } as const;
+}
+
+/**
+ * Convida alguém pro workspace com um perfil já definido.
+ *
+ * Substitui o /cadastro público: usuário só nasce por convite de admin, e o
+ * perfil vem escolhido daqui (a trigger handle_new_user lê dos metadados).
+ * A senha nunca passa por aqui — o convidado define a dele pelo link do email.
+ */
+export async function convidarUsuario(
+  email: string,
+  nome: string,
+  perfil: string,
+): Promise<Result> {
+  const emailLimpo = email.trim().toLowerCase();
+  const nomeLimpo = nome.trim();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpo)) {
+    return { ok: false, error: 'E-mail inválido.' };
+  }
+  if (nomeLimpo.length < 2) {
+    return { ok: false, error: 'Nome obrigatório.' };
+  }
+  if (!PERFIS_VALIDOS.includes(perfil as PerfilSlug)) {
+    return { ok: false, error: 'Perfil inválido.' };
+  }
+
+  const { user, isAdmin } = await requireAdmin();
+  if (!user) return { ok: false, error: 'Sessão expirada.' };
+  if (!isAdmin) return { ok: false, error: 'Só admin pode convidar usuários.' };
+
+  const origin = (await headers()).get('origin') ?? 'https://rgt-app-ten.vercel.app';
+
+  // service role: convidar exige privilégio de admin da Auth API
+  const admin = createServiceClient();
+  const { error } = await admin.auth.admin.inviteUserByEmail(emailLimpo, {
+    data: { nome: nomeLimpo, perfil },
+    redirectTo: `${origin}/auth/callback?next=/redefinir-senha`,
+  });
+
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('already') || msg.includes('registered')) {
+      return { ok: false, error: 'Esse e-mail já tem conta no sistema.' };
+    }
+    // O convite depende de SMTP configurado no projeto Supabase
+    return { ok: false, error: `Falha ao enviar convite: ${error.message}` };
+  }
+
+  revalidatePath('/admin/usuarios');
+  return { ok: true };
 }
 
 export async function atualizarPerfil(userId: string, novoPerfil: string): Promise<Result> {
