@@ -58,7 +58,17 @@ export const step1Schema = z.object({
       (v) => !v || ['solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel'].includes(v),
       'Estado civil inválido',
     ),
-  numero_processo: z.string().trim().min(20, 'Número do processo parece inválido'),
+  // O banco agora exige 20 dígitos (constraint operacoes_cnj_20_digitos) e
+  // recusa duplicata comparando só os dígitos. Validar aqui evita que o usuário
+  // receba o erro cru do Postgres. `min(20)` sozinho deixava passar 20
+  // caracteres quaisquer — inclusive um CPF ou texto solto.
+  numero_processo: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v.replace(/\D/g, '').length === 20,
+      'Número do processo deve ter 20 dígitos (padrão CNJ)',
+    ),
   tipo: z.enum(['precatorio', 'rpv', 'pre_precatorio', 'pre_rpv', 'direito_creditorio']),
   natureza: z.enum(['alimentar', 'comum', 'tributaria']),
   esfera: z.enum(['federal', 'estadual', 'municipal']),

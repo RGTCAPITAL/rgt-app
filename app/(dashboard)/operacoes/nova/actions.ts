@@ -88,6 +88,14 @@ export async function criarOperacao(payload: PayloadNovaOperacao): Promise<Criar
     .single();
 
   if (insertError) {
+    // 23505 = unique_violation. O índice compara só os dígitos do CNJ, então
+    // pega a duplicata mesmo quando a máscara é diferente.
+    if (insertError.code === '23505' && insertError.message.includes('cnj_normalizado')) {
+      return {
+        ok: false,
+        error: 'Já existe uma operação para este processo. Busque por ele na lista de operações.',
+      };
+    }
     return { ok: false, error: insertError.message };
   }
 
