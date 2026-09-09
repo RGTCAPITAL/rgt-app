@@ -11,7 +11,7 @@
 --   leads exige nome. Aqui só temos CNJ + valor até a Judit rodar.
 --   Depois vira lead com nome real + telefone.
 --
--- Issue: RGT-XX (prospecção em massa)
+-- Issue: RGT-74 (prospecção em massa)
 -- =============================================================================
 
 
