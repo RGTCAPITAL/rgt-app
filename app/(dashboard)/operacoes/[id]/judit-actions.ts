@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { consultarProcesso, JuditError, juditConfigurada } from '@/lib/judit/client';
 import { extrairRedFlags } from '@/lib/judit/red-flags';
 import type { ProcessoJudit, ResultadoConsultaJudit } from '@/lib/judit/types';
+import { exigirPerfil } from '@/lib/auth/roles';
 
 /**
  * Server action que roda uma consulta Judit pra uma operação.
@@ -21,6 +22,13 @@ import type { ProcessoJudit, ResultadoConsultaJudit } from '@/lib/judit/types';
  * sem quebrar o app.
  */
 export async function rodarConsultaJudit(operacaoId: string): Promise<ResultadoConsultaJudit> {
+  // Gate primeiro: o crédito é debitado na hora da consulta, então deixar a RLS
+  // barrar só no INSERT gastaria dinheiro à toa. Quem não pode consultar também
+  // não precisa saber se a integração está configurada.
+  const auth = await exigirPerfil(['admin', 'gestao', 'juridico']);
+  if (!auth.ok) return { ok: false, erro: auth.error };
+  const user = { id: auth.userId };
+
   if (!juditConfigurada()) {
     return {
       ok: false,
@@ -29,10 +37,6 @@ export async function rodarConsultaJudit(operacaoId: string): Promise<ResultadoC
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, erro: 'Sessão expirada.' };
 
   // Busca operação pra pegar CNJ + validar RLS
   const { data: op } = await supabase

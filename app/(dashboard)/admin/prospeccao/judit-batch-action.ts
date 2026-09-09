@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { consultarProcesso, JuditError, juditConfigurada } from '@/lib/judit/client';
 import { extrairRedFlags } from '@/lib/judit/red-flags';
 import { extrairMetadadosProspeccao } from '@/lib/judit/extract';
+import { exigirPerfil } from '@/lib/auth/roles';
 
 const BATCH_MAX = 50;
 const DELAY_MS = 800; // throttle entre chamadas pra não estourar rate limit
@@ -31,6 +32,13 @@ export async function enriquecerLoteJudit(
   | { ok: true; data: { ok: number; not_found: number; error: number } }
   | { ok: false; error: string }
 > {
+  // Gate primeiro: quem não pode disparar o batch não precisa nem saber se a
+  // integração está configurada. Cada consulta Judit custa crédito real, então
+  // a autorização vem antes de qualquer trabalho.
+  const auth = await exigirPerfil(['admin', 'gestao', 'juridico']);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const user = { id: auth.userId };
+
   if (!juditConfigurada()) {
     return {
       ok: false,
@@ -45,10 +53,6 @@ export async function enriquecerLoteJudit(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: 'Sessão expirada.' };
 
   // Busca as prospecções pendentes
   const { data: pendentes, error: fetchErr } = await supabase
@@ -63,7 +67,13 @@ export async function enriquecerLoteJudit(
 
   const resumo = { ok: 0, not_found: 0, error: 0 };
 
-  for (const p of pendentes) {
+  for (let i = 0; i < pendentes.length; i++) {
+    const p = pendentes[i]!;
+
+    // Throttle no topo do loop: garante o intervalo entre chamadas Judit mesmo
+    // quando uma iteração aborta cedo (a chamada paga já aconteceu de qualquer jeito).
+    if (i > 0) await sleep(DELAY_MS);
+
     let payload;
     let erroMsg: string | null = null;
     let status: 'ok' | 'not_found' | 'error' = 'ok';
@@ -83,7 +93,7 @@ export async function enriquecerLoteJudit(
     }
 
     // Salva consulta (operacao_id null aqui — ainda é prospecção, sem op vinculada)
-    const { data: consulta } = await supabase
+    const { data: consulta, error: consultaErr } = await supabase
       .from('dd_judit_consultas')
       .insert({
         operacao_id: null,
@@ -97,9 +107,18 @@ export async function enriquecerLoteJudit(
       .select('id')
       .single();
 
-    // Se salvar consulta falhou (ex: FK), ainda atualiza prospeccao com o resultado
-    // (não é fatal — histórico é bonus)
-    const consultaId = consulta?.id ?? null;
+    // Sem trilha de auditoria não gravamos dado derivado: a prospecção passaria a
+    // exibir cedente/advogado "da Judit" sem nenhuma consulta registrada por trás.
+    if (consultaErr) {
+      resumo.error++;
+      await supabase
+        .from('prospeccao_precatorios')
+        .update({ judit_status: 'error' })
+        .eq('id', p.id);
+      continue;
+    }
+
+    const consultaId = consulta.id;
 
     if (status === 'ok') {
       const meta = extrairMetadadosProspeccao(payload);
@@ -129,11 +148,6 @@ export async function enriquecerLoteJudit(
         })
         .eq('id', p.id);
       resumo[status]++;
-    }
-
-    // Throttle
-    if (pendentes.indexOf(p) < pendentes.length - 1) {
-      await sleep(DELAY_MS);
     }
   }
 

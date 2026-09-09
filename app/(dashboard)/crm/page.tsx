@@ -28,7 +28,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   let query = supabase
     .from('leads')
     .select(
-      'id, nome, telefone, email, cpf_cnpj, origem, status, created_at, motivo_perda, operacao_id, dono_id, dono:usuarios!leads_dono_id_fkey(id, nome)',
+      'id, nome, telefone, email, cpf_cnpj, origem, status, created_at, motivo_perda, operacao_id, dono_id, notas, dono:usuarios!leads_dono_id_fkey(id, nome)',
     )
     .order('created_at', { ascending: false });
 

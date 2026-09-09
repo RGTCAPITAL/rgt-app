@@ -30,6 +30,7 @@ export type LeadCard = {
   motivo_perda: string | null;
   operacao_id: string | null;
   dono_id: string | null;
+  notas: string | null;
   dono: { nome: string | null } | null;
 };
 
@@ -189,7 +190,7 @@ export function Kanban({
                           cpf_cnpj: lead.cpf_cnpj,
                           origem: lead.origem,
                           dono_id: lead.dono_id,
-                          notas: null,
+                          notas: lead.notas,
                           status: lead.status,
                           operacao_id: lead.operacao_id,
                           motivo_perda: lead.motivo_perda,

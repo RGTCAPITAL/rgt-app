@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { exigirPerfil } from '@/lib/auth/roles';
 
 /**
  * Payload de UMA prospecção já agregada por CNJ (soma de N RPs do mesmo processo).
@@ -57,11 +58,11 @@ export async function importarLoteProspeccao(
     return { ok: false, error: `Máximo ${MAX_LINHAS} linhas por import.` };
   }
 
+  const auth = await exigirPerfil(['admin', 'gestao']);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const user = { id: auth.userId };
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: 'Sessão expirada.' };
 
   const erros: string[] = [];
   const validos = rows
@@ -133,6 +134,9 @@ export async function descartarProspeccao(
     return { ok: false, error: 'Motivo é obrigatório (mín 3 chars).' };
   }
 
+  const auth = await exigirPerfil(['admin', 'gestao', 'broker']);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
   const supabase = await createClient();
   const { error } = await supabase
     .from('prospeccao_precatorios')
@@ -162,11 +166,11 @@ export async function virarLead(
     return { ok: false, error: 'Nome do credor obrigatório.' };
   }
 
+  const auth = await exigirPerfil(['admin', 'gestao', 'broker']);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const user = { id: auth.userId };
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: 'Sessão expirada.' };
 
   // Busca a prospecção pra pegar CPF conhecido + validar RLS
   const { data: prosp } = await supabase

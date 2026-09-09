@@ -89,7 +89,8 @@ export async function consultarProcesso(cnj: string): Promise<PayloadJudit> {
   if (cnjLimpo.length !== 20) {
     throw new JuditError('Nº CNJ deve ter 20 dígitos');
   }
-  return fetchJson<PayloadJudit>(`/processos/${encodeURIComponent(cnj)}`, { method: 'GET' });
+  // Judit espera os 20 dígitos crus — o banco guarda o CNJ mascarado vindo do form
+  return fetchJson<PayloadJudit>(`/processos/${cnjLimpo}`, { method: 'GET' });
 }
 
 /**
@@ -110,7 +111,11 @@ export async function consultarHistoricoCpf(cpf: string): Promise<PayloadJudit> 
  *       (respeitando os "anexos privados" do processo).
  */
 export async function baixarAutos(cnj: string): Promise<{ url: string }> {
-  return fetchJson<{ url: string }>(`/processos/${encodeURIComponent(cnj)}/autos`, {
+  const cnjLimpo = cnj.replace(/\D/g, '');
+  if (cnjLimpo.length !== 20) {
+    throw new JuditError('Nº CNJ deve ter 20 dígitos');
+  }
+  return fetchJson<{ url: string }>(`/processos/${cnjLimpo}/autos`, {
     method: 'GET',
   });
 }

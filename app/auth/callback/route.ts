@@ -12,12 +12,24 @@ import { createClient } from '@/lib/supabase/server';
  * 2. PKCE (usado por OAuth e algumas rotas modernas):
  *    /auth/callback?code=xxx&next=/
  */
+/**
+ * Só aceita caminho relativo same-origin. Sem isso, `next=@evil.com/x` faz
+ * `${origin}${next}` virar `https://app.com@evil.com/x` — o browser lê
+ * `app.com` como userinfo e navega pra evil.com com a sessão já criada.
+ */
+function destinoSeguro(next: string | null): string {
+  if (!next) return '/';
+  if (!next.startsWith('/')) return '/';
+  if (next.startsWith('//') || next.startsWith('/\\')) return '/';
+  return next;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const token_hash = searchParams.get('token_hash');
   const type = searchParams.get('type') as EmailOtpType | null;
-  const next = searchParams.get('next') ?? '/';
+  const next = destinoSeguro(searchParams.get('next'));
 
   const supabase = await createClient();
 
