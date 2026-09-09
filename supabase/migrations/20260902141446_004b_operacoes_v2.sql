@@ -1,8 +1,8 @@
 -- =============================================================================
--- 004_operacoes_v2.sql
+-- 004b_operacoes_v2.sql
 --
 -- Refatoração de operacoes após mapeamento do Lajedo Capital (2026-09-02).
--- Aplicar em: SQL Editor do Supabase Dashboard
+-- Os ALTER TYPE do enum tipo_ativo saíram para a 004a (ver motivo lá).
 -- Issue: RGT-46
 --
 -- Depende de: 001_perfis_usuarios.sql, 002_operacoes.sql, 003_suporte.sql
@@ -30,8 +30,6 @@ ALTER TABLE operacoes ALTER COLUMN loa DROP NOT NULL;
 -- 2. Ampliar enum tipo_ativo com Pré-Precatório e Pré-RPV
 -- ────────────────────────────────────────────────────────────────
 
-ALTER TYPE tipo_ativo ADD VALUE IF NOT EXISTS 'pre_precatorio';
-ALTER TYPE tipo_ativo ADD VALUE IF NOT EXISTS 'pre_rpv';
 
 
 -- ────────────────────────────────────────────────────────────────
