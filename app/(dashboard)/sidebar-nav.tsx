@@ -3,7 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, Users, Briefcase, CheckSquare, Shield, Search, type LucideIcon } from 'lucide-react';
+import {
+  Home,
+  Users,
+  Briefcase,
+  CheckSquare,
+  Shield,
+  Search,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react';
 
 export type NavItem = {
   label: string;
@@ -19,7 +28,10 @@ export const NAV_BASE: NavItem[] = [
   { label: 'Tarefas', href: '/tarefas', icon: CheckSquare },
 ];
 
-export const NAV_ADMIN: NavItem[] = [{ label: 'Usuários', href: '/admin/usuarios', icon: Shield }];
+export const NAV_ADMIN: NavItem[] = [
+  { label: 'Usuários', href: '/admin/usuarios', icon: Shield },
+  { label: 'Índices', href: '/admin/indices', icon: TrendingUp },
+];
 
 function itemAtivo(pathname: string, href: string): boolean {
   if (href === '/') return pathname === '/';
