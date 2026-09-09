@@ -1,6 +1,19 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Spinner } from '@/components/ui/spinner';
 import { criarComentario, deletarComentario } from './comentarios-actions';
 import { labelEtapa } from '@/lib/workflow';
 
@@ -63,11 +76,15 @@ export function TabComentarios({ operacaoId, usuarioAtualId, isAdmin, comentario
   }
 
   function apagar(id: string) {
-    if (!confirm('Apagar este comentário?')) return;
     setErro(null);
     startTransition(async () => {
       const res = await deletarComentario(operacaoId, id);
-      if (!res.ok) setErro(res.error);
+      if (!res.ok) {
+        setErro(res.error);
+        toast.error(res.error);
+        return;
+      }
+      toast.success('Comentário apagado');
     });
   }
 
@@ -97,8 +114,9 @@ export function TabComentarios({ operacaoId, usuarioAtualId, isAdmin, comentario
             type="button"
             onClick={enviar}
             disabled={pending || !texto.trim()}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+            className="flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
           >
+            {pending && <Spinner size={3} />}
             {pending ? 'Enviando…' : 'Comentar'}
           </button>
         </div>
@@ -138,14 +156,41 @@ export function TabComentarios({ operacaoId, usuarioAtualId, isAdmin, comentario
                   </div>
                   <p className="mt-1 text-sm whitespace-pre-wrap text-neutral-800">{c.texto}</p>
                   {podeApagar && (
-                    <button
-                      type="button"
-                      onClick={() => apagar(c.id)}
-                      disabled={pending}
-                      className="mt-1 text-xs text-neutral-500 hover:text-red-600 disabled:opacity-40"
-                    >
-                      Apagar
-                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger
+                        disabled={pending}
+                        render={
+                          <button
+                            type="button"
+                            className="mt-1 text-xs text-neutral-500 hover:text-red-600 disabled:opacity-40"
+                          />
+                        }
+                      >
+                        Apagar
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Apagar este comentário?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            <span className="mb-2 block rounded-md bg-neutral-50 p-2 text-xs text-neutral-700 italic">
+                              &ldquo;
+                              {c.texto.length > 160 ? `${c.texto.slice(0, 160)}…` : c.texto}
+                              &rdquo;
+                            </span>
+                            A remoção é definitiva.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => apagar(c.id)}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Apagar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
                 </div>
               </li>

@@ -1,12 +1,24 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { ArrowRight, Check, TrendingUp, X } from 'lucide-react';
 import { mudarEtapa, registrarAceite } from './actions';
 import { labelEtapa, transicoesPermitidas, type Etapa } from '@/lib/workflow';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 type Props = {
   operacaoId: string;
@@ -58,23 +71,27 @@ export function AcoesEtapa({
   function confirmar() {
     if (!novaEtapa) return;
     setErro(null);
+    const destino = labelEtapa(novaEtapa);
     startTransition(async () => {
       const res = await mudarEtapa(operacaoId, novaEtapa, observacao);
       if (!res.ok) {
         setErro(res.error);
+        toast.error(res.error);
         return;
       }
       setModalOpen(false);
+      toast.success(`Operação movida para ${destino}`);
     });
   }
 
-  function abrirAceite() {
+  function abrirAjuste() {
     setErro(null);
     setPrecoInput(precoProposto ? String(precoProposto) : '');
     setAceiteModalOpen(true);
   }
 
-  function confirmarAceite() {
+  /** Salva o preço digitado no modal e registra o aceite com ele. */
+  function confirmarAjuste() {
     setErro(null);
     const preco = Number(precoInput.replace(',', '.'));
     if (!preco || preco <= 0) {
@@ -85,9 +102,25 @@ export function AcoesEtapa({
       const res = await registrarAceite(operacaoId, true, preco);
       if (!res.ok) {
         setErro(res.error);
+        toast.error(res.error);
         return;
       }
       setAceiteModalOpen(false);
+      toast.success(`Aceite registrado — ${fmtBRL(preco)}`);
+    });
+  }
+
+  /** Aceita o valor que já está na tela, sem repedir o número. */
+  function aceitarValorAtual() {
+    setErro(null);
+    startTransition(async () => {
+      const res = await registrarAceite(operacaoId, true, precoProposto);
+      if (!res.ok) {
+        setErro(res.error);
+        toast.error(res.error);
+        return;
+      }
+      toast.success('Aceite do credor registrado');
     });
   }
 
@@ -95,14 +128,18 @@ export function AcoesEtapa({
     setErro(null);
     startTransition(async () => {
       const res = await registrarAceite(operacaoId, false, null);
-      if (!res.ok) setErro(res.error);
+      if (!res.ok) {
+        setErro(res.error);
+        toast.error(res.error);
+        return;
+      }
+      toast.success('Recusa registrada');
     });
   }
 
   if (!podeAvancar && !emAceite) return null;
 
-  const valorCedivel = precoProposto ?? 0;
-  const comissao = 0; // placeholder - se um dia tiver campo commissao_pct
+  const temPreco = precoProposto !== null && precoProposto > 0;
 
   return (
     <>
@@ -118,56 +155,109 @@ export function AcoesEtapa({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-blue-50 px-4 py-3 ring-1 ring-blue-200">
-                <div className="text-xs font-medium text-neutral-600">Valor Líquido Cedível</div>
-                <div className="mt-1 text-xl font-bold text-blue-700">{fmtBRL(valorCedivel)}</div>
-                <div className="mt-0.5 text-[10px] text-neutral-500">100% do líquido cedível</div>
+            <div className="rounded-lg bg-blue-50 px-4 py-3 ring-1 ring-blue-200">
+              <div className="text-xs font-medium text-neutral-600">Preço proposto ao credor</div>
+              <div className="mt-1 text-2xl font-bold text-blue-700">
+                {temPreco ? fmtBRL(precoProposto) : '— a definir —'}
               </div>
-              <div className="rounded-lg bg-neutral-50 px-4 py-3 ring-1 ring-neutral-200">
-                <div className="text-xs font-medium text-neutral-600">Pagamento ao Cedente</div>
-                <div className="mt-1 text-xl font-bold text-neutral-900">
-                  {fmtBRL(valorCedivel)}
-                </div>
-                <div className="mt-0.5 text-[10px] text-neutral-500">valor proposto</div>
-              </div>
-              <div className="rounded-lg bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
-                <div className="text-xs font-medium text-neutral-600">Comissão</div>
-                <div className="mt-1 text-xl font-bold text-amber-700">{fmtBRL(comissao)}</div>
-                <div className="mt-0.5 text-[10px] text-neutral-500">a definir</div>
+              <div className="mt-0.5 text-[10px] text-neutral-500">
+                {temPreco
+                  ? 'valor que a RGT paga ao cedente'
+                  : 'informe o valor antes de registrar o aceite'}
               </div>
             </div>
 
             <Button
-              onClick={abrirAceite}
+              onClick={abrirAjuste}
               disabled={pending}
               variant="outline"
               className="w-full border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
             >
               <TrendingUp className="size-4" />
-              Ajustar valor proposto
+              {temPreco ? 'Alterar o valor proposto' : 'Informar valor proposto'}
             </Button>
 
             <div className="grid grid-cols-2 gap-3">
-              <Button
-                onClick={abrirAceite}
-                disabled={pending}
-                className="h-12 bg-emerald-600 text-white hover:bg-emerald-700"
-              >
-                {pending && <Spinner />}
-                <Check className="size-5" />
-                Aceitar Proposta
-              </Button>
-              <Button
-                onClick={registrarRecusa}
-                disabled={pending}
-                variant="destructive"
-                className="h-12 bg-red-600 text-white hover:bg-red-700"
-              >
-                {pending && <Spinner />}
-                <X className="size-5" />
-                Recusar Proposta
-              </Button>
+              {/* Aceitar confirma o valor que já está na tela. Antes este botão
+                  abria o mesmo modal do "Ajustar", pedindo o preço de novo. */}
+              <AlertDialog>
+                <AlertDialogTrigger
+                  disabled={pending || !temPreco}
+                  render={
+                    <button
+                      type="button"
+                      className={cn(
+                        buttonVariants(),
+                        'h-12 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40',
+                      )}
+                    />
+                  }
+                >
+                  {pending && <Spinner />}
+                  <Check className="size-5" />
+                  Aceitar Proposta
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Registrar o aceite do credor?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Confirma que o credor aceitou{' '}
+                      <strong className="text-neutral-900">
+                        {temPreco ? fmtBRL(precoProposto) : ''}
+                      </strong>
+                      . A operação segue para a due diligence. Se o valor está errado, cancele e use
+                      &quot;Alterar o valor proposto&quot;.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={aceitarValorAtual}
+                      className="bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                      Confirmar aceite
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Recusa é irreversível pela UI e antes disparava direto no clique */}
+              <AlertDialog>
+                <AlertDialogTrigger
+                  disabled={pending}
+                  render={
+                    <button
+                      type="button"
+                      className={cn(
+                        buttonVariants({ variant: 'destructive' }),
+                        'h-12 bg-red-600 text-white hover:bg-red-700 disabled:opacity-40',
+                      )}
+                    />
+                  }
+                >
+                  {pending && <Spinner />}
+                  <X className="size-5" />
+                  Recusar Proposta
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Registrar recusa do credor?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      A operação fica marcada como <strong>recusada pelo credor</strong>. Não há
+                      botão pra desfazer — reverter exige mudar a etapa manualmente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Voltar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={registrarRecusa}
+                      className="bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Sim, registrar recusa
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </CardContent>
         </Card>
@@ -278,11 +368,10 @@ export function AcoesEtapa({
       <Dialog open={aceiteModalOpen} onOpenChange={(open) => !pending && setAceiteModalOpen(open)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registrar aceite do credor</DialogTitle>
+            <DialogTitle>Valor proposto ao credor</DialogTitle>
             <DialogDescription>
-              Informe o preço proposto que o credor aceitou. Fica gravado como{' '}
-              <code className="rounded bg-neutral-100 px-1 text-xs">preco_proposto</code> na
-              operação.
+              Informe o preço que a RGT paga ao cedente. Salvar já registra o aceite do credor por
+              esse valor.
             </DialogDescription>
           </DialogHeader>
 
@@ -312,12 +401,12 @@ export function AcoesEtapa({
               Cancelar
             </Button>
             <Button
-              onClick={confirmarAceite}
+              onClick={confirmarAjuste}
               disabled={pending || !precoInput}
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
               {pending && <Spinner />}
-              {pending ? 'Salvando…' : 'Confirmar aceite'}
+              {pending ? 'Salvando…' : 'Salvar e registrar aceite'}
             </Button>
           </DialogFooter>
         </DialogContent>

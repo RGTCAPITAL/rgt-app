@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { mudarStatusLead } from './actions';
+import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +84,9 @@ export function Kanban({
   const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
   const [editandoLead, setEditandoLead] = useState<LeadEdit | null>(null);
+  // Card fica em estado de carregando enquanto o servidor não confirma: sem isso
+  // ele permanecia visualmente na coluna antiga por ~500ms, sem sinal nenhum.
+  const [movendoId, setMovendoId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   function onDragStart(e: React.DragEvent, leadId: string) {
@@ -115,14 +119,37 @@ export function Kanban({
       return;
     }
 
-    aplicarStatus(leadId, novoStatus);
+    // 'ganho' só existe passando pelo formulário de operação — o server rejeita
+    // o atalho. Antes o drop era aceito, ia até o servidor e voltava com erro:
+    // agora explicamos na hora e apontamos o caminho certo.
+    if (novoStatus === 'ganho') {
+      toast.error('Pra marcar como Ganho, use "Virar operação" no card do lead.', {
+        description: 'O lead só vira ganho quando a operação é criada de fato.',
+      });
+      return;
+    }
+
+    aplicarStatus(leadId, novoStatus, undefined, lead.nome);
   }
 
-  function aplicarStatus(leadId: string, novoStatus: StatusLead, motivo?: string) {
+  function aplicarStatus(
+    leadId: string,
+    novoStatus: StatusLead,
+    motivo?: string,
+    nomeLead?: string,
+  ) {
     setErro(null);
+    setMovendoId(leadId);
+    const destino = STATUS_LEAD.find((s) => s.value === novoStatus)?.label ?? novoStatus;
     startTransition(async () => {
       const res = await mudarStatusLead(leadId, novoStatus, motivo);
-      if (!res.ok) setErro(res.error);
+      setMovendoId(null);
+      if (!res.ok) {
+        setErro(res.error);
+        toast.error(res.error);
+        return;
+      }
+      toast.success(nomeLead ? `${nomeLead} → ${destino}` : `Lead movido para ${destino}`);
     });
   }
 
@@ -132,7 +159,7 @@ export function Kanban({
       setErro('Informe o motivo da perda.');
       return;
     }
-    aplicarStatus(modalPerdido.leadId, 'perdido', motivoPerda);
+    aplicarStatus(modalPerdido.leadId, 'perdido', motivoPerda, modalPerdido.nome);
     setModalPerdido(null);
   }
 
@@ -174,7 +201,14 @@ export function Kanban({
 
               <div className="flex-1 space-y-2 overflow-y-auto">
                 {leadsDaCol.length === 0 ? (
-                  <div className="mt-4 text-center text-xs text-neutral-400">—</div>
+                  // Antes era só um "—" cinza, que não dizia o que fazer.
+                  <div className="mt-3 rounded-lg border border-dashed border-neutral-200 px-3 py-6 text-center">
+                    <p className="text-xs text-neutral-400">
+                      {col.value === 'novo'
+                        ? 'Nenhum lead novo. Crie um em "Novo lead" ou importe um CSV.'
+                        : 'Arraste um card até aqui.'}
+                    </p>
+                  </div>
                 ) : (
                   leadsDaCol.map((lead) => (
                     <div
@@ -196,7 +230,10 @@ export function Kanban({
                           motivo_perda: lead.motivo_perda,
                         })
                       }
-                      className="group cursor-grab rounded-lg bg-white p-3 text-sm shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md active:cursor-grabbing"
+                      className={cn(
+                        'group cursor-grab rounded-lg bg-white p-3 text-sm shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md active:cursor-grabbing',
+                        movendoId === lead.id && 'pointer-events-none animate-pulse opacity-50',
+                      )}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-medium text-neutral-900">{lead.nome}</span>

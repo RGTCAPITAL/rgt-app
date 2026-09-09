@@ -163,7 +163,16 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
               <Input
                 defaultValue={filtros.q}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') updateFiltro('q', (e.target as HTMLInputElement).value);
+                  if (e.key !== 'Enter') return;
+                  const bruto = (e.target as HTMLInputElement).value;
+                  // O servidor ignora busca com menos de 3 dígitos. Antes o Enter
+                  // simplesmente não fazia nada e o campo parecia quebrado.
+                  const digitos = bruto.replace(/\D/g, '');
+                  if (bruto.trim() && digitos.length < 3) {
+                    toast.error('Digite ao menos 3 dígitos do número do processo.');
+                    return;
+                  }
+                  updateFiltro('q', bruto);
                 }}
                 placeholder="Buscar (ao menos 3 dígitos)"
                 className="h-9 w-56 pl-8 text-sm"

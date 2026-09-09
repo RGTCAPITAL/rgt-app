@@ -115,9 +115,11 @@ export async function registrarAceite(
   }
 
   // Pra aceitar, é preciso ter preço proposto (constraint operacoes_aceite_precisa_preco).
-  // Se ainda não tem, o caller passa o valor via `precoProposto`.
+  // O valor informado agora tem precedência sobre o que já está salvo — antes era
+  // `op.preco_proposto ?? informado`, o que fazia o salvo sempre vencer e o botão
+  // "Ajustar valor proposto" descartar em silêncio o que o usuário digitava.
   const precoParaSalvar =
-    op.preco_proposto ?? (precoProposto !== null && precoProposto > 0 ? precoProposto : null);
+    precoProposto !== null && precoProposto > 0 ? precoProposto : op.preco_proposto;
 
   if (aceitou && precoParaSalvar === null) {
     return {

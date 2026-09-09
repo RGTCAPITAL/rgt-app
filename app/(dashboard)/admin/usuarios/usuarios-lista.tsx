@@ -1,7 +1,18 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { atualizarPerfil, toggleAtivo } from './actions';
 import { ConvidarDialog } from './convidar-dialog';
@@ -44,22 +55,49 @@ export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meu
   const [convidando, setConvidando] = useState(false);
   const [_, startTransition] = useTransition();
 
-  function mudarPerfil(userId: string, novoPerfil: string) {
+  // Mudança de perfil só sai daqui depois de confirmada. Antes ia direto no
+  // onChange do <select>, e no macOS o scroll do trackpad sobre um select
+  // nativo troca a opção — dava pra promover um broker a admin sem clicar.
+  const [trocaPerfil, setTrocaPerfil] = useState<{
+    usuario: UsuarioRow;
+    novoPerfil: string;
+  } | null>(null);
+  const [alvoAtivo, setAlvoAtivo] = useState<UsuarioRow | null>(null);
+
+  function confirmarTrocaPerfil() {
+    if (!trocaPerfil) return;
+    const { usuario, novoPerfil } = trocaPerfil;
+    const label = PERFIS.find((p) => p.value === novoPerfil)?.label ?? novoPerfil;
     setErro(null);
-    setPendingId(userId);
+    setPendingId(usuario.id);
+    setTrocaPerfil(null);
     startTransition(async () => {
-      const res = await atualizarPerfil(userId, novoPerfil);
-      if (!res.ok) setErro(res.error);
+      const res = await atualizarPerfil(usuario.id, novoPerfil);
+      if (!res.ok) {
+        setErro(res.error);
+        toast.error(res.error);
+      } else {
+        toast.success(`${usuario.nome ?? usuario.email} agora é ${label}`);
+      }
       setPendingId(null);
     });
   }
 
-  function mudarAtivo(userId: string, novoAtivo: boolean) {
+  function confirmarToggleAtivo() {
+    if (!alvoAtivo) return;
+    const u = alvoAtivo;
+    const novoAtivo = !u.ativo;
     setErro(null);
-    setPendingId(userId);
+    setPendingId(u.id);
+    setAlvoAtivo(null);
     startTransition(async () => {
-      const res = await toggleAtivo(userId, novoAtivo);
-      if (!res.ok) setErro(res.error);
+      const res = await toggleAtivo(u.id, novoAtivo);
+      if (!res.ok) {
+        setErro(res.error);
+        toast.error(res.error);
+      } else {
+        toast.success(`${u.nome ?? u.email} ${novoAtivo ? 'reativado' : 'desativado'}`);
+      }
       setPendingId(null);
     });
   }
@@ -126,7 +164,11 @@ export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meu
                       <div className="flex items-center justify-end gap-2">
                         <select
                           value={u.perfil_slug ?? ''}
-                          onChange={(e) => mudarPerfil(u.id, e.target.value)}
+                          onChange={(e) => {
+                            const novo = e.target.value;
+                            if (novo === u.perfil_slug) return;
+                            setTrocaPerfil({ usuario: u, novoPerfil: novo });
+                          }}
                           disabled={carregando}
                           className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-900 outline-none focus:border-neutral-900"
                         >
@@ -138,12 +180,7 @@ export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meu
                         </select>
                         <button
                           type="button"
-                          onClick={() => {
-                            const acao = u.ativo ? 'desativar' : 'ativar';
-                            if (confirm(`Confirma ${acao} ${u.nome ?? u.email}?`)) {
-                              mudarAtivo(u.id, !u.ativo);
-                            }
-                          }}
+                          onClick={() => setAlvoAtivo(u)}
                           disabled={carregando}
                           className={`rounded-md border px-3 py-1 text-xs font-medium ${
                             u.ativo
@@ -170,6 +207,75 @@ export function UsuariosLista({ usuarios, meuId }: { usuarios: UsuarioRow[]; meu
       </p>
 
       {convidando && <ConvidarDialog onClose={() => setConvidando(false)} />}
+
+      <AlertDialog
+        open={trocaPerfil !== null}
+        onOpenChange={(aberto) => !aberto && setTrocaPerfil(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mudar o perfil de acesso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {trocaPerfil && (
+                <>
+                  <strong className="text-neutral-900">
+                    {trocaPerfil.usuario.nome ?? trocaPerfil.usuario.email}
+                  </strong>{' '}
+                  deixa de ser{' '}
+                  {PERFIS.find((p) => p.value === trocaPerfil.usuario.perfil_slug)?.label ??
+                    'sem perfil'}{' '}
+                  e passa a ser{' '}
+                  <strong className="text-neutral-900">
+                    {PERFIS.find((p) => p.value === trocaPerfil.novoPerfil)?.label}
+                  </strong>
+                  .
+                  {trocaPerfil.novoPerfil === 'admin' && (
+                    <span className="mt-2 block rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                      Admin enxerga e altera tudo, inclusive os perfis dos outros usuários.
+                    </span>
+                  )}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarTrocaPerfil}>Mudar perfil</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={alvoAtivo !== null}
+        onOpenChange={(aberto) => !aberto && setAlvoAtivo(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {alvoAtivo?.ativo ? 'Desativar este usuário?' : 'Reativar este usuário?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {alvoAtivo && (
+                <>
+                  <strong className="text-neutral-900">{alvoAtivo.nome ?? alvoAtivo.email}</strong>{' '}
+                  {alvoAtivo.ativo
+                    ? 'perde o acesso ao sistema imediatamente. As operações e leads dele continuam no lugar.'
+                    : 'volta a conseguir entrar no sistema com o perfil atual.'}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarToggleAtivo}
+              className={alvoAtivo?.ativo ? 'bg-red-600 text-white hover:bg-red-700' : undefined}
+            >
+              {alvoAtivo?.ativo ? 'Desativar' : 'Reativar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,6 +1,19 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Spinner } from '@/components/ui/spinner';
 import { uploadDocumento, deletarDocumento, getSignedUrl } from './documentos-actions';
 import {
   GRUPOS,
@@ -179,8 +192,13 @@ function ItemChecklist({
     fd.append('file', file);
     startTransition(async () => {
       const res = await uploadDocumento(fd);
-      if (!res.ok) onErro(res.error);
       if (inputRef.current) inputRef.current.value = '';
+      if (!res.ok) {
+        onErro(res.error);
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`${file.name} enviado`);
     });
   }
 
@@ -190,18 +208,33 @@ function ItemChecklist({
       const res = await getSignedUrl(storagePath);
       if (!res.ok) {
         onErro(res.error);
+        toast.error(res.error);
         return;
       }
-      if (res.data?.url) window.open(res.data.url, '_blank');
+      if (!res.data?.url) {
+        toast.error('Não foi possível gerar o link do arquivo.');
+        return;
+      }
+      // window.open volta null quando o bloqueador de popup barra — comum no
+      // Chrome quando a chamada sai de dentro de um transition. Antes disso
+      // simplesmente não acontecia nada e o botão parecia quebrado.
+      const aba = window.open(res.data.url, '_blank');
+      if (!aba) {
+        toast.error('O navegador bloqueou a janela. Libere popups para este site e tente de novo.');
+      }
     });
   }
 
   function apagar(id: string) {
-    if (!confirm('Apagar este documento?')) return;
     onErro(null);
     startTransition(async () => {
       const res = await deletarDocumento(operacaoId, id);
-      if (!res.ok) onErro(res.error);
+      if (!res.ok) {
+        onErro(res.error);
+        toast.error(res.error);
+        return;
+      }
+      toast.success('Documento apagado');
     });
   }
 
@@ -246,14 +279,40 @@ function ItemChecklist({
                       · por {d.uploader?.nome ?? 'usuário removido'}
                     </span>
                     {podeApagar && (
-                      <button
-                        type="button"
-                        onClick={() => apagar(d.id)}
-                        disabled={pending}
-                        className="text-neutral-500 hover:text-red-600 disabled:opacity-40"
-                      >
-                        apagar
-                      </button>
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          disabled={pending}
+                          render={
+                            <button
+                              type="button"
+                              className="text-neutral-500 hover:text-red-600 disabled:opacity-40"
+                            />
+                          }
+                        >
+                          apagar
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Apagar este documento?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {/* O prompt nativo não dizia QUAL arquivo — com várias
+                                  versões do mesmo tipo, dava pra apagar a errada. */}
+                              <strong className="text-neutral-900">{d.nome_original}</strong>, de{' '}
+                              {label.toLowerCase()}, enviado por{' '}
+                              {d.uploader?.nome ?? 'usuário removido'}. A remoção é definitiva.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => apagar(d.id)}
+                              className="bg-red-600 text-white hover:bg-red-700"
+                            >
+                              Apagar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     )}
                   </li>
                 );
@@ -276,9 +335,12 @@ function ItemChecklist({
             type="button"
             onClick={abrirSeletor}
             disabled={pending}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40"
           >
-            {temDoc ? 'Enviar outra versão' : 'Enviar'}
+            {/* Arquivo pode ter até 20MB: sem spinner o botão só ficava apagado
+                por segundos e parecia travado. */}
+            {pending && <Spinner size={3} />}
+            {pending ? 'Enviando…' : temDoc ? 'Enviar outra versão' : 'Enviar'}
           </button>
         </div>
       </div>

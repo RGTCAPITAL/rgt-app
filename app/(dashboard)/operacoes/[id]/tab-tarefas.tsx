@@ -1,8 +1,16 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { criarTarefa, atualizarStatusTarefa } from './tarefas-actions';
 import { fmtDataBR } from '@/lib/formatters';
+
+const LABEL_STATUS: Record<string, string> = {
+  pendente: 'reaberta',
+  em_andamento: 'iniciada',
+  concluida: 'concluída',
+  cancelada: 'cancelada',
+};
 
 export type Tarefa = {
   id: string;
@@ -53,6 +61,9 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
   const [destId, setDestId] = useState('');
   const [prazo, setPrazo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
+  // Qual tarefa está mudando de status: sem isso, todos os botões da lista
+  // ficavam apagados juntos e não dava pra saber em qual você clicou.
+  const [tarefaPendente, setTarefaPendente] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function criar() {
@@ -72,22 +83,32 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
       });
       if (!res.ok) {
         setErro(res.error);
+        toast.error(res.error);
         return;
       }
+      const criada = titulo;
       setTitulo('');
       setDescricao('');
       setDestPerfil('');
       setDestId('');
       setPrazo('');
       setModalOpen(false);
+      toast.success(`Tarefa criada: ${criada}`);
     });
   }
 
   function mudarStatus(id: string, status: string) {
     setErro(null);
+    setTarefaPendente(id);
     startTransition(async () => {
       const res = await atualizarStatusTarefa(id, status);
-      if (!res.ok) setErro(res.error);
+      setTarefaPendente(null);
+      if (!res.ok) {
+        setErro(res.error);
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Tarefa ${LABEL_STATUS[status] ?? 'atualizada'}`);
     });
   }
 
@@ -132,7 +153,7 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
                 key={t.id}
                 className={`rounded-md border p-3 text-sm ${
                   atrasada ? 'border-red-300 bg-red-50/50' : 'border-neutral-200 bg-white'
-                }`}
+                } ${tarefaPendente === t.id ? 'animate-pulse opacity-60' : ''}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
