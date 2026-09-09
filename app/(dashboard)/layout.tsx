@@ -13,20 +13,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!user) redirect('/login');
 
-  const { data: meuPerfil } = await supabase
-    .from('usuarios')
-    .select('perfil:perfis(slug)')
-    .eq('id', user.id)
-    .single<{ perfil: { slug: string } | null }>();
+  // Perfil e notificações não dependem um do outro — em série custavam ~50-100ms
+  // extras em TODA navegação do app, porque o layout roda a cada troca de rota.
+  const [{ data: meuPerfil }, { data: notifs }] = await Promise.all([
+    supabase
+      .from('usuarios')
+      .select('perfil:perfis(slug)')
+      .eq('id', user.id)
+      .single<{ perfil: { slug: string } | null }>(),
+    supabase
+      .from('notificacoes')
+      .select('id, tipo, titulo, descricao, link, lida_em, created_at')
+      .eq('destinatario', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .returns<Notif[]>(),
+  ]);
   const isAdmin = meuPerfil?.perfil?.slug === 'admin';
-
-  const { data: notifs } = await supabase
-    .from('notificacoes')
-    .select('id, tipo, titulo, descricao, link, lida_em, created_at')
-    .eq('destinatario', user.id)
-    .order('created_at', { ascending: false })
-    .limit(10)
-    .returns<Notif[]>();
 
   return (
     <div className="flex min-h-screen">

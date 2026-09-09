@@ -195,11 +195,10 @@ export default async function DashboardPage() {
 
   const [abertas, aceitePendente, prontasPagamento, ddTravada, ultimasCriadas, leadsAbertos] =
     await Promise.all([
-      supabase
-        .from('operacoes')
-        .select('id, valor_total', { count: 'exact' })
-        .not('etapa_atual', 'in', '(finalizada,cancelada)')
-        .returns<{ id: string; valor_total: number }[]>(),
+      // Soma no banco: antes transferia id+valor_total de TODAS as operações
+      // abertas só pra reduzir a um número no cliente. A RPC é SECURITY INVOKER,
+      // então a RLS continua valendo e cada perfil soma só o que enxerga.
+      supabase.rpc('totais_pipeline'),
       supabase
         .from('operacoes')
         .select(
@@ -240,8 +239,11 @@ export default async function DashboardPage() {
         .not('status', 'in', '(ganho,perdido)'),
     ]);
 
-  const totalAbertas = abertas.count ?? 0;
-  const totalPipeline = (abertas.data ?? []).reduce((a, o) => a + Number(o.valor_total || 0), 0);
+  const totais = (
+    abertas.data as unknown as { abertas: number; valor_abertas: number }[] | null
+  )?.[0];
+  const totalAbertas = Number(totais?.abertas ?? 0);
+  const totalPipeline = Number(totais?.valor_abertas ?? 0);
   const aceitesAntigos = aceitePendente.data ?? [];
   const prontas = prontasPagamento.data ?? [];
   const ddTravadas = ddTravada.data ?? [];

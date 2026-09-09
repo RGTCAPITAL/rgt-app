@@ -115,86 +115,94 @@ export default async function OperacaoDetalhePage({
 
   if (error || !op) notFound();
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('perfil:perfis(slug)')
-    .eq('id', user.id)
-    .single<{ perfil: { slug: string } | null }>();
+  // As 5 queries abaixo são independentes entre si e da checagem de perfil.
+  // Em série custavam ~350-600ms de I/O na página mais acessada do app; em
+  // paralelo o custo vira o da mais lenta. A busca da operação continua antes
+  // (o notFound acima depende dela e a RLS já filtrou o acesso).
+  const [
+    { data: usuario },
+    { data: historico },
+    { data: comentarios },
+    { data: documentos },
+    { data: tarefas },
+    { data: usuariosOpt },
+  ] = await Promise.all([
+    supabase
+      .from('usuarios')
+      .select('perfil:perfis(slug)')
+      .eq('id', user.id)
+      .single<{ perfil: { slug: string } | null }>(),
+    supabase
+      .from('etapas_operacao')
+      .select('id, etapa, entrou_em, saiu_em, observacao, autorizado_por:usuarios(nome)')
+      .eq('operacao_id', id)
+      .order('entrou_em', { ascending: false })
+      .returns<EtapaHist[]>(),
+    supabase
+      .from('comentarios')
+      .select('id, texto, etapa, created_at, autor:usuarios(id, nome)')
+      .eq('operacao_id', id)
+      .order('created_at', { ascending: false })
+      .returns<
+        {
+          id: string;
+          texto: string;
+          etapa: string | null;
+          created_at: string;
+          autor: { id: string; nome: string | null } | null;
+        }[]
+      >(),
+    supabase
+      .from('documentos')
+      .select(
+        'id, tipo, nome_original, storage_path, tamanho_bytes, uploaded_at, uploaded_by, uploader:usuarios!documentos_uploaded_by_fkey(nome)',
+      )
+      .eq('operacao_id', id)
+      .order('uploaded_at', { ascending: false })
+      .returns<
+        {
+          id: string;
+          tipo: string;
+          nome_original: string;
+          storage_path: string;
+          tamanho_bytes: number | null;
+          uploaded_at: string;
+          uploaded_by: string | null;
+          uploader: { nome: string | null } | null;
+        }[]
+      >(),
+    supabase
+      .from('tarefas')
+      .select(
+        'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome)',
+      )
+      .eq('operacao_id', id)
+      .order('created_at', { ascending: false })
+      .returns<
+        {
+          id: string;
+          titulo: string;
+          descricao: string | null;
+          destinatario_perfil: string | null;
+          destinatario_id: string | null;
+          prazo: string | null;
+          status: string;
+          created_at: string;
+          criado_por: { nome: string | null } | null;
+          destinatario: { nome: string | null } | null;
+        }[]
+      >(),
+    supabase
+      .from('usuarios')
+      .select('id, nome')
+      .eq('ativo', true)
+      .order('nome')
+      .returns<{ id: string; nome: string | null }[]>(),
+  ]);
 
   const role = usuario?.perfil?.slug ?? '';
   const podeAvancar = ['admin', 'gestao'].includes(role);
   const isAdmin = role === 'admin';
-
-  const { data: historico } = await supabase
-    .from('etapas_operacao')
-    .select('id, etapa, entrou_em, saiu_em, observacao, autorizado_por:usuarios(nome)')
-    .eq('operacao_id', id)
-    .order('entrou_em', { ascending: false })
-    .returns<EtapaHist[]>();
-
-  const { data: comentarios } = await supabase
-    .from('comentarios')
-    .select('id, texto, etapa, created_at, autor:usuarios(id, nome)')
-    .eq('operacao_id', id)
-    .order('created_at', { ascending: false })
-    .returns<
-      {
-        id: string;
-        texto: string;
-        etapa: string | null;
-        created_at: string;
-        autor: { id: string; nome: string | null } | null;
-      }[]
-    >();
-
-  const { data: documentos } = await supabase
-    .from('documentos')
-    .select(
-      'id, tipo, nome_original, storage_path, tamanho_bytes, uploaded_at, uploaded_by, uploader:usuarios!documentos_uploaded_by_fkey(nome)',
-    )
-    .eq('operacao_id', id)
-    .order('uploaded_at', { ascending: false })
-    .returns<
-      {
-        id: string;
-        tipo: string;
-        nome_original: string;
-        storage_path: string;
-        tamanho_bytes: number | null;
-        uploaded_at: string;
-        uploaded_by: string | null;
-        uploader: { nome: string | null } | null;
-      }[]
-    >();
-
-  const { data: tarefas } = await supabase
-    .from('tarefas')
-    .select(
-      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome)',
-    )
-    .eq('operacao_id', id)
-    .order('created_at', { ascending: false })
-    .returns<
-      {
-        id: string;
-        titulo: string;
-        descricao: string | null;
-        destinatario_perfil: string | null;
-        destinatario_id: string | null;
-        prazo: string | null;
-        status: string;
-        created_at: string;
-        criado_por: { nome: string | null } | null;
-        destinatario: { nome: string | null } | null;
-      }[]
-    >();
-
-  const { data: usuariosOpt } = await supabase
-    .from('usuarios')
-    .select('id, nome')
-    .eq('ativo', true)
-    .order('nome')
-    .returns<{ id: string; nome: string | null }[]>();
 
   return (
     <div className="mx-auto max-w-6xl">

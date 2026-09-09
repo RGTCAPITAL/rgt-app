@@ -168,51 +168,23 @@ export async function virarLead(
 
   const auth = await exigirPerfil(['admin', 'gestao', 'broker']);
   if (!auth.ok) return { ok: false, error: auth.error };
-  const user = { id: auth.userId };
 
   const supabase = await createClient();
 
-  // Busca a prospecção pra pegar CPF conhecido + validar RLS
-  const { data: prosp } = await supabase
-    .from('prospeccao_precatorios')
-    .select('id, cedente_cpf_provavel, numero_processo, tribunal, valor_face')
-    .eq('id', prospeccaoId)
-    .maybeSingle();
-  if (!prosp) return { ok: false, error: 'Prospecção não encontrada ou sem permissão.' };
+  // Uma RPC em vez de INSERT + UPDATE separados: se o segundo passo falhasse,
+  // sobrava lead órfão no CRM e o broker clicava de novo, duplicando.
+  const { data: leadId, error } = await supabase.rpc('virar_prospeccao_em_lead', {
+    p_prospeccao_id: prospeccaoId,
+    p_nome: input.nome,
+    p_telefone: input.telefone,
+    p_email: input.email,
+    p_notas: input.notas,
+  });
 
-  const notasAuto = [
-    input.notas?.trim(),
-    `Origem: prospecção ${prosp.tribunal} · Proc ${prosp.numero_processo}`,
-    prosp.valor_face ? `Valor face: R$ ${Number(prosp.valor_face).toLocaleString('pt-BR')}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n');
-
-  const { data: lead, error: leadErr } = await supabase
-    .from('leads')
-    .insert({
-      nome: input.nome.trim(),
-      telefone: input.telefone?.trim() || null,
-      email: input.email?.trim() || null,
-      cpf_cnpj: prosp.cedente_cpf_provavel,
-      origem: 'outro',
-      status: 'em_contato',
-      dono_id: user.id,
-      notas: notasAuto,
-    })
-    .select('id')
-    .single();
-
-  if (leadErr) return { ok: false, error: leadErr.message };
-
-  const { error: updErr } = await supabase
-    .from('prospeccao_precatorios')
-    .update({ status: 'lead_criado', lead_id: lead.id, responsavel_id: user.id })
-    .eq('id', prospeccaoId);
-
-  if (updErr) return { ok: false, error: updErr.message };
+  if (error) return { ok: false, error: error.message };
+  if (!leadId) return { ok: false, error: 'Não foi possível criar o lead.' };
 
   revalidatePath('/admin/prospeccao');
   revalidatePath('/crm');
-  return { ok: true, leadId: lead.id };
+  return { ok: true, leadId: leadId as unknown as string };
 }

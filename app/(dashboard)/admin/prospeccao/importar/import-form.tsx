@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { Upload, AlertTriangle, CheckCircle, X, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +13,13 @@ import { Spinner } from '@/components/ui/spinner';
 import { importarLoteProspeccao, type LinhaProspeccao } from '../actions';
 
 /**
+ * A lib `xlsx` tem ~430KB e só é usada depois que o usuário escolhe um arquivo.
+ * Importada estaticamente, entrava no chunk da rota e era baixada até por quem
+ * abre a página só pra ler as instruções. Agora carrega sob demanda.
+ */
+type Xlsx = typeof import('xlsx');
+
+/**
  * Layout TRT19 detectado:
  *   L1–L8: cabeçalho institucional
  *   L9: header ("Nº da RP", "Nº do Processo", "Nº do Precatório", "Tipo de Requisição",
@@ -23,7 +29,10 @@ import { importarLoteProspeccao, type LinhaProspeccao } from '../actions';
  *
  * Adaptável a outros layouts se precisar (TJAL, TRF5).
  */
-function parseTRT19(sheet: XLSX.WorkSheet): {
+function parseTRT19(
+  XLSX: Xlsx,
+  sheet: import('xlsx').WorkSheet,
+): {
   linhas: LinhaProspeccao[];
   erroLayout: string | null;
 } {
@@ -167,6 +176,8 @@ export function ImportForm() {
     if (!f) return;
 
     try {
+      // Carrega a lib só agora que existe arquivo pra ler
+      const XLSX = await import('xlsx');
       const buf = await f.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array', cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]!];
@@ -174,7 +185,7 @@ export function ImportForm() {
         setErroParse('Planilha vazia.');
         return;
       }
-      const { linhas, erroLayout } = parseTRT19(sheet);
+      const { linhas, erroLayout } = parseTRT19(XLSX, sheet);
       if (erroLayout) {
         setErroParse(erroLayout);
         return;
