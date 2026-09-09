@@ -1,0 +1,18 @@
+-- ============================================================================
+-- 027: inventário das garantias de segurança que moram no banco (RGT-76)
+--
+-- Nem toda barreira pode ser exercitada num teste automatizado sem risco: pra
+-- provar que `garantir_admin_remanescente` funciona seria preciso desativar
+-- admins de verdade num banco compartilhado.
+--
+-- Esta função expõe a PRESENÇA de cada garantia crítica. Um teste que a
+-- consulta falha no instante em que alguém dropar um trigger, afrouxar uma
+-- policy ou remover um índice único numa migration futura — que é exatamente
+-- o modo de falha silencioso que a auditoria (RGT-75) apontou.
+--
+-- SECURITY DEFINER porque lê o catálogo do Postgres, que o usuário autenticado
+-- não alcança. Só devolve nomes de objetos de schema — nenhum dado de negócio.
+--
+-- NOTA: a 028 corrige o nome do trigger de escalação, que estava errado aqui.
+-- ============================================================================
+-- (corpo idêntico ao da 028, mantido só como registro histórico)
