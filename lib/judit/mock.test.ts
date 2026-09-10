@@ -5,6 +5,14 @@ import { extrairMetadadosProspeccao } from './extract';
 
 const CNJ = '00011073320175190001';
 
+/**
+ * Gera CNJs sequenciais de 20 dígitos a partir de um prefixo.
+ *
+ * Era BigInt antes, mas literal BigInt exige target >= ES2020 e o tsconfig
+ * do projeto está em ES2017 — o `next build` quebrava no type check.
+ */
+const cnjSeq = (prefixo: string, i: number) => prefixo + String(i).padStart(19, '0');
+
 describe('mock da Judit', () => {
   it('é determinístico: o mesmo CNJ dá sempre o mesmo cenário', () => {
     const primeiro = cenarioDoCnj(CNJ);
@@ -12,20 +20,14 @@ describe('mock da Judit', () => {
   });
 
   it('CNJs diferentes caem em cenários diferentes', () => {
-    const cenarios = new Set(
-      Array.from({ length: 200 }, (_, i) =>
-        cenarioDoCnj(String(10000000000000000000n + BigInt(i))),
-      ),
-    );
+    const cenarios = new Set(Array.from({ length: 200 }, (_, i) => cenarioDoCnj(cnjSeq('1', i))));
     // Sem variedade, a fila inteira ficaria com o mesmo resultado e não daria
     // pra testar filtro nenhum.
     expect(cenarios.size).toBeGreaterThan(3);
   });
 
   it('a distribuição deixa a maioria dos processos limpa', () => {
-    const amostra = Array.from({ length: 1000 }, (_, i) =>
-      cenarioDoCnj(String(20000000000000000000n + BigInt(i))),
-    );
+    const amostra = Array.from({ length: 1000 }, (_, i) => cenarioDoCnj(cnjSeq('2', i)));
     const saudaveis = amostra.filter((c) => c === 'saudavel').length;
     // Se a maioria tivesse red flag, o broker aprenderia a ignorar o alerta.
     expect(saudaveis).toBeGreaterThan(400);
@@ -34,7 +36,7 @@ describe('mock da Judit', () => {
 
   it('todo credor simulado é marcado como tal', () => {
     for (let i = 0; i < 50; i++) {
-      const p = processoSimulado(String(30000000000000000000n + BigInt(i)));
+      const p = processoSimulado(cnjSeq('3', i));
       const autor = p.partes?.find((x) => x.tipo === 'autor');
       expect(autor?.nome).toMatch(/^\[SIMULADO\]/);
     }
@@ -60,7 +62,7 @@ describe('mock da Judit', () => {
     const vistos = new Set<string>();
 
     for (let i = 0; i < 3000 && vistos.size < Object.keys(casos).length; i++) {
-      const cnj = String(40000000000000000000n + BigInt(i));
+      const cnj = cnjSeq('4', i);
       const cenario = cenarioDoCnj(cnj);
       const esperada = casos[cenario];
       if (!esperada || vistos.has(cenario)) continue;
@@ -72,7 +74,7 @@ describe('mock da Judit', () => {
 
   it('processo saudável não gera red flag', () => {
     for (let i = 0; i < 2000; i++) {
-      const cnj = String(50000000000000000000n + BigInt(i));
+      const cnj = cnjSeq('5', i);
       if (cenarioDoCnj(cnj) !== 'saudavel') continue;
       expect(extrairRedFlags(processoSimulado(cnj))).toEqual([]);
       return;

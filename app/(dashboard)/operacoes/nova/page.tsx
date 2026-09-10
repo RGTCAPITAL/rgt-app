@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { NovaOperacaoForm } from './nova-operacao-form';
+import { iaConfigurada } from '@/lib/ia/client';
 import type { Esfera } from '@/lib/tribunais';
 
 type Search = { lead_id?: string };
@@ -83,6 +84,7 @@ export default async function NovaOperacaoPage({
         entesDevedores={entes ?? []}
         podeMunicipal={podeMunicipal}
         leadInicial={leadInicial}
+        iaConfigurada={iaConfigurada()}
       />
     </div>
   );

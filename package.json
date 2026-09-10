@@ -18,6 +18,7 @@
     "*.{ts,tsx,js,jsx}": "eslint --fix"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@base-ui/react": "^1.7.0",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",

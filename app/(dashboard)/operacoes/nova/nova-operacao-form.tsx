@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { ArrowLeft, ArrowRight, Check, Info, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Info, Send, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { criarOperacao } from './actions';
 import {
@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { UploadOficio } from './upload-oficio';
 
 type EnteDevedor = {
   id: string;
@@ -39,6 +40,7 @@ type Props = {
   entesDevedores: EnteDevedor[];
   podeMunicipal: boolean;
   leadInicial?: { id: string; nome: string; cpf: string } | null;
+  iaConfigurada: boolean;
 };
 
 type Step1State = {
@@ -147,7 +149,12 @@ function fmtRascunhoIdade(savedAt: number): string {
   return `${dias}d atrás`;
 }
 
-export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }: Props) {
+export function NovaOperacaoForm({
+  entesDevedores,
+  podeMunicipal,
+  leadInicial,
+  iaConfigurada,
+}: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [s1, setS1] = useState<Step1State>(
     leadInicial
@@ -160,6 +167,10 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
   const [erroServer, setErroServer] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const rascunhoInicializado = useRef(false);
+  // Campos que vieram da leitura do ofício e ainda não foram tocados por
+  // humano. A marca é o que separa "eu digitei isso" de "a IA sugeriu isso" na
+  // hora de conferir a operação antes de enviar.
+  const [origemIA, setOrigemIA] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (rascunhoInicializado.current) return;
@@ -233,6 +244,15 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
     );
   }, [s2.valor_principal, s2.valor_juros, s2.valor_selic]);
 
+  function esquecerOrigemIA(chaves: string[]) {
+    setOrigemIA((prev) => {
+      if (!chaves.some((k) => prev.has(k))) return prev;
+      const next = new Set(prev);
+      for (const k of chaves) next.delete(k);
+      return next;
+    });
+  }
+
   function updateS1<K extends keyof Step1State>(key: K, value: Step1State[K]) {
     setS1((prev) => {
       const next = { ...prev, [key]: value };
@@ -243,6 +263,8 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
       return next;
     });
     setErros((e) => ({ ...e, [key]: '' }));
+    // Editou à mão: deixa de ser sugestão da IA.
+    esquecerOrigemIA(key === 'esfera' ? [key, 'tribunal', 'ente_devedor_id'] : [key as string]);
   }
 
   function updateS2<K extends keyof Step2State>(key: K, value: Step2State[K]) {
@@ -253,6 +275,43 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
       return next;
     });
     setErros((e) => ({ ...e, [key]: '' }));
+    esquecerOrigemIA(
+      key === 'pss_ativo'
+        ? [key, 'pss_pct']
+        : key === 'rra_ativo'
+          ? [key, 'rra_meses']
+          : [key as string],
+    );
+  }
+
+  /**
+   * Aplica no formulário um bloco de campos vindo da leitura do ofício.
+   *
+   * Vem em bloco, e não campo a campo, porque `esfera` derruba `tribunal` e
+   * `ente_devedor_id` — se os três fossem aplicados em chamadas separadas, os
+   * dois últimos sumiriam. Aqui a limpeza acontece uma vez, antes do merge.
+   */
+  function aplicarDoOficio(passo: 1 | 2, patch: Record<string, string | boolean>) {
+    if (passo === 1) {
+      setS1((prev) => {
+        const base = { ...prev };
+        if (typeof patch.esfera === 'string' && patch.esfera !== prev.esfera) {
+          base.tribunal = '';
+          base.ente_devedor_id = '';
+        }
+        return { ...base, ...patch } as Step1State;
+      });
+    } else {
+      setS2((prev) => ({ ...prev, ...patch }) as Step2State);
+    }
+
+    const chaves = Object.keys(patch);
+    setOrigemIA((prev) => new Set([...prev, ...chaves]));
+    setErros((e) => {
+      const next = { ...e };
+      for (const k of chaves) next[k] = '';
+      return next;
+    });
   }
 
   function irPara(destino: 1 | 2 | 3) {
@@ -325,6 +384,10 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
           </Alert>
         )}
 
+        {/* Fica só no passo 1: é ali que o ofício preenche a maior parte, e o
+            painel de revisão precisa aparecer antes dos campos que ele altera. */}
+        {step === 1 && <UploadOficio iaConfigurada={iaConfigurada} onAplicar={aplicarDoOficio} />}
+
         {step === 1 && (
           <Card>
             <CardHeader>
@@ -336,6 +399,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 value={s1.cedente_nome}
                 onChange={(v) => updateS1('cedente_nome', v)}
                 error={erros.cedente_nome}
+                daIA={origemIA.has('cedente_nome')}
                 required
                 className="sm:col-span-2"
               />
@@ -345,6 +409,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('cedente_cpf', fmtCPF(v))}
                 placeholder="000.000.000-00"
                 error={erros.cedente_cpf}
+                daIA={origemIA.has('cedente_cpf')}
                 required
               />
               <FieldText
@@ -369,6 +434,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('numero_processo', maskCNJ(v))}
                 placeholder="0000000-00.0000.0.00.0000"
                 error={erros.numero_processo}
+                daIA={origemIA.has('numero_processo')}
                 required
               />
               <FieldSelect
@@ -377,6 +443,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('tipo', v)}
                 options={TIPOS_ATIVO}
                 error={erros.tipo}
+                daIA={origemIA.has('tipo')}
                 required
               />
               <FieldSelect
@@ -385,6 +452,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('natureza', v)}
                 options={NATUREZAS}
                 error={erros.natureza}
+                daIA={origemIA.has('natureza')}
                 required
               />
               <FieldSelect
@@ -393,6 +461,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('esfera', v)}
                 options={esferasVisiveis}
                 error={erros.esfera}
+                daIA={origemIA.has('esfera')}
                 required
               />
               <FieldSelect
@@ -401,6 +470,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('tribunal', v)}
                 options={tribunaisDisponiveis.map((t) => ({ value: t, label: t }))}
                 error={erros.tribunal}
+                daIA={origemIA.has('tribunal')}
                 required
                 disabled={!s1.esfera}
                 hint={!s1.esfera ? 'Selecione a esfera primeiro' : undefined}
@@ -414,6 +484,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                   label: e.uf ? `${e.nome} (${e.uf})` : e.nome,
                 }))}
                 error={erros.ente_devedor_id}
+                daIA={origemIA.has('ente_devedor_id')}
                 required
                 disabled={!s1.esfera}
                 hint={!s1.esfera ? 'Selecione a esfera primeiro' : undefined}
@@ -433,6 +504,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('especie', v)}
                 options={ESPECIES}
                 error={erros.especie}
+                daIA={origemIA.has('especie')}
                 required
               />
               <FieldText
@@ -441,6 +513,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('data_base', v)}
                 type="date"
                 error={erros.data_base}
+                daIA={origemIA.has('data_base')}
                 required
               />
               <FieldText
@@ -449,6 +522,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('data_autuacao', v)}
                 type="date"
                 error={erros.data_autuacao}
+                daIA={origemIA.has('data_autuacao')}
               />
               <FieldText
                 label="LOA estimada (ano)"
@@ -456,6 +530,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                 onChange={(v) => updateS1('loa', v)}
                 placeholder="Ex: 2027"
                 error={erros.loa}
+                daIA={origemIA.has('loa')}
               />
             </CardContent>
           </Card>
@@ -474,6 +549,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                     value={s2.valor_principal}
                     onChange={(v) => updateS2('valor_principal', v)}
                     error={erros.valor_principal}
+                    daIA={origemIA.has('valor_principal')}
                     required
                   />
                   <FieldText
@@ -481,6 +557,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                     value={s2.valor_juros}
                     onChange={(v) => updateS2('valor_juros', v)}
                     error={erros.valor_juros}
+                    daIA={origemIA.has('valor_juros')}
                     required
                   />
                   <FieldText
@@ -488,6 +565,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                     value={s2.valor_selic}
                     onChange={(v) => updateS2('valor_selic', v)}
                     error={erros.valor_selic}
+                    daIA={origemIA.has('valor_selic')}
                     hint="Opcional"
                   />
                 </div>
@@ -509,6 +587,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                     value={s2.retencao_honorarios_pct}
                     onChange={(v) => updateS2('retencao_honorarios_pct', v)}
                     error={erros.retencao_honorarios_pct}
+                    daIA={origemIA.has('retencao_honorarios_pct')}
                   />
                   <FieldText
                     label="Percentual de aquisição (%)"
@@ -536,6 +615,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                       value={s2.pss_pct}
                       onChange={(v) => updateS2('pss_pct', v)}
                       error={erros.pss_pct}
+                      daIA={origemIA.has('pss_pct')}
                       placeholder="Ex: 11"
                       required
                     />
@@ -557,6 +637,7 @@ export function NovaOperacaoForm({ entesDevedores, podeMunicipal, leadInicial }:
                       value={s2.rra_meses}
                       onChange={(v) => updateS2('rra_meses', v)}
                       error={erros.rra_meses}
+                      daIA={origemIA.has('rra_meses')}
                       hint="0 = IR fixo 3%. >0 = cálculo por meses acumulados."
                       placeholder="Ex: 60"
                       required
@@ -817,6 +898,19 @@ function InfoTip({ text }: { text: string }) {
 
 type Option = { value: string; label: string };
 
+/**
+ * Marca que o valor do campo veio da leitura do ofício e ainda não foi tocado.
+ * Some no primeiro caractere digitado — quem editou assumiu o valor.
+ */
+function SeloIA() {
+  return (
+    <span className="ml-1.5 inline-flex items-center gap-1 rounded bg-violet-100 px-1.5 py-0.5 align-middle text-[10px] font-medium text-violet-800">
+      <Sparkles className="size-2.5" />
+      do ofício
+    </span>
+  );
+}
+
 function FieldText({
   label,
   value,
@@ -827,6 +921,7 @@ function FieldText({
   hint,
   required,
   className,
+  daIA,
 }: {
   label: string;
   value: string;
@@ -837,6 +932,7 @@ function FieldText({
   hint?: string;
   required?: boolean;
   className?: string;
+  daIA?: boolean;
 }) {
   const id = useMemo(() => `f-${label.replace(/\W+/g, '-').toLowerCase()}`, [label]);
   return (
@@ -844,6 +940,7 @@ function FieldText({
       <Label htmlFor={id}>
         {label}
         {required && <span className="text-red-600"> *</span>}
+        {daIA && <SeloIA />}
       </Label>
       <Input
         id={id}
@@ -871,6 +968,7 @@ function FieldSelect({
   hint,
   required,
   disabled,
+  daIA,
 }: {
   label: string;
   value: string;
@@ -880,6 +978,7 @@ function FieldSelect({
   hint?: string;
   required?: boolean;
   disabled?: boolean;
+  daIA?: boolean;
 }) {
   const id = useMemo(() => `s-${label.replace(/\W+/g, '-').toLowerCase()}`, [label]);
   return (
@@ -887,6 +986,7 @@ function FieldSelect({
       <Label htmlFor={id}>
         {label}
         {required && <span className="text-red-600"> *</span>}
+        {daIA && <SeloIA />}
       </Label>
       <select
         id={id}
