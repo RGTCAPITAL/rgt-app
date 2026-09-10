@@ -8,6 +8,7 @@
  */
 
 import type { PayloadJudit } from './types';
+import { modoMockLigado, processoSimulado, cenarioDoCnj } from './mock';
 
 const BASE_URL = process.env.JUDIT_API_URL ?? 'https://api.judit.io/v2';
 const TIMEOUT_MS = 45_000; // Judit pode demorar até ~30s por consulta live
@@ -89,8 +90,34 @@ export async function consultarProcesso(cnj: string): Promise<PayloadJudit> {
   if (cnjLimpo.length !== 20) {
     throw new JuditError('Nº CNJ deve ter 20 dígitos');
   }
+
+  if (usandoMock()) return respostaSimulada(cnjLimpo);
+
   // Judit espera os 20 dígitos crus — o banco guarda o CNJ mascarado vindo do form
   return fetchJson<PayloadJudit>(`/processos/${cnjLimpo}`, { method: 'GET' });
+}
+
+/**
+ * Modo simulado só liga quando pedido EXPLICITAMENTE e não há chave real.
+ * A chave real sempre vence: se alguém esquecer JUDIT_MODO=mock no ambiente de
+ * produção, o efeito é nenhum — melhor do que servir dado falso em silêncio.
+ */
+export function usandoMock(): boolean {
+  return modoMockLigado() && !process.env.JUDIT_API_KEY;
+}
+
+/** Reproduz a latência e os modos de falha da API real. */
+async function respostaSimulada(cnjLimpo: string): Promise<PayloadJudit> {
+  await new Promise((r) => setTimeout(r, 300 + (cnjLimpo.charCodeAt(19) % 700)));
+
+  const cenario = cenarioDoCnj(cnjLimpo);
+  if (cenario === 'nao_encontrado') {
+    throw new JuditError(`[SIMULADO] Processo ${cnjLimpo} não encontrado na base`, 404);
+  }
+  if (cenario === 'erro') {
+    throw new JuditError('[SIMULADO] Judit respondeu 503: serviço indisponível', 503);
+  }
+  return { ...processoSimulado(cnjLimpo), _mock: true } as PayloadJudit;
 }
 
 /**
@@ -120,7 +147,11 @@ export async function baixarAutos(cnj: string): Promise<{ url: string }> {
   });
 }
 
-/** Retorna true se JUDIT_API_KEY tá configurada (usado pra esconder botão na UI) */
+/**
+ * True quando dá pra consultar — com chave real OU em modo simulado.
+ * A UI usa isto pra liberar os botões; o aviso de que os dados são falsos vem
+ * de `usandoMock()`, não daqui.
+ */
 export function juditConfigurada(): boolean {
-  return Boolean(process.env.JUDIT_API_KEY);
+  return Boolean(process.env.JUDIT_API_KEY) || usandoMock();
 }

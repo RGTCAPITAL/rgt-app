@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle, RefreshCw, Search, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, FlaskConical, RefreshCw, Search, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
@@ -16,6 +16,7 @@ type Props = {
   atualizadoEm: string | null;
   redFlags: RedFlag[];
   juditConfigurada: boolean;
+  juditSimulada: boolean;
 };
 
 function fmtRel(iso: string): string {
@@ -31,6 +32,7 @@ export function JuditCard({
   atualizadoEm,
   redFlags,
   juditConfigurada,
+  juditSimulada,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [ultimasFlags, setUltimasFlags] = useState<RedFlag[]>(redFlags);
@@ -108,6 +110,15 @@ export function JuditCard({
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {juditSimulada && (
+          <div className="mb-3 flex gap-2 rounded-md border-2 border-dashed border-violet-400 bg-violet-50 p-2 text-[11px] text-violet-900">
+            <FlaskConical className="size-3.5 shrink-0" />
+            <span>
+              <strong>Modo simulado</strong> — dados inventados a partir do número do processo, não
+              vieram da Judit. Não use pra decidir compra.
+            </span>
+          </div>
+        )}
         {semConsulta ? (
           <p className="text-sm text-neutral-600">
             Nenhuma consulta feita ainda pro processo{' '}

@@ -1,8 +1,16 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Upload, Search, Sparkles, UserPlus, XCircle, FileSpreadsheet } from 'lucide-react';
+import {
+  Upload,
+  Search,
+  Sparkles,
+  UserPlus,
+  XCircle,
+  FileSpreadsheet,
+  FlaskConical,
+} from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { juditConfigurada } from '@/lib/judit/client';
+import { juditConfigurada, usandoMock } from '@/lib/judit/client';
 import { buttonVariants } from '@/components/ui/button';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
@@ -89,6 +97,7 @@ export default async function ProspeccaoPage({
   const lotes = Array.from(new Set((lotesData ?? []).map((l) => l.fonte_lote))).sort();
 
   const juditOn = juditConfigurada();
+  const mock = usandoMock();
 
   return (
     <div>
@@ -136,6 +145,18 @@ export default async function ProspeccaoPage({
           color="rose"
         />
       </div>
+
+      {mock && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border-2 border-dashed border-violet-400 bg-violet-50 p-3 text-sm text-violet-900">
+          <FlaskConical className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <strong>Modo simulado</strong> — a Judit não está contratada. Os nomes de credor vêm
+            prefixados com <code className="rounded bg-violet-100 px-1">[SIMULADO]</code> e os red
+            flags são inventados a partir do número do processo. Serve pra testar o fluxo, não pra
+            decidir compra.
+          </div>
+        </div>
+      )}
 
       {!juditOn && (
         <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
