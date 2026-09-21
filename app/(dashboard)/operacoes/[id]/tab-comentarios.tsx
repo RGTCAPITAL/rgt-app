@@ -114,7 +114,7 @@ export function TabComentarios({ operacaoId, usuarioAtualId, isAdmin, comentario
             type="button"
             onClick={enviar}
             disabled={pending || !texto.trim()}
-            className="flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+            className="bg-primary text-primary-foreground hover:bg-primary/85 flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium disabled:opacity-40"
           >
             {pending && <Spinner size={3} />}
             {pending ? 'Enviando…' : 'Comentar'}

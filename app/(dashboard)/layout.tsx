@@ -1,3 +1,5 @@
+import Image from 'next/image';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { NotifSino, type Notif } from './notif-sino';
@@ -35,9 +37,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-screen">
       <aside className="flex w-56 flex-col justify-between border-r border-neutral-200 bg-white p-4">
         <div>
-          <div className="mb-8 px-2 text-lg font-bold tracking-tight">
-            rgt <span className="text-neutral-400">app</span>
-          </div>
+          {/* Logo horizontal oficial (kit do Humberto). Mesmo arquivo do site,
+              pra manter consistência da marca entre canal público e interno. */}
+          <Link href="/" className="mb-8 block px-2" aria-label="Ir para o início">
+            <Image
+              src="/logo-header.png"
+              alt="RGT Capital"
+              width={175}
+              height={48}
+              priority
+              className="h-10 w-auto"
+            />
+          </Link>
           <SidebarNav isAdmin={isAdmin} />
         </div>
         <div className="border-t border-neutral-200 pt-3">

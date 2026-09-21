@@ -127,7 +127,7 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+          className="bg-primary text-primary-foreground hover:bg-primary/85 rounded-md px-3 py-1.5 text-xs font-medium"
         >
           + Nova tarefa
         </button>
@@ -343,7 +343,7 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
                 type="button"
                 onClick={criar}
                 disabled={pending || !titulo.trim()}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                className="bg-primary text-primary-foreground hover:bg-primary/85 rounded-md px-4 py-2 text-sm font-medium disabled:opacity-40"
               >
                 {pending ? 'Criando…' : 'Criar tarefa'}
               </button>

@@ -11,7 +11,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'RGT App',
+  title: {
+    default: 'Plataforma RGT',
+    // Prefixa o título das páginas internas com "Plataforma RGT" — deixa a
+    // aba do navegador reconhecível quando o usuário tem várias abertas.
+    template: '%s · Plataforma RGT',
+  },
   description: 'Plataforma interna da RGT Capital',
 };
 

@@ -38,7 +38,7 @@ export default async function LoginPage({
         {message && <p className="text-sm text-green-700">{message}</p>}
         <button
           type="submit"
-          className="w-full rounded-md bg-neutral-900 py-2.5 text-sm font-medium text-white hover:bg-neutral-800"
+          className="bg-primary text-primary-foreground hover:bg-primary/85 w-full rounded-md py-2.5 text-sm font-medium"
         >
           Entrar
         </button>
