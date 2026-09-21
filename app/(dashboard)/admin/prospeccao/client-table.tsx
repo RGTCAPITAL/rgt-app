@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/table';
 import { Card } from '@/components/ui/card';
 import { RED_FLAG_LABEL, type RedFlag } from '@/lib/judit/types';
-import { enriquecerLoteJudit } from './judit-batch-action';
+import { enriquecerLoteDjen } from './djen-batch-action';
 import { VirarLeadDialog } from './virar-lead-dialog';
 import { DescartarDialog } from './descartar-dialog';
 
@@ -130,7 +130,7 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
       return;
     }
     startTransition(async () => {
-      const res = await enriquecerLoteJudit(pendentesSelecionados);
+      const res = await enriquecerLoteDjen(pendentesSelecionados);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -245,7 +245,7 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
             ) : (
               <>
                 <Sparkles className="size-3.5" />
-                Enriquecer com Judit ({pendentesSelecionados.length})
+                Enriquecer com DJEN ({pendentesSelecionados.length})
               </>
             )}
           </Button>
@@ -312,7 +312,7 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                           <span className="font-medium">{r.cedente_nome_provavel}</span>
                         ) : (
                           <span className="text-xs text-neutral-400 italic">
-                            (Judit ainda não rodou)
+                            (Ainda não enriquecido)
                           </span>
                         )}
                       </TableCell>
@@ -395,7 +395,7 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                                 disabled={!r.cedente_nome_provavel && r.judit_status === 'pendente'}
                                 title={
                                   !r.cedente_nome_provavel && r.judit_status === 'pendente'
-                                    ? 'Enriqueça com Judit primeiro pra ter o nome'
+                                    ? 'Enriqueça pelo DJEN primeiro pra ter o nome'
                                     : ''
                                 }
                               >

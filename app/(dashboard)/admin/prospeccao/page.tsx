@@ -10,7 +10,10 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { juditConfigurada, usandoMock } from '@/lib/judit/client';
+// DJEN é público, sem chave — não precisa de flag de "configurado".
+// O batch de enriquecimento sempre roda; se um processo não tiver publicação
+// desde set/2024, o item vira `not_found` — o broker sabe que precisa buscar
+// por outro caminho.
 import { buttonVariants } from '@/components/ui/button';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
@@ -96,8 +99,10 @@ export default async function ProspeccaoPage({
     .limit(1000);
   const lotes = Array.from(new Set((lotesData ?? []).map((l) => l.fonte_lote))).sort();
 
-  const juditOn = juditConfigurada();
-  const mock = usandoMock();
+  // DJEN sempre disponível — mantemos as flags como constantes pra preservar
+  // o shape do prop sem quebrar a UI. Removível quando refatorarmos o table.
+  const djenOn = true;
+  const mock = false;
 
   return (
     <div>
@@ -158,22 +163,12 @@ export default async function ProspeccaoPage({
         </div>
       )}
 
-      {!juditOn && (
-        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          <Search className="mt-0.5 size-4 shrink-0" />
-          <div>
-            <strong>Judit não configurada</strong> — batch de enriquecimento fica indisponível.
-            Adicione <code>JUDIT_API_KEY</code> no .env.local pra habilitar.
-          </div>
-        </div>
-      )}
-
       <ProspeccaoTable
         rows={rows ?? []}
         lotes={lotes}
         filtros={{ lote: sp.lote ?? '', status: sp.status ?? '', q: sp.q ?? '' }}
         role={role}
-        juditOn={juditOn}
+        juditOn={djenOn}
       />
     </div>
   );
