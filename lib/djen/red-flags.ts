@@ -376,3 +376,69 @@ export function extrairFatos(texto: string): ExtracaoTexto {
 export function sanitizarTexto(texto: string): string {
   return texto.replace(/<br\s*\/?>/gi, '\n').trim();
 }
+
+// ---- Lookup pra UI ----
+
+const LOOKUP: Map<string, RedFlagDef> = new Map(TODAS_REDFLAGS.map((f) => [f.codigo, f]));
+
+/**
+ * Descrições em português "normal" pra hover na UI. A `descricao` do def é
+ * técnica (pro jurídico ler); estas são pro broker/gestão que não é advogado.
+ * Faltar aqui não é bug: cai no fallback pra descricao técnica.
+ */
+const DESCRICOES_HUMANAS: Record<string, string> = {
+  '1': 'Alguém já comprou este crédito. Não dá pra oferecer proposta.',
+  '1a': 'Boilerplate do TJAL: fundo já foi habilitado no lugar do credor. Não comprar.',
+  '1b': 'O texto nomeia quem vendeu o crédito. Cessão consumada.',
+  '1c': 'Escritura pública de cessão foi citada. Cessão consumada.',
+  '2': 'FIDC ou securitizadora aparece no processo. Concorrência já entrou.',
+  '3': '"% do crédito" mencionado. Pode ser cessão parcial — vale checar.',
+  '3a': 'Percentual de crédito EM cessão. Negociação em andamento.',
+  '4': 'Processo já foi quitado ou arquivado. Não tem mais o que comprar.',
+  '5': 'Execução suspensa. Vai demorar mais pra receber.',
+  '6': 'Regime especial de pagamento — precifica diferente do normal.',
+  '7': 'Credor faleceu, herdeiros no processo. Negociação com espólio.',
+  '8': 'Penhora sobre o crédito. Parte do valor tem destino comprometido.',
+  '8a': 'Bloqueio contra o ente devedor. Sinal POSITIVO — pressão pra pagar.',
+  '9': 'Trânsito em julgado — pode virar precatório definitivo.',
+  '10': 'Recurso pendente. Ainda não é definitivo.',
+  X1: 'Ofício requisitório expedido — precatório em formação.',
+  X2: 'Deságio ou acordo formal citado no texto.',
+  X3: 'Compensação tributária discutida no processo.',
+  X4: 'RPV (mini-precatório): paga rápido, mas o teto de valor é baixo.',
+  X5: 'Ano do exercício orçamentário/LOA identificado no texto.',
+  X7: 'Dispensa de anuência do devedor (boilerplate art. 100 §14 CF).',
+};
+
+export interface RedFlagInfo {
+  codigo: string;
+  descricao: string;
+  descricaoHumana: string;
+  categoria: CategoriaRedFlag;
+  cor: 'vermelho' | 'amarelo' | 'cinza';
+}
+
+/**
+ * Devolve info agregada pra render — junta o def (categoria/cor) com a
+ * descrição humana. Códigos desconhecidos caem em cinza/'código X detectado'
+ * pra a UI nunca engolir o sinal, mesmo se o catálogo mudar no server.
+ */
+export function infoRedFlag(codigo: string): RedFlagInfo {
+  const def = LOOKUP.get(codigo);
+  if (!def) {
+    return {
+      codigo,
+      descricao: `Código ${codigo} (desconhecido)`,
+      descricaoHumana: `Padrão "${codigo}" detectado mas ainda não catalogado nesta versão.`,
+      categoria: 'NAVEGACIONAL',
+      cor: 'cinza',
+    };
+  }
+  return {
+    codigo,
+    descricao: def.descricao,
+    descricaoHumana: DESCRICOES_HUMANAS[codigo] ?? def.descricao,
+    categoria: def.categoria,
+    cor: def.cor,
+  };
+}

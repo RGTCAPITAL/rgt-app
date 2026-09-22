@@ -7,7 +7,9 @@ import { buscarPorCnj } from '@/lib/djen/client';
 import { paraLinhaBanco } from '@/lib/djen/mappers';
 import { DjenError, type Publicacao, type RedFlag } from '@/lib/djen/types';
 
-const BATCH_MAX = 50;
+// 100 leva ~5-6 min no rate limiter (3.3s/request serial). DJEN é grátis e
+// permite 20 req/min; o gargalo real é o timeout do server action, não a API.
+const BATCH_MAX = 100;
 
 /**
  * Enriquece a fila de prospecção via DJEN (API pública do CNJ, gratuita).
@@ -43,7 +45,7 @@ export async function enriquecerLoteDjen(
   if (ids.length > BATCH_MAX) {
     return {
       ok: false,
-      error: `Máximo ${BATCH_MAX} por batch (evita saturar rate limit da API pública).`,
+      error: `Máximo ${BATCH_MAX} por batch — um lote grande leva ~5-6 min. Divide em vezes menores.`,
     };
   }
 

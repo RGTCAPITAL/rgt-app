@@ -26,7 +26,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card } from '@/components/ui/card';
-import { RED_FLAG_LABEL, type RedFlag } from '@/lib/judit/types';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { infoRedFlag } from '@/lib/djen/red-flags';
 import { enriquecerLoteDjen } from './djen-batch-action';
 import { VirarLeadDialog } from './virar-lead-dialog';
 import { DescartarDialog } from './descartar-dialog';
@@ -43,7 +44,7 @@ type Row = {
   cedente_nome_provavel: string | null;
   advogado_nome: string | null;
   advogado_oab: string | null;
-  red_flags: RedFlag[];
+  red_flags: string[];
   status: string;
   fonte_lote: string;
   lead_id: string | null;
@@ -69,6 +70,18 @@ const STATUS_LABEL: Record<string, { label: string; color: string; icon: typeof 
   },
   lead_criado: { label: 'Virou lead', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle },
   descartado: { label: 'Descartado', color: 'bg-red-100 text-red-700', icon: XCircle },
+};
+
+const RED_FLAG_COR_CLS: Record<'vermelho' | 'amarelo' | 'cinza', string> = {
+  vermelho: 'border-red-200 bg-red-50 text-red-700',
+  amarelo: 'border-amber-200 bg-amber-50 text-amber-800',
+  cinza: 'border-neutral-200 bg-neutral-50 text-neutral-700',
+};
+
+const RED_FLAG_CAT_LABEL: Record<'BLOQUEADOR' | 'PRICING' | 'NAVEGACIONAL', string> = {
+  BLOQUEADOR: 'Bloqueia a compra',
+  PRICING: 'Afeta o preço',
+  NAVEGACIONAL: 'Info',
 };
 
 const JUDIT_LABEL: Record<string, { label: string; color: string }> = {
@@ -354,23 +367,43 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                         {r.red_flags.length === 0 ? (
                           <span className="text-xs text-neutral-400">—</span>
                         ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {r.red_flags.slice(0, 2).map((f) => (
-                              <Badge
-                                key={f}
-                                variant="outline"
-                                className="border-red-200 bg-red-50 text-[10px] text-red-700"
-                              >
-                                <AlertTriangle className="size-2.5" />
-                                {RED_FLAG_LABEL[f] ?? f}
-                              </Badge>
-                            ))}
-                            {r.red_flags.length > 2 && (
-                              <span className="text-[10px] text-neutral-500">
-                                +{r.red_flags.length - 2}
-                              </span>
-                            )}
-                          </div>
+                          <TooltipProvider delay={200}>
+                            <div className="flex flex-wrap gap-1">
+                              {r.red_flags.slice(0, 4).map((f) => {
+                                const info = infoRedFlag(f);
+                                const cls = RED_FLAG_COR_CLS[info.cor];
+                                return (
+                                  <Tooltip key={f}>
+                                    <TooltipTrigger
+                                      render={
+                                        <Badge
+                                          variant="outline"
+                                          className={`cursor-help text-[10px] ${cls}`}
+                                        />
+                                      }
+                                    >
+                                      <AlertTriangle className="size-2.5" />
+                                      {f}
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      <div className="space-y-1">
+                                        <div className="font-semibold">{info.descricaoHumana}</div>
+                                        <div className="text-[10px] opacity-70">
+                                          Código {info.codigo} ·{' '}
+                                          {RED_FLAG_CAT_LABEL[info.categoria]}
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                );
+                              })}
+                              {r.red_flags.length > 4 && (
+                                <span className="text-[10px] text-neutral-500">
+                                  +{r.red_flags.length - 4}
+                                </span>
+                              )}
+                            </div>
+                          </TooltipProvider>
                         )}
                       </TableCell>
                       <TableCell>
