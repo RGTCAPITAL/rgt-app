@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { ImportForm } from './import-form';
+import { ImportForm, type DonoOption } from './import-form';
 
 export default async function ImportarLeadsPage() {
   const supabase = await createClient();
@@ -26,5 +26,12 @@ export default async function ImportarLeadsPage() {
     );
   }
 
-  return <ImportForm />;
+  const { data: donos } = await supabase
+    .from('usuarios')
+    .select('id, nome')
+    .eq('ativo', true)
+    .order('nome')
+    .returns<DonoOption[]>();
+
+  return <ImportForm donos={donos ?? []} />;
 }
