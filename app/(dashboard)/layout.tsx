@@ -6,6 +6,7 @@ import { NotifSino, type Notif } from './notif-sino';
 import { SidebarNav } from './sidebar-nav';
 import { UserMenu } from './user-menu';
 import { Breadcrumbs } from './breadcrumbs';
+import { AvisoDadosExemplo } from './aviso-dados-exemplo';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -60,7 +61,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Breadcrumbs />
           <NotifSino notifs={notifs ?? []} />
         </header>
-        <main className="p-10 lg:p-12">{children}</main>
+        <main className="p-10 lg:p-12">
+          <AvisoDadosExemplo />
+          {children}
+        </main>
       </div>
     </div>
   );

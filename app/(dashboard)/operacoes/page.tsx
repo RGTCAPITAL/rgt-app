@@ -13,6 +13,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { SeloExemplo } from '@/components/ui/selo-exemplo';
 import { ESFERAS, TIPOS_ATIVO } from './nova/schemas';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -58,6 +59,7 @@ type OperacaoRow = {
   tipo: string;
   valor_total: number;
   etapa_atual: string;
+  is_exemplo: boolean;
   updated_at: string;
   dono: { nome: string | null } | null;
 };
@@ -121,7 +123,7 @@ export default async function OperacoesPage({
   let query = supabase
     .from('operacoes')
     .select(
-      'id, numero_processo, cedente_nome, tribunal, esfera, tipo, valor_total, etapa_atual, updated_at, dono:usuarios!operacoes_dono_id_fkey(nome)',
+      'id, numero_processo, cedente_nome, tribunal, esfera, tipo, valor_total, etapa_atual, updated_at, is_exemplo, dono:usuarios!operacoes_dono_id_fkey(nome)',
       { count: 'exact' },
     )
     .order('updated_at', { ascending: false })
@@ -394,7 +396,12 @@ export default async function OperacoesPage({
                       {op.numero_processo}
                     </Link>
                   </TableCell>
-                  <TableCell className="py-3 text-neutral-700">{op.cedente_nome}</TableCell>
+                  <TableCell className="py-3 text-neutral-700">
+                    <span className="inline-flex items-center gap-1.5">
+                      {op.cedente_nome}
+                      {op.is_exemplo && <SeloExemplo />}
+                    </span>
+                  </TableCell>
                   <TableCell className="py-3 text-neutral-700">{labelTipo(op.tipo)}</TableCell>
                   <TableCell className="py-3 text-neutral-700 capitalize">{op.esfera}</TableCell>
                   <TableCell

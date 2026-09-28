@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
 import { Badge } from '@/components/ui/badge';
+import { SeloExemplo } from '@/components/ui/selo-exemplo';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,6 +33,7 @@ export type LeadCard = {
   operacao_id: string | null;
   dono_id: string | null;
   notas: string | null;
+  is_exemplo: boolean;
   dono: { nome: string | null } | null;
 };
 
@@ -236,8 +238,11 @@ export function Kanban({
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="font-medium text-neutral-900">{lead.nome}</span>
-                        <span className="text-[10px] text-neutral-400">
+                        <span className="min-w-0 font-medium text-neutral-900">
+                          {lead.nome}
+                          {lead.is_exemplo && <SeloExemplo className="ml-1.5 align-middle" />}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-neutral-400">
                           {fmtRel(lead.created_at)}
                         </span>
                       </div>
