@@ -69,7 +69,10 @@ export default async function IndicesPage() {
         color="violet"
       />
 
-      <IndicesPainel resumos={resumos} />
+      {/* hojeIso vem do servidor de propósito: `new Date()` num componente
+          cliente roda no fuso do navegador e pode discordar do servidor na
+          virada do mês — justamente quando o aviso de frescor mais importa. */}
+      <IndicesPainel resumos={resumos} hojeIso={new Date().toISOString().slice(0, 10)} />
     </div>
   );
 }

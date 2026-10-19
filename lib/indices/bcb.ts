@@ -18,7 +18,11 @@
 import { DEF_SERIES, type Serie } from './series';
 
 const BASE = 'https://api.bcb.gov.br/dados/serie';
-const TIMEOUT_MS = 20_000;
+// 10 s, não 20. Com retry de 3 tentativas em 6 séries, o teto de rede é
+// 6 x 3 x TIMEOUT — em 20 s isso dá 360 s e estoura o maxDuration de 300 s do
+// Hobby; em 10 s dá 180 s e cabe. O p50 medido em 19/10/2026 foi 103 ms e o
+// pior caso bem-sucedido 5 s, então 10 s não corta requisição boa.
+const TIMEOUT_MS = 10_000;
 
 export class BcbError extends Error {
   constructor(

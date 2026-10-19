@@ -14,6 +14,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { calcularFator, competenciaDe, type PontoPersistido } from '@/lib/indices/fator';
 import type { Serie } from '@/lib/indices/series';
+import { LIMITE_ATRASO_MESES } from './limites';
+
+// Reexportado pra quem já importava daqui. A definição mora em `limites.ts`,
+// que não importa nada — este arquivo puxa `next/headers` por tabela, e um
+// componente cliente que importasse a constante daqui quebraria a página.
+export { LIMITE_ATRASO_MESES };
 
 export type ResultadoCorrecao =
   | {
@@ -81,7 +87,6 @@ export async function obterFatorCorrecao(
   const ultima = pontos[pontos.length - 1]!.competencia;
   const atraso = ultima < competenciaFinal ? mesesEntre(ultima, competenciaFinal) : 0;
 
-  const LIMITE_ATRASO_MESES = 2;
   if (atraso > LIMITE_ATRASO_MESES) {
     return {
       ok: false,
