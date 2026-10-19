@@ -8,7 +8,9 @@ import { TabTarefas, type Tarefa, type UsuarioOpt } from './tab-tarefas';
 import type { ContextoCedente } from '@/lib/documentos-checklist';
 import type { RedFlag } from '@/lib/judit/types';
 import { cn } from '@/lib/utils';
-import { Info } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
+import Link from 'next/link';
+import { Calculator, Info } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -135,7 +137,7 @@ export function DetalheTabs({
         </TabsList>
 
         <TabsContent value="detalhes" className="p-6">
-          <TabDetalhes op={operacao} />
+          <TabDetalhes op={operacao} operacaoId={operacaoId} />
         </TabsContent>
         <TabsContent value="documentos" className="p-6">
           <TabDocumentos
@@ -172,7 +174,7 @@ export function DetalheTabs({
   );
 }
 
-function TabDetalhes({ op }: { op: OperacaoDetalhes }) {
+function TabDetalhes({ op, operacaoId }: { op: OperacaoDetalhes; operacaoId: string }) {
   const totalPct = (v: number | null | undefined) =>
     op.valor_total > 0 && v ? `${((v / op.valor_total) * 100).toFixed(2)}% do total` : '—';
   return (
@@ -204,8 +206,23 @@ function TabDetalhes({ op }: { op: OperacaoDetalhes }) {
         </div>
       </section>
 
+      {/*
+        Esta seção já se chamou "Deduções e líquido" e mostrava três
+        percentuais sem nunca exibir líquido nenhum — o título prometia uma
+        conta que a tela não fazia. Agora os percentuais são o que são
+        (parâmetros do cálculo) e a conta mora na folha de precificação.
+      */}
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-neutral-900">Deduções e líquido</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-neutral-900">Parâmetros de dedução</h3>
+          <Link
+            href={`/operacoes/${operacaoId}/precificacao`}
+            className={buttonVariants({ size: 'sm' })}
+          >
+            <Calculator className="size-3.5" />
+            Abrir memória de cálculo
+          </Link>
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <FinanceTile
             label="Retenção Honorários"
