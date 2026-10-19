@@ -1,6 +1,7 @@
 import { AlertTriangle, FileText, Calculator, Pencil, Hash } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { LinhaCascata, OrigemValor, ResultadoCascata } from '@/lib/precificacao/tipos';
+import { CampoPreco } from './campo-preco';
 
 /**
  * A conta, aberta.
@@ -29,6 +30,10 @@ type Operacao = {
   indice: string | null;
   percentualAquisicao: number | null;
   precoProposto: number | null;
+  precoAceito: boolean | null;
+  precoDefinidoEm: string | null;
+  precoDefinidoPor: string | null;
+  precoJustificativa: string | null;
   etapaAtual: string;
 };
 
@@ -307,29 +312,17 @@ export function FolhaCalculo({
                 </div>
               </div>
 
-              {/* O deságio ainda não é automático — e a tela diz isso. */}
-              <div className="rounded-lg border border-dashed border-neutral-300 p-4">
-                <div className="text-sm font-medium text-neutral-900">
-                  Preço proposto ao cedente
-                </div>
-                <div className="mt-1.5 flex flex-wrap items-end justify-between gap-3">
-                  <p className="max-w-md text-xs text-neutral-500">
-                    O cálculo automático do deságio depende da régua por ano de LOA, que ainda não
-                    está configurada. Por enquanto o preço é digitado na operação, e esta tela serve
-                    pra conferir a base.
-                  </p>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold text-neutral-900 tabular-nums">
-                      {operacao.precoProposto !== null ? fmtBRL(operacao.precoProposto) : '—'}
-                    </div>
-                    {operacao.precoProposto !== null && liquido !== null && liquido > 0 && (
-                      <div className="text-[11px] text-neutral-500">
-                        {((operacao.precoProposto / liquido) * 100).toFixed(2)}% do líquido
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* O deságio ainda não calcula sozinho — o preço é definido aqui. */}
+              <CampoPreco
+                operacaoId={operacao.id}
+                precoAtual={operacao.precoProposto}
+                justificativaAtual={operacao.precoJustificativa}
+                liquido={liquido}
+                precoAceito={operacao.precoAceito}
+                definidoEm={operacao.precoDefinidoEm}
+                definidoPor={operacao.precoDefinidoPor}
+                podeEditar={podeEditar}
+              />
             </CardContent>
           </Card>
 

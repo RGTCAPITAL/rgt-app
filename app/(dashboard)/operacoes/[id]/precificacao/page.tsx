@@ -46,6 +46,10 @@ type OperacaoPrecificacao = {
   retencao_honorarios_pct: number | null;
   percentual_aquisicao: number | null;
   preco_proposto: number | null;
+  preco_aceito: boolean | null;
+  preco_proposto_em: string | null;
+  preco_justificativa: string | null;
+  definidor: { nome: string } | null;
   etapa_atual: string;
   ente: { nome: string } | null;
 };
@@ -66,7 +70,9 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
        valor_principal, valor_juros, valor_selic, valor_total,
        data_base, indice_correcao, atualizar_valores_ate,
        pss_ativo, pss_pct, pss_valor, rra_ativo, rra_meses,
-       retencao_honorarios_pct, percentual_aquisicao, preco_proposto, etapa_atual,
+       retencao_honorarios_pct, percentual_aquisicao, etapa_atual,
+       preco_proposto, preco_aceito, preco_proposto_em, preco_justificativa,
+       definidor:usuarios!operacoes_preco_proposto_por_fkey(nome),
        ente:entes_devedores(nome)`,
     )
     .eq('id', id)
@@ -170,6 +176,10 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
           indice: op.indice_correcao,
           percentualAquisicao: op.percentual_aquisicao,
           precoProposto: op.preco_proposto,
+          precoAceito: op.preco_aceito,
+          precoDefinidoEm: op.preco_proposto_em,
+          precoDefinidoPor: op.definidor?.nome ?? null,
+          precoJustificativa: op.preco_justificativa,
           etapaAtual: op.etapa_atual,
         }}
         cascata={cascata}
