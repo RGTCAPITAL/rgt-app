@@ -28,8 +28,15 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   let query = supabase
     .from('leads')
     .select(
-      'id, nome, telefone, email, cpf_cnpj, origem, status, created_at, motivo_perda, operacao_id, dono_id, notas, is_exemplo, dono:usuarios!leads_dono_id_fkey(id, nome)',
+      `id, nome, telefone, email, cpf_cnpj, origem, status, created_at, motivo_perda,
+       operacao_id, dono_id, notas, is_exemplo, valor_processo, valor_proposta_indicativa,
+       dono:usuarios!leads_dono_id_fkey(id, nome),
+       retornos:tarefas(id, titulo, prazo)`,
     )
+    // Só os retornos ainda em aberto: tarefa concluída no card seria ruído.
+    // O filtro é na relação embarcada, não no lead — lead sem retorno
+    // continua aparecendo, com a lista vazia.
+    .eq('retornos.status', 'pendente')
     .order('created_at', { ascending: false });
 
   if (params.origem) query = query.eq('origem', params.origem);

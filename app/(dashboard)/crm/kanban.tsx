@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, CalendarClock, MessageCircle } from 'lucide-react';
 import { mudarStatusLead } from './actions';
 import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
+import { DialogRetorno } from './dialog-retorno';
 import { Badge } from '@/components/ui/badge';
 import { SeloExemplo } from '@/components/ui/selo-exemplo';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -34,6 +35,9 @@ export type LeadCard = {
   dono_id: string | null;
   notas: string | null;
   is_exemplo: boolean;
+  valor_processo: number | null;
+  valor_proposta_indicativa: number | null;
+  retornos: { id: string; titulo: string; prazo: string | null }[];
   dono: { nome: string | null } | null;
 };
 
@@ -55,6 +59,44 @@ function iniciais(nome: string | null): string {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('');
+}
+
+/** 187430 vira "R$ 187,4 mil" — card não comporta valor por extenso. */
+function fmtBRLCompacto(v: number | null): string {
+  if (v === null) return '—';
+  if (v >= 1_000_000) return 'R$ ' + (v / 1_000_000).toFixed(1).replace('.', ',') + ' mi';
+  if (v >= 1_000) return 'R$ ' + (v / 1_000).toFixed(0) + ' mil';
+  return 'R$ ' + v.toFixed(0);
+}
+
+/**
+ * Link que abre a conversa no WhatsApp do próprio broker.
+ *
+ * Não depende de verificação da Meta, de template aprovado nem de número
+ * oficial: quem manda a mensagem é a pessoa, do aparelho dela. Resolve hoje
+ * o que o envio automatizado só resolve em semanas.
+ */
+function linkWhatsApp(telefone: string): string {
+  const d = telefone.replace(/D/g, '');
+  // Número brasileiro sem DDI: 11 dígitos com nono, 10 sem.
+  const comDdi = d.length <= 11 ? '55' + d : d;
+  return 'https://wa.me/' + comDdi;
+}
+
+/** O retorno pendente mais próximo, e se já passou do prazo. */
+function proximoRetornoDe(
+  retornos: { id: string; titulo: string; prazo: string | null }[],
+): { titulo: string; quando: string; atrasado: boolean } | null {
+  const comPrazo = retornos.filter((r) => r.prazo).sort((a, b) => a.prazo!.localeCompare(b.prazo!));
+  const r = comPrazo[0];
+  if (!r) return null;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const [ano, mes, dia] = r.prazo!.split('-');
+  return {
+    titulo: r.titulo,
+    quando: r.prazo === hoje ? 'hoje' : dia + '/' + mes,
+    atrasado: r.prazo! < hoje,
+  };
 }
 
 const COLUNA_BORDER: Record<string, string> = {
@@ -83,6 +125,7 @@ export function Kanban({
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<StatusLead | null>(null);
+  const [leadRetorno, setLeadRetorno] = useState<{ id: string; nome: string } | null>(null);
   const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
   const [editandoLead, setEditandoLead] = useState<LeadEdit | null>(null);
@@ -212,89 +255,155 @@ export function Kanban({
                     </p>
                   </div>
                 ) : (
-                  leadsDaCol.map((lead) => (
-                    <div
-                      key={lead.id}
-                      draggable
-                      onDragStart={(e) => onDragStart(e, lead.id)}
-                      onClick={() =>
-                        setEditandoLead({
-                          id: lead.id,
-                          nome: lead.nome,
-                          telefone: lead.telefone,
-                          email: lead.email,
-                          cpf_cnpj: lead.cpf_cnpj,
-                          origem: lead.origem,
-                          dono_id: lead.dono_id,
-                          notas: lead.notas,
-                          status: lead.status,
-                          operacao_id: lead.operacao_id,
-                          motivo_perda: lead.motivo_perda,
-                        })
-                      }
-                      className={cn(
-                        'group cursor-grab rounded-lg bg-white p-3 text-sm shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md active:cursor-grabbing',
-                        movendoId === lead.id && 'pointer-events-none animate-pulse opacity-50',
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 font-medium text-neutral-900">
-                          {lead.nome}
-                          {lead.is_exemplo && <SeloExemplo className="ml-1.5 align-middle" />}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-neutral-400">
-                          {fmtRel(lead.created_at)}
-                        </span>
-                      </div>
-                      {(lead.telefone || lead.email) && (
-                        <div className="mt-1 text-xs text-neutral-600">
-                          {lead.telefone && <span>{lead.telefone}</span>}
-                          {lead.telefone && lead.email && <span className="mx-1">·</span>}
-                          {lead.email && <span className="break-all">{lead.email}</span>}
-                        </div>
-                      )}
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <Badge variant="secondary" className="text-[10px]">
-                          {labelOrigem(lead.origem)}
-                        </Badge>
-                        {lead.dono?.nome && (
-                          <span
-                            title={lead.dono.nome}
-                            className="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-[9px] font-medium text-white"
-                          >
-                            {iniciais(lead.dono.nome)}
+                  leadsDaCol.map((lead) => {
+                    const proximoRetorno = proximoRetornoDe(lead.retornos ?? []);
+                    return (
+                      <div
+                        key={lead.id}
+                        draggable
+                        onDragStart={(e) => onDragStart(e, lead.id)}
+                        onClick={() =>
+                          setEditandoLead({
+                            id: lead.id,
+                            nome: lead.nome,
+                            telefone: lead.telefone,
+                            email: lead.email,
+                            cpf_cnpj: lead.cpf_cnpj,
+                            origem: lead.origem,
+                            dono_id: lead.dono_id,
+                            notas: lead.notas,
+                            status: lead.status,
+                            operacao_id: lead.operacao_id,
+                            motivo_perda: lead.motivo_perda,
+                          })
+                        }
+                        className={cn(
+                          'group cursor-grab rounded-lg bg-white p-3 text-sm shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md active:cursor-grabbing',
+                          movendoId === lead.id && 'pointer-events-none animate-pulse opacity-50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="min-w-0 font-medium text-neutral-900">
+                            {lead.nome}
+                            {lead.is_exemplo && <SeloExemplo className="ml-1.5 align-middle" />}
                           </span>
+                          <span className="shrink-0 text-[10px] text-neutral-400">
+                            {fmtRel(lead.created_at)}
+                          </span>
+                        </div>
+                        {(lead.telefone || lead.email) && (
+                          <div className="mt-1 text-xs text-neutral-600">
+                            {lead.telefone && <span>{lead.telefone}</span>}
+                            {lead.telefone && lead.email && <span className="mx-1">·</span>}
+                            {lead.email && <span className="break-all">{lead.email}</span>}
+                          </div>
+                        )}
+                        {/*
+                        Valor no card. Kanban sem dinheiro é lista de nomes:
+                        o usuário não consegue priorizar sem abrir cada um.
+                      */}
+                        {(lead.valor_proposta_indicativa !== null ||
+                          lead.valor_processo !== null) && (
+                          <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-neutral-100 pt-2">
+                            <span className="text-[10px] text-neutral-400">
+                              {lead.valor_proposta_indicativa !== null ? 'proposta' : 'processo'}
+                            </span>
+                            <span className="text-xs font-semibold text-neutral-900 tabular-nums">
+                              {fmtBRLCompacto(
+                                lead.valor_proposta_indicativa ?? lead.valor_processo,
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {proximoRetorno && (
+                          <div
+                            className={`mt-2 flex items-center gap-1 text-[11px] ${
+                              proximoRetorno.atrasado
+                                ? 'font-medium text-red-600'
+                                : 'text-neutral-500'
+                            }`}
+                          >
+                            <CalendarClock className="size-3 shrink-0" />
+                            <span className="truncate">
+                              {proximoRetorno.titulo} · {proximoRetorno.quando}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {labelOrigem(lead.origem)}
+                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            {/*
+                            wa.me abre a conversa no WhatsApp do próprio broker,
+                            como pessoa. Não depende de verificação da Meta,
+                            nem de template, nem de número oficial.
+                          */}
+                            {lead.telefone && (
+                              <a
+                                href={linkWhatsApp(lead.telefone)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Abrir conversa no WhatsApp"
+                                className="rounded p-1 text-neutral-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
+                              >
+                                <MessageCircle className="size-3.5" />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLeadRetorno({ id: lead.id, nome: lead.nome });
+                              }}
+                              title="Agendar retorno"
+                              className="rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+                            >
+                              <CalendarClock className="size-3.5" />
+                            </button>
+                            {lead.dono?.nome && (
+                              <span
+                                title={lead.dono.nome}
+                                className="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-[9px] font-medium text-white"
+                              >
+                                {iniciais(lead.dono.nome)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {(lead.status === 'qualificado' || lead.status === 'proposta_enviada') && (
+                          <a
+                            href={`/operacoes/nova?lead_id=${lead.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className={cn(
+                              buttonVariants({ size: 'xs' }),
+                              'mt-2 w-full bg-emerald-600 text-white hover:bg-emerald-700',
+                            )}
+                          >
+                            Virar operação
+                            <ArrowRight className="size-3" />
+                          </a>
+                        )}
+                        {lead.status === 'perdido' && lead.motivo_perda && (
+                          <p className="mt-2 border-l-2 border-red-300 pl-2 text-[11px] text-neutral-600 italic">
+                            {lead.motivo_perda}
+                          </p>
+                        )}
+                        {lead.status === 'ganho' && lead.operacao_id && (
+                          <a
+                            href={`/operacoes/${lead.operacao_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-2 inline-block text-[11px] text-emerald-700 underline"
+                          >
+                            → Ver operação
+                          </a>
                         )}
                       </div>
-                      {(lead.status === 'qualificado' || lead.status === 'proposta_enviada') && (
-                        <a
-                          href={`/operacoes/nova?lead_id=${lead.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className={cn(
-                            buttonVariants({ size: 'xs' }),
-                            'mt-2 w-full bg-emerald-600 text-white hover:bg-emerald-700',
-                          )}
-                        >
-                          Virar operação
-                          <ArrowRight className="size-3" />
-                        </a>
-                      )}
-                      {lead.status === 'perdido' && lead.motivo_perda && (
-                        <p className="mt-2 border-l-2 border-red-300 pl-2 text-[11px] text-neutral-600 italic">
-                          {lead.motivo_perda}
-                        </p>
-                      )}
-                      {lead.status === 'ganho' && lead.operacao_id && (
-                        <a
-                          href={`/operacoes/${lead.operacao_id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="mt-2 inline-block text-[11px] text-emerald-700 underline"
-                        >
-                          → Ver operação
-                        </a>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -357,6 +466,8 @@ export function Kanban({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DialogRetorno lead={leadRetorno} onFechar={() => setLeadRetorno(null)} />
     </div>
   );
 }
