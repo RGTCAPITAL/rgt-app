@@ -55,6 +55,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
   linhas.push({
     id: 'principal',
+    grupo: 'data_base',
     rotulo: 'Principal',
     valor: composicao.principal,
     sinal: '+',
@@ -64,6 +65,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
   linhas.push({
     id: 'juros',
+    grupo: 'data_base',
     rotulo: 'Juros moratórios',
     valor: composicao.juros,
     sinal: '+',
@@ -72,6 +74,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
   linhas.push({
     id: 'correcao-oficio',
+    grupo: 'data_base',
     rotulo: `Correção até a data-base (${rotuloIndice(composicao.indice)})`,
     valor: composicao.correcao,
     sinal: '+',
@@ -83,6 +86,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
   linhas.push({
     id: 'bruto-data-base',
+    grupo: 'data_base',
     rotulo: `Bruto em ${mesAno(composicao.dataBase)}`,
     valor: brutoDataBase,
     sinal: '=',
@@ -102,6 +106,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
   if (fatorCorrecao === null) {
     linhas.push({
       id: 'correcao-periodo',
+      grupo: 'atualizacao',
       rotulo: `Correção de ${mesAno(composicao.dataBase)} até ${mesAno(dataFinal)}`,
       valor: null,
       sinal: '+',
@@ -119,6 +124,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
     linhas.push({
       id: 'correcao-periodo',
+      grupo: 'atualizacao',
       rotulo: `Correção de ${mesAno(composicao.dataBase)} até ${mesAno(dataFinal)}`,
       valor: valorCorrecao,
       sinal: '+',
@@ -128,6 +134,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
     linhas.push({
       id: 'bruto-atualizado',
+      grupo: 'atualizacao',
       rotulo: `Bruto atualizado em ${mesAno(dataFinal)}`,
       valor: brutoAtualizado,
       sinal: '=',
@@ -150,6 +157,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
   if (!deducoes.pssIncide) {
     linhas.push({
       id: 'pss',
+      grupo: 'deducoes',
       rotulo: 'Previdência (PSS)',
       valor: 0,
       sinal: '−',
@@ -160,6 +168,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
   } else if (deducoes.pssValor === null) {
     linhas.push({
       id: 'pss',
+      grupo: 'deducoes',
       rotulo: 'Previdência (PSS)',
       valor: null,
       sinal: '−',
@@ -180,6 +189,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
         : null;
     linhas.push({
       id: 'pss',
+      grupo: 'deducoes',
       rotulo: 'Previdência (PSS)',
       valor: deducoes.pssValor,
       sinal: '−',
@@ -197,9 +207,12 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
       ? round2((brutoAtualizado * deducoes.honorariosContratuaisPct) / 100)
       : null);
 
-  if (honorariosValor !== null) {
+  // Zero não vira linha, pela mesma razão dos gravames: linha zerada é
+  // ruído que o olho precisa descartar ao conferir a conta.
+  if (honorariosValor !== null && honorariosValor > 0) {
     linhas.push({
       id: 'honorarios-contratuais',
+      grupo: 'deducoes',
       rotulo: 'Honorários contratuais',
       valor: honorariosValor,
       sinal: '−',
@@ -233,6 +246,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
     if (g.valor === null || g.valor === 0) continue;
     linhas.push({
       id: g.id,
+      grupo: 'deducoes',
       rotulo: g.rotulo,
       valor: g.valor,
       sinal: '−',
@@ -252,6 +266,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
   if (!tributacao.irIncide) {
     linhas.push({
       id: 'ir',
+      grupo: 'deducoes',
       rotulo: 'Imposto de renda',
       valor: 0,
       sinal: '−',
@@ -264,6 +279,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
     // número que não existe. O bloqueio do fator já impede o total.
     linhas.push({
       id: 'ir',
+      grupo: 'deducoes',
       rotulo: 'Imposto de renda',
       valor: null,
       sinal: '−',
@@ -281,6 +297,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
     });
     linhas.push({
       id: 'ir',
+      grupo: 'deducoes',
       rotulo: 'Imposto de renda',
       valor: ir.valor,
       sinal: '−',
@@ -296,6 +313,7 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
   linhas.push({
     id: 'liquido',
+    grupo: 'resultado',
     rotulo: provisorio ? 'Líquido disponível (antes do IR)' : 'Líquido disponível',
     valor: liquidoDisponivel,
     sinal: '=',

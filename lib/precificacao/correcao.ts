@@ -21,8 +21,13 @@ export type ResultadoCorrecao =
       fator: number;
       metodo: 'numero_indice' | 'encadeamento';
       mesesAplicados: number;
-      /** Última competência disponível na série — mostra o quão atual é a conta. */
+      /** Competência até a qual a correção foi de fato aplicada. */
       competenciaFinal: string;
+      /**
+       * True quando a série ainda não alcançou a data pedida e a conta parou
+       * na última competência publicada. Não é erro — é o normal.
+       */
+      truncadoNaUltima: boolean;
     }
   | { ok: false; erro: string; serieDefasada?: boolean };
 
@@ -65,23 +70,29 @@ export async function obterFatorCorrecao(
     };
   }
 
-  // Defasagem é o caso perigoso: a série existe, o cálculo "funciona", e o
-  // fator sai menor do que deveria porque faltam os meses do fim. Isso vira
-  // proposta abaixo do valor — dinheiro deixado na mesa sem ninguém notar.
+  // O índice de um mês só é publicado no mês seguinte: em 19/10 a série ainda
+  // está fechada em setembro. Pedir correção "até hoje" portanto SEMPRE vai
+  // faltar o mês corrente — se isso fosse erro, a tela não funcionaria nunca.
+  //
+  // Então a conta vai até a última competência publicada e diz até onde foi,
+  // que é exatamente como a contadoria judicial trabalha ("atualizado até
+  // 09/2026"). O que não pode é a série estar meses atrás sem ninguém saber:
+  // aí o fator sai menor que o real e vira proposta abaixo do valor.
   const ultima = pontos[pontos.length - 1]!.competencia;
-  if (ultima < competenciaFinal) {
-    const faltam = mesesEntre(ultima, competenciaFinal);
-    // Um mês de atraso é normal: índice de outubro só sai em novembro.
-    if (faltam > 1) {
-      return {
-        ok: false,
-        erro: `A série ${serie.toUpperCase()} está atualizada até ${ultima.slice(0, 7)}, faltando ${faltam} ${faltam === 1 ? 'mês' : 'meses'} até ${competenciaFinal.slice(0, 7)}. Corrigir com a série incompleta produziria um valor menor que o real.`,
-        serieDefasada: true,
-      };
-    }
+  const atraso = ultima < competenciaFinal ? mesesEntre(ultima, competenciaFinal) : 0;
+
+  const LIMITE_ATRASO_MESES = 2;
+  if (atraso > LIMITE_ATRASO_MESES) {
+    return {
+      ok: false,
+      erro: `A série ${serie.toUpperCase()} está parada em ${formatarCompetencia(ultima)} e já deveria alcançar ${formatarCompetencia(competenciaFinal)}. Corrigir assim produziria um valor menor que o real. Sincronize os índices antes de precificar.`,
+      serieDefasada: true,
+    };
   }
 
-  const r = calcularFator(pontos, dataBaseIso, dataFinalIso);
+  // Corrige até onde a série alcança, não até onde foi pedido.
+  const alvoEfetivo = atraso > 0 ? ultima : dataFinalIso;
+  const r = calcularFator(pontos, dataBaseIso, alvoEfetivo);
   if (!r.ok) return { ok: false, erro: r.erro };
 
   return {
@@ -90,7 +101,13 @@ export async function obterFatorCorrecao(
     metodo: r.metodo,
     mesesAplicados: r.mesesAplicados,
     competenciaFinal: ultima,
+    truncadoNaUltima: atraso > 0,
   };
+}
+
+/** '2026-09-01' → '09/2026' */
+function formatarCompetencia(competencia: string): string {
+  return `${competencia.slice(5, 7)}/${competencia.slice(0, 4)}`;
 }
 
 /** Distância em meses entre duas competências (dia 1). */

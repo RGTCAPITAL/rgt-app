@@ -96,6 +96,7 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
   let erroFator: string | null = null;
   let metodoFator: string | null = null;
   let competenciaFinal: string | null = null;
+  let truncado = false;
 
   if (faltaBase.length === 0) {
     const r = await obterFatorCorrecao(op.indice_correcao!, op.data_base!, dataFinal);
@@ -103,6 +104,7 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
       fator = r.fator;
       metodoFator = r.metodo;
       competenciaFinal = r.competenciaFinal;
+      truncado = r.truncadoNaUltima;
     } else {
       erroFator = r.erro;
     }
@@ -135,7 +137,9 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
       irIncide: op.rra_ativo ?? false,
       rraMeses: op.rra_meses,
     },
-    dataFinal,
+    // A conta vai até onde a série alcança. Usar a data pedida aqui faria
+    // as linhas dizerem 10/2026 enquanto o fator é de 09/2026.
+    dataFinal: competenciaFinal ?? dataFinal,
     fatorCorrecao: fator,
   };
 
@@ -174,6 +178,7 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
         erroFator={erroFator}
         metodoFator={metodoFator}
         competenciaFinal={competenciaFinal}
+        truncado={truncado}
         podeEditar={podeEditar}
       />
     </div>

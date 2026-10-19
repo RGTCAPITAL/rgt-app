@@ -96,8 +96,16 @@ export type OrigemValor =
   /** Informação ausente. A linha aparece, o valor não. */
   | 'falta';
 
+/**
+ * Bloco da conta. Serve pra tela separar o que está em bases diferentes:
+ * o principal é da data-base, as deduções incidem sobre o atualizado, e
+ * mostrar os dois com o mesmo percentual confunde quem confere.
+ */
+export type GrupoLinha = 'data_base' | 'atualizacao' | 'deducoes' | 'resultado';
+
 export type LinhaCascata = {
   id: string;
+  grupo: GrupoLinha;
   rotulo: string;
   /** null quando a origem é 'falta'. */
   valor: number | null;

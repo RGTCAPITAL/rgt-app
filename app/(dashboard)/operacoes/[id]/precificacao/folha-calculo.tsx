@@ -39,6 +39,22 @@ const fmtData = (iso: string) => {
   return `${d}/${m}/${a}`;
 };
 
+/** 2026-09-01 vira 09/2026 */
+const fmtCompetencia = (c: string) => `${c.slice(5, 7)}/${c.slice(0, 4)}`;
+
+/**
+ * Os blocos da conta, na ordem de leitura. Separar importa porque o
+ * principal está na posição da data-base e as deduções incidem sobre o
+ * valor já corrigido — misturar os dois na mesma coluna de percentual faz
+ * quem confere perder o fio.
+ */
+const GRUPOS = [
+  { id: 'data_base' as const, titulo: 'Como o ofício entregou' },
+  { id: 'atualizacao' as const, titulo: 'Atualização até hoje' },
+  { id: 'deducoes' as const, titulo: 'O que sai do credor' },
+  { id: 'resultado' as const, titulo: 'Resultado' },
+];
+
 const ROTULO_INDICE: Record<string, string> = {
   selic: 'Selic',
   ipca: 'IPCA',
@@ -117,7 +133,11 @@ function Linha({ l }: { l: LinhaCascata }) {
       </div>
 
       <div className="hidden text-right text-xs text-neutral-400 tabular-nums sm:block">
-        {l.percentualDoTotal !== undefined ? `${l.percentualDoTotal.toFixed(2)}%` : ''}
+        {/* Linhas da data-base não ganham percentual: a base delas é outra,
+            e misturar as duas na mesma coluna confunde quem confere. */}
+        {l.grupo !== 'data_base' && l.percentualDoTotal !== undefined
+          ? `${l.percentualDoTotal.toFixed(2)}%`
+          : ''}
       </div>
 
       <div
@@ -143,6 +163,7 @@ export function FolhaCalculo({
   erroFator,
   metodoFator,
   competenciaFinal,
+  truncado,
   podeEditar,
 }: {
   operacao: Operacao;
@@ -152,6 +173,7 @@ export function FolhaCalculo({
   erroFator: string | null;
   metodoFator: string | null;
   competenciaFinal: string | null;
+  truncado: boolean;
   podeEditar: boolean;
 }) {
   const liquido = cascata?.liquidoDisponivel ?? null;
@@ -210,7 +232,9 @@ export function FolhaCalculo({
                 Memória de cálculo
                 {operacao.dataBase && (
                   <span className="ml-2 font-normal text-neutral-500">
-                    de {fmtData(operacao.dataBase)} até {fmtData(dataFinal)}
+                    {`de ${fmtData(operacao.dataBase)} até ${
+                      competenciaFinal ? fmtCompetencia(competenciaFinal) : fmtData(dataFinal)
+                    }`}
                   </span>
                 )}
               </CardTitle>
@@ -218,14 +242,25 @@ export function FolhaCalculo({
             <CardContent className="p-0">
               <div className="hidden grid-cols-[1fr_90px_150px] gap-x-4 border-b border-neutral-100 px-4 py-2 text-[10px] font-medium tracking-wide text-neutral-400 uppercase sm:grid">
                 <div>Linha</div>
-                <div className="text-right">% do total</div>
+                <div className="text-right">% do crédito</div>
                 <div className="text-right">Valor</div>
               </div>
-              <div className="divide-y divide-neutral-100">
-                {cascata.linhas.map((l) => (
-                  <Linha key={l.id} l={l} />
-                ))}
-              </div>
+              {GRUPOS.map(({ id, titulo }) => {
+                const doGrupo = cascata.linhas.filter((l) => l.grupo === id);
+                if (doGrupo.length === 0) return null;
+                return (
+                  <div key={id}>
+                    <div className="border-b border-neutral-100 bg-neutral-50/60 px-4 py-1.5 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">
+                      {titulo}
+                    </div>
+                    <div className="divide-y divide-neutral-100">
+                      {doGrupo.map((l) => (
+                        <Linha key={l.id} l={l} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
 
@@ -319,11 +354,11 @@ export function FolhaCalculo({
               </li>
               {competenciaFinal && (
                 <li>
-                  Série disponível até{' '}
-                  <strong className="text-neutral-700">
-                    {competenciaFinal.slice(5, 7)}/{competenciaFinal.slice(0, 4)}
-                  </strong>
-                  .
+                  Conta atualizada até{' '}
+                  <strong className="text-neutral-700">{fmtCompetencia(competenciaFinal)}</strong>
+                  {truncado
+                    ? ', que é a última competência publicada. O índice de um mês só sai no mês seguinte, então essa é a posição mais recente possível hoje.'
+                    : '.'}
                 </li>
               )}
               <li>
