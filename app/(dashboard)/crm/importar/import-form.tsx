@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Upload, AlertTriangle, CheckCircle, X, Copy, Ban, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AvisoPdf } from '@/components/ui/aviso-pdf';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,6 +78,7 @@ export function ImportForm({ donos }: { donos: DonoOption[] }) {
   const [colunasDuplicadas, setColunasDuplicadas] = useState<ColunaDuplicada[]>([]);
   const [linhaCabecalho, setLinhaCabecalho] = useState(0);
   const [erroParse, setErroParse] = useState<string | null>(null);
+  const [pdfEscolhido, setPdfEscolhido] = useState<string | null>(null);
   const [lendo, setLendo] = useState(false);
 
   const [conferencia, setConferencia] = useState<Conferencia | null>(null);
@@ -98,6 +100,7 @@ export function ImportForm({ donos }: { donos: DonoOption[] }) {
     setColunasDuplicadas([]);
     setLinhaCabecalho(0);
     setErroParse(null);
+    setPdfEscolhido(null);
     setConferencia(null);
     setIncluirDup(new Set());
   }
@@ -107,6 +110,13 @@ export function ImportForm({ donos }: { donos: DonoOption[] }) {
     setFile(f ?? null);
     resetar();
     if (!f) return;
+
+    // PDF entra no seletor de propósito: antes o accept o filtrava e o
+    // arquivo aparecia cinza, sem explicação nenhuma.
+    if (f.type === 'application/pdf' || /.pdf$/i.test(f.name)) {
+      setPdfEscolhido(f.name);
+      return;
+    }
 
     setLendo(true);
     try {
@@ -240,12 +250,14 @@ export function ImportForm({ donos }: { donos: DonoOption[] }) {
                 <input
                   id="file"
                   type="file"
-                  accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  accept=".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/pdf"
                   onChange={onFileChange}
                   className="hidden"
                   disabled={pending || lendo}
                 />
               </label>
+
+              {pdfEscolhido && <AvisoPdf nomeArquivo={pdfEscolhido} />}
 
               {erroParse && (
                 <div className="mt-4 flex gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">

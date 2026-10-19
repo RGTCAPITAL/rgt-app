@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Upload, AlertTriangle, CheckCircle, X, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AvisoPdf } from '@/components/ui/aviso-pdf';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -166,6 +167,7 @@ export function ImportForm() {
   const [rows, setRows] = useState<LinhaProspeccao[] | null>(null);
   const [fonteLote, setFonteLote] = useState<string>('trt19_venc_2027');
   const [erroParse, setErroParse] = useState<string | null>(null);
+  const [pdfEscolhido, setPdfEscolhido] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -173,7 +175,15 @@ export function ImportForm() {
     setFile(f ?? null);
     setRows(null);
     setErroParse(null);
+    setPdfEscolhido(null);
     if (!f) return;
+
+    // PDF entra no seletor de propósito: antes o accept o filtrava e o
+    // arquivo aparecia cinza, sem explicação nenhuma.
+    if (f.type === 'application/pdf' || /.pdf$/i.test(f.name)) {
+      setPdfEscolhido(f.name);
+      return;
+    }
 
     try {
       // Carrega a lib só agora que existe arquivo pra ler
@@ -259,12 +269,14 @@ export function ImportForm() {
                 <input
                   id="file"
                   type="file"
-                  accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept=".xlsx,.xls,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
                   onChange={onFileChange}
                   className="hidden"
                   disabled={pending}
                 />
               </label>
+
+              {pdfEscolhido && <AvisoPdf nomeArquivo={pdfEscolhido} />}
 
               {erroParse && (
                 <div className="mt-4 flex gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
