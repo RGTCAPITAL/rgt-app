@@ -7,6 +7,12 @@ import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
 import { DialogRetorno } from './dialog-retorno';
+import {
+  escolherModelo,
+  linkWhatsAppComTexto,
+  montarMensagem,
+  type ModeloMensagem,
+} from '@/lib/crm/mensagem';
 import { Badge } from '@/components/ui/badge';
 import { SeloExemplo } from '@/components/ui/selo-exemplo';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -69,20 +75,6 @@ function fmtBRLCompacto(v: number | null): string {
   return 'R$ ' + v.toFixed(0);
 }
 
-/**
- * Link que abre a conversa no WhatsApp do próprio broker.
- *
- * Não depende de verificação da Meta, de template aprovado nem de número
- * oficial: quem manda a mensagem é a pessoa, do aparelho dela. Resolve hoje
- * o que o envio automatizado só resolve em semanas.
- */
-function linkWhatsApp(telefone: string): string {
-  const d = telefone.replace(/D/g, '');
-  // Número brasileiro sem DDI: 11 dígitos com nono, 10 sem.
-  const comDdi = d.length <= 11 ? '55' + d : d;
-  return 'https://wa.me/' + comDdi;
-}
-
 /** O retorno pendente mais próximo, e se já passou do prazo. */
 function proximoRetornoDe(
   retornos: { id: string; titulo: string; prazo: string | null }[],
@@ -110,6 +102,7 @@ const COLUNA_BORDER: Record<string, string> = {
 
 export function Kanban({
   leads,
+  modelos,
   donos,
   meuId,
   isAdmin,
@@ -117,6 +110,7 @@ export function Kanban({
   onNovoFechado,
 }: {
   leads: LeadCard[];
+  modelos: ModeloMensagem[];
   donos: DonoOption[];
   meuId: string;
   isAdmin: boolean;
@@ -257,6 +251,22 @@ export function Kanban({
                 ) : (
                   leadsDaCol.map((lead) => {
                     const proximoRetorno = proximoRetornoDe(lead.retornos ?? []);
+                    // A mensagem é montada por lead: o modelo escolhido é o
+                    // mais completo que os dados DESTE lead sustentam.
+                    const dadosMsg = {
+                      nome: lead.nome,
+                      valorProposta: lead.valor_proposta_indicativa,
+                      valorProcesso: lead.valor_processo,
+                      numeroProcesso: null,
+                      enteDevedor: null,
+                    };
+                    const modelo = escolherModelo(modelos, dadosMsg);
+                    const linkZap = lead.telefone
+                      ? linkWhatsAppComTexto(
+                          lead.telefone,
+                          modelo ? montarMensagem(modelo.texto, dadosMsg) : '',
+                        )
+                      : null;
                     return (
                       <div
                         key={lead.id}
@@ -343,11 +353,15 @@ export function Kanban({
                           */}
                             {lead.telefone && (
                               <a
-                                href={linkWhatsApp(lead.telefone)}
+                                href={linkZap!}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                title="Abrir conversa no WhatsApp"
+                                title={
+                                  modelo
+                                    ? 'Abrir WhatsApp com a mensagem pronta'
+                                    : 'Abrir conversa no WhatsApp'
+                                }
                                 className="rounded p-1 text-neutral-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
                               >
                                 <MessageCircle className="size-3.5" />

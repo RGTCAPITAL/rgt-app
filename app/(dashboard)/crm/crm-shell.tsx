@@ -4,19 +4,21 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Plus, Upload } from 'lucide-react';
 import { Kanban, type LeadCard } from './kanban';
+import type { ModeloMensagem } from '@/lib/crm/mensagem';
 import type { DonoOption } from './lead-form';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type Props = {
   leads: LeadCard[];
+  modelos: ModeloMensagem[];
   donos: DonoOption[];
   meuId: string;
   isAdmin: boolean;
   podeImportar: boolean;
 };
 
-export function CrmShell({ leads, donos, meuId, isAdmin, podeImportar }: Props) {
+export function CrmShell({ leads, modelos, donos, meuId, isAdmin, podeImportar }: Props) {
   const [novoAberto, setNovoAberto] = useState(false);
 
   return (
@@ -40,6 +42,7 @@ export function CrmShell({ leads, donos, meuId, isAdmin, podeImportar }: Props) 
 
       <Kanban
         leads={leads}
+        modelos={modelos}
         donos={donos}
         meuId={meuId}
         isAdmin={isAdmin}

@@ -45,6 +45,17 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   const { data: leads, error } =
     await query.returns<(LeadCard & { dono: { id: string; nome: string | null } | null })[]>();
 
+  // Modelos de mensagem do botão de WhatsApp. Ordem crescente: o seletor
+  // usa o primeiro cujos requisitos o lead atende.
+  const { data: modelos } = await supabase
+    .from('modelos_mensagem')
+    .select('id, nome, texto, requer_valor, requer_ente')
+    .eq('ativo', true)
+    .order('ordem')
+    .returns<
+      { id: string; nome: string; texto: string; requer_valor: boolean; requer_ente: boolean }[]
+    >();
+
   const { data: donosTodos } = await supabase
     .from('usuarios')
     .select('id, nome')
@@ -122,6 +133,13 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <CrmShell
         leads={leads ?? []}
+        modelos={(modelos ?? []).map((m) => ({
+          id: m.id,
+          nome: m.nome,
+          texto: m.texto,
+          requerValor: m.requer_valor,
+          requerEnte: m.requer_ente,
+        }))}
         donos={donosTodos ?? []}
         meuId={user.id}
         isAdmin={isAdmin}

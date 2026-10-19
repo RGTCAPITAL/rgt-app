@@ -11,6 +11,7 @@ import {
   Shield,
   Search,
   TrendingUp,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ export const NAV_BASE: NavItem[] = [
 
 export const NAV_ADMIN: NavItem[] = [
   { label: 'Usuários', href: '/admin/usuarios', icon: Shield },
+  { label: 'Mensagens', href: '/admin/mensagens', icon: MessageSquare },
   { label: 'Índices', href: '/admin/indices', icon: TrendingUp },
 ];
 
