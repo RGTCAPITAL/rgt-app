@@ -97,7 +97,7 @@ CREATE POLICY "modelos_delete" ON modelos_mensagem FOR DELETE TO authenticated
 INSERT INTO modelos_mensagem (nome, texto, requer_valor, requer_ente, ordem) VALUES
 (
   'Primeiro contato — com valor e devedor',
-  E'Olá {nome}, bom dia. Aqui é da RGT Capital, empresa de Maceió que trabalha com precatórios.\n\nO senhor tem um crédito a receber de {ente}, no valor de {valor}. A gente compra esse tipo de crédito e paga à vista, em vez de o senhor esperar o pagamento do governo.\n\nPosso te explicar como funciona? Se não tiver interesse, é só avisar que não escrevo mais.\n\nUma coisa importante: a RGT nunca pede depósito, taxa ou PIX. Se alguém pedir dinheiro em nosso nome, é golpe.',
+  E'Olá {nome}, bom dia. Aqui é da RGT Capital, empresa de Maceió que trabalha com precatórios.\n\nO senhor tem um crédito judicial contra {ente}, no valor de {valor}. A gente compra esse tipo de crédito e paga à vista, em vez de o senhor esperar o pagamento do governo.\n\nPosso te explicar como funciona? Se não tiver interesse, é só avisar que não escrevo mais.\n\nUma coisa importante: a RGT nunca pede depósito, taxa ou PIX. Se alguém pedir dinheiro em nosso nome, é golpe.',
   true, true, 10
 ),
 (

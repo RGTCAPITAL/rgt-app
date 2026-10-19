@@ -3,12 +3,31 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { STATUS_LEAD, type StatusLead } from '@/lib/leads';
-import { leadFormSchema } from './lead-schemas';
+import { leadFormSchema, valorParaNumero } from './lead-schemas';
 import { titleCase } from '@/lib/formatters';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
 const STATUS_VALIDOS = STATUS_LEAD.map((s) => s.value) as readonly StatusLead[];
+
+/**
+ * Campos do precatório, já no tipo que a coluna espera.
+ *
+ * Os três são opcionais e `null` é o estado legítimo de "ainda não sei" —
+ * é o que faz a mensagem de primeiro contato cair num modelo mais simples
+ * em vez de citar um valor que ninguém conferiu.
+ */
+function dadosPrecatorio(d: {
+  ente_devedor?: string;
+  numero_processo?: string;
+  valor_processo?: string;
+}) {
+  return {
+    ente_devedor: d.ente_devedor?.trim() || null,
+    numero_processo: d.numero_processo?.trim() || null,
+    valor_processo: d.valor_processo ? valorParaNumero(d.valor_processo) : null,
+  };
+}
 
 export async function criarLead(payload: Record<string, unknown>): Promise<Result<{ id: string }>> {
   const parsed = leadFormSchema.safeParse(payload);
@@ -39,6 +58,7 @@ export async function criarLead(payload: Record<string, unknown>): Promise<Resul
     notas: parsed.data.notas || null,
     dono_id: isBroker ? user.id : parsed.data.dono_id || null,
     status: 'novo' as const,
+    ...dadosPrecatorio(parsed.data),
   };
 
   const { data, error } = await supabase.from('leads').insert(insert).select('id').single();
@@ -71,6 +91,7 @@ export async function atualizarLead(
     origem: parsed.data.origem,
     notas: parsed.data.notas || null,
     dono_id: parsed.data.dono_id || null,
+    ...dadosPrecatorio(parsed.data),
   };
 
   const { data, error } = await supabase

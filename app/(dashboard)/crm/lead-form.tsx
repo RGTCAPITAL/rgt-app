@@ -44,6 +44,9 @@ export type LeadEdit = {
   status: string;
   operacao_id: string | null;
   motivo_perda: string | null;
+  ente_devedor: string | null;
+  numero_processo: string | null;
+  valor_processo: number | null;
 };
 
 type Props = {
@@ -80,6 +83,13 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
   const [origem, setOrigem] = useState<string>(editando?.origem ?? '');
   const [donoId, setDonoId] = useState(editando?.dono_id ?? (isAdmin ? '' : meuId));
   const [notas, setNotas] = useState(editando?.notas ?? '');
+  const [enteDevedor, setEnteDevedor] = useState(editando?.ente_devedor ?? '');
+  const [numeroProcesso, setNumeroProcesso] = useState(editando?.numero_processo ?? '');
+  const [valorProcesso, setValorProcesso] = useState(
+    editando?.valor_processo !== null && editando?.valor_processo !== undefined
+      ? editando.valor_processo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+      : '',
+  );
   const [erro, setErro] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -97,6 +107,9 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
       origem,
       dono_id: donoId,
       notas: notas.trim(),
+      ente_devedor: enteDevedor.trim(),
+      numero_processo: numeroProcesso.trim(),
+      valor_processo: valorProcesso.trim(),
     };
 
     startTransition(async () => {
@@ -183,6 +196,39 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
               </select>
             </Field>
           )}
+          <div className="border-t border-neutral-200 pt-3 sm:col-span-2">
+            <div className="text-xs font-medium text-neutral-900">Dados do precatório</div>
+            <p className="mt-0.5 text-[11px] text-neutral-500">
+              Opcional, e é o que a mensagem de WhatsApp usa. Sem o devedor e o valor, o texto que
+              abre pronto no botão do card fica na versão curta.
+            </p>
+          </div>
+          <Field label="Quem deve">
+            <Input
+              value={enteDevedor}
+              onChange={(e) => setEnteDevedor(e.target.value)}
+              disabled={pending}
+              placeholder="Estado de Alagoas, INSS…"
+            />
+          </Field>
+          <Field label="Valor do processo (R$)">
+            <Input
+              value={valorProcesso}
+              onChange={(e) => setValorProcesso(e.target.value)}
+              disabled={pending}
+              inputMode="decimal"
+              placeholder="187.430,50"
+            />
+          </Field>
+          <Field label="Número do processo" full>
+            <Input
+              value={numeroProcesso}
+              onChange={(e) => setNumeroProcesso(e.target.value)}
+              disabled={pending}
+              placeholder="0001107-33.2017.5.19.0001"
+            />
+          </Field>
+
           <Field label="Notas" full>
             <Textarea
               value={notas}

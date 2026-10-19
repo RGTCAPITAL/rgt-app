@@ -43,6 +43,8 @@ export type LeadCard = {
   is_exemplo: boolean;
   valor_processo: number | null;
   valor_proposta_indicativa: number | null;
+  ente_devedor: string | null;
+  numero_processo: string | null;
   retornos: { id: string; titulo: string; prazo: string | null }[];
   dono: { nome: string | null } | null;
 };
@@ -257,8 +259,8 @@ export function Kanban({
                       nome: lead.nome,
                       valorProposta: lead.valor_proposta_indicativa,
                       valorProcesso: lead.valor_processo,
-                      numeroProcesso: null,
-                      enteDevedor: null,
+                      numeroProcesso: lead.numero_processo,
+                      enteDevedor: lead.ente_devedor,
                     };
                     const modelo = escolherModelo(modelos, dadosMsg);
                     const linkZap = lead.telefone
@@ -285,6 +287,9 @@ export function Kanban({
                             status: lead.status,
                             operacao_id: lead.operacao_id,
                             motivo_perda: lead.motivo_perda,
+                            ente_devedor: lead.ente_devedor,
+                            numero_processo: lead.numero_processo,
+                            valor_processo: lead.valor_processo,
                           })
                         }
                         className={cn(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   escolherModelo,
+  formatarEnte,
   linkWhatsAppComTexto,
   montarMensagem,
   primeiroNome,
@@ -179,5 +180,49 @@ describe('linkWhatsAppComTexto', () => {
   it('escapa quebra de linha, que é comum em mensagem de contato', () => {
     const l = linkWhatsAppComTexto('82999998888', 'linha 1\nlinha 2');
     expect(l).toContain('%0A');
+  });
+});
+
+describe('formatarEnte', () => {
+  it('transforma estado cru da planilha em nome apresentável', () => {
+    // A planilha do TRT19 entrega "ALAGOAS"; "crédito a receber de ALAGOAS"
+    // soa como erro de sistema na mensagem que vai pro credor.
+    expect(formatarEnte('ALAGOAS')).toBe('Estado de Alagoas');
+    expect(formatarEnte('PERNAMBUCO')).toBe('Estado de Pernambuco');
+  });
+
+  it('devolve o acento que a planilha não tem', () => {
+    expect(formatarEnte('SAO PAULO')).toBe('Estado de São Paulo');
+    expect(formatarEnte('PARA')).toBe('Estado de Pará');
+    expect(formatarEnte('MARANHAO')).toBe('Estado de Maranhão');
+  });
+
+  it('preserva siglas em caixa alta', () => {
+    // "Inss" lê como erro de digitação
+    expect(formatarEnte('INSS')).toBe('INSS');
+    expect(formatarEnte('INCRA')).toBe('INCRA');
+    expect(formatarEnte('ect')).toBe('ECT');
+  });
+
+  it('deixa preposição em minúscula em nome composto', () => {
+    expect(formatarEnte('MUNICIPIO DE MACEIO')).toBe('Municipio de Maceio');
+    expect(formatarEnte('PREFEITURA DA CAPITAL')).toBe('Prefeitura da Capital');
+  });
+
+  it('não quebra com entrada vazia ou nula', () => {
+    expect(formatarEnte(null)).toBeNull();
+    expect(formatarEnte('')).toBeNull();
+    expect(formatarEnte('   ')).toBeNull();
+  });
+
+  it('chega formatado na mensagem final', () => {
+    const r = montarMensagem('crédito contra {ente}', {
+      nome: 'José',
+      valorProposta: null,
+      valorProcesso: null,
+      numeroProcesso: null,
+      enteDevedor: 'ALAGOAS',
+    });
+    expect(r).toBe('crédito contra Estado de Alagoas');
   });
 });

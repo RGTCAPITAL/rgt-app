@@ -54,6 +54,107 @@ const fmtBRL = (v: number) =>
     .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 })
     .replace(/ /g, ' ');
 
+/**
+ * Siglas que devem continuar em caixa alta. Aplicar título a elas produz
+ * "Inss" e "Incra", que lê como erro de digitação.
+ */
+const SIGLAS = new Set([
+  'INSS',
+  'INCRA',
+  'ECT',
+  'CEF',
+  'BB',
+  'DNIT',
+  'IBAMA',
+  'FUNAI',
+  'ANAC',
+  'INMETRO',
+  'IBGE',
+  'INEP',
+  'FNDE',
+  'CNEN',
+  'SUDENE',
+  'UFAL',
+  'UFPE',
+  'IFAL',
+]);
+
+const ESTADOS = new Set([
+  'ACRE',
+  'ALAGOAS',
+  'AMAPA',
+  'AMAZONAS',
+  'BAHIA',
+  'CEARA',
+  'ESPIRITO SANTO',
+  'GOIAS',
+  'MARANHAO',
+  'MATO GROSSO',
+  'MATO GROSSO DO SUL',
+  'MINAS GERAIS',
+  'PARA',
+  'PARAIBA',
+  'PARANA',
+  'PERNAMBUCO',
+  'PIAUI',
+  'RIO DE JANEIRO',
+  'RIO GRANDE DO NORTE',
+  'RIO GRANDE DO SUL',
+  'RONDONIA',
+  'RORAIMA',
+  'SANTA CATARINA',
+  'SAO PAULO',
+  'SERGIPE',
+  'TOCANTINS',
+  'DISTRITO FEDERAL',
+]);
+
+/** Grafias corretas, já que a planilha do tribunal chega sem acento. */
+const ACENTUADOS: Record<string, string> = {
+  AMAPA: 'Amapá',
+  CEARA: 'Ceará',
+  'ESPIRITO SANTO': 'Espírito Santo',
+  GOIAS: 'Goiás',
+  MARANHAO: 'Maranhão',
+  PARA: 'Pará',
+  PARAIBA: 'Paraíba',
+  PARANA: 'Paraná',
+  PIAUI: 'Piauí',
+  RONDONIA: 'Rondônia',
+  'SAO PAULO': 'São Paulo',
+};
+
+function tituloSimples(s: string): string {
+  const minusculas = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+  return s
+    .toLocaleLowerCase('pt-BR')
+    .split(/\s+/)
+    .map((palavra, i) =>
+      i > 0 && minusculas.has(palavra)
+        ? palavra
+        : palavra.charAt(0).toLocaleUpperCase('pt-BR') + palavra.slice(1),
+    )
+    .join(' ');
+}
+
+/**
+ * Deixa o nome do devedor apresentável na mensagem.
+ *
+ * A planilha do tribunal entrega "ALAGOAS", e a frase "crédito a receber de
+ * ALAGOAS" soa como erro. Aqui vira "Estado de Alagoas". Siglas são
+ * preservadas e nomes compostos ganham as preposições em minúscula.
+ */
+export function formatarEnte(bruto: string | null): string | null {
+  if (!bruto) return null;
+  const limpo = bruto.trim().replace(/\s+/g, ' ');
+  if (!limpo) return null;
+
+  const chave = limpo.toLocaleUpperCase('pt-BR');
+  if (SIGLAS.has(chave)) return chave;
+  if (ESTADOS.has(chave)) return `Estado de ${ACENTUADOS[chave] ?? tituloSimples(chave)}`;
+  return tituloSimples(limpo);
+}
+
 /** Variáveis que um modelo pode usar, documentadas pra quem edita o texto. */
 export const VARIAVEIS_DISPONIVEIS = [
   { chave: '{nome}', descricao: 'Primeiro nome da pessoa' },
@@ -72,7 +173,7 @@ export function montarMensagem(texto: string, lead: DadosLead): string {
       .replaceAll('{nome_completo}', lead.nome.trim())
       .replaceAll('{nome}', primeiroNome(lead.nome))
       .replaceAll('{valor}', valor !== null ? fmtBRL(valor) : '')
-      .replaceAll('{ente}', lead.enteDevedor ?? '')
+      .replaceAll('{ente}', formatarEnte(lead.enteDevedor) ?? '')
       .replaceAll('{processo}', lead.numeroProcesso ?? '')
       // Espaço duplo e espaço antes de pontuação denunciam variável vazia que
       // escapou. Limpar depois é mais robusto que prever cada combinação.
