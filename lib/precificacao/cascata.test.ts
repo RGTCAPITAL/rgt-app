@@ -48,7 +48,7 @@ function entradaBase(over: Partial<EntradaCascata> = {}): EntradaCascata {
       penhora: null,
       compensacaoTributaria: null,
     },
-    tributacao: { rraAtivo: true, rraMeses: RUBEM.rraMeses },
+    tributacao: { irIncide: true, rraMeses: RUBEM.rraMeses },
     dataFinal: '2026-10-19',
     fatorCorrecao: 1,
     ...over,
@@ -84,17 +84,18 @@ describe('cascata — conferência contra o ofício do TJAL', () => {
     expect(linha(r, 'pss')?.origem).toBe('oficio');
   });
 
-  it('chega no líquido antes do IR descontando só o PSS', () => {
+  it('chega no líquido descontando PSS e IR', () => {
     const r = montarCascata(entradaBase());
-    // 937.367,38 − 57.596,17
-    expect(r.liquidoDisponivel).toBe(879771.21);
+    // 937.367,38 − 57.596,17 (PSS) − 69.622,44 (IR RRA 83 meses)
+    expect(r.liquidoDisponivel).toBe(810148.77);
   });
 
-  it('marca como provisório porque o IR sobre RRA ainda não é calculado', () => {
+  it('calcula o IR por RRA e não deixa mais pendência', () => {
     const r = montarCascata(entradaBase());
-    expect(r.provisorio).toBe(true);
-    expect(linha(r, 'liquido')?.rotulo).toBe('Líquido disponível (antes do IR)');
-    expect(linha(r, 'ir')?.origem).toBe('falta');
+    expect(r.provisorio).toBe(false);
+    expect(linha(r, 'liquido')?.rotulo).toBe('Líquido disponível');
+    expect(linha(r, 'ir')?.origem).toBe('calculado');
+    expect(linha(r, 'ir')?.valor).toBe(69622.44);
     expect(linha(r, 'ir')?.detalhe).toContain('83 meses');
   });
 
@@ -104,7 +105,7 @@ describe('cascata — conferência contra o ofício do TJAL', () => {
     const r = montarCascata(entradaBase());
     const ids = r.linhas.map((l) => l.id);
     expect(ids).not.toContain('honorarios-sucumbenciais');
-    expect(r.liquidoDisponivel).toBe(879771.21);
+    expect(r.liquidoDisponivel).toBe(810148.77);
   });
 });
 
@@ -119,7 +120,7 @@ describe('cascata — correção monetária do período', () => {
 
   it('o líquido acompanha o bruto corrigido', () => {
     const r = montarCascata(entradaBase({ fatorCorrecao: 1.2578 }));
-    expect(r.liquidoDisponivel).toBe(1121424.52);
+    expect(r.liquidoDisponivel).toBe(1014681.35);
   });
 
   it('bloqueia o total quando a série não cobre o período', () => {
@@ -162,11 +163,12 @@ describe('cascata — falta não vira zero', () => {
     );
     expect(linha(r, 'pss')?.valor).toBe(0);
     expect(linha(r, 'pss')?.origem).toBe('oficio');
-    expect(r.liquidoDisponivel).toBe(937367.38);
+    // PSS zerado, mas o IR continua incidindo: 937.367,38 − 69.622,44
+    expect(r.liquidoDisponivel).toBe(867744.94);
   });
 
   it('não inventa IR quando o ofício não indica RRA', () => {
-    const r = montarCascata(entradaBase({ tributacao: { rraAtivo: false, rraMeses: null } }));
+    const r = montarCascata(entradaBase({ tributacao: { irIncide: false, rraMeses: null } }));
     expect(linha(r, 'ir')?.valor).toBe(0);
     expect(r.provisorio).toBe(false);
     expect(linha(r, 'liquido')?.rotulo).toBe('Líquido disponível');
@@ -182,7 +184,7 @@ describe('cascata — deduções opcionais', () => {
     );
     // 20% de 937.367,38
     expect(linha(r, 'honorarios-contratuais')?.valor).toBe(187473.48);
-    expect(r.liquidoDisponivel).toBe(937367.38 - RUBEM.pssValor - 187473.48);
+    expect(r.liquidoDisponivel).toBe(622675.29);
   });
 
   it('valor digitado tem precedência sobre o percentual', () => {
@@ -215,7 +217,7 @@ describe('cascata — deduções opcionais', () => {
     );
     expect(linha(r, 'cessao-anterior')?.valor).toBe(200000);
     expect(linha(r, 'cessao-anterior')?.norma).toBe('Res. CJF 983/2026, art. 22');
-    expect(r.liquidoDisponivel).toBe(937367.38 - RUBEM.pssValor - 200000);
+    expect(r.liquidoDisponivel).toBe(610148.77);
   });
 });
 
@@ -241,5 +243,74 @@ describe('cascata — auditabilidade', () => {
       'ir',
       'liquido',
     ]);
+  });
+});
+
+describe('cascata — percentual do total (regra copiada da Lajedo)', () => {
+  it('cada linha com valor declara seu peso sobre o crédito atualizado', () => {
+    const r = montarCascata(entradaBase({ fatorCorrecao: 1.2578 }));
+    const pss = linha(r, 'pss')!;
+    const ir = linha(r, 'ir')!;
+
+    // É o que deixa a conta legível sem calculadora: dá pra ver quanto cada
+    // dedução comeu do crédito.
+    expect(pss.percentualDoTotal).toBeGreaterThan(0);
+    expect(ir.percentualDoTotal).toBeGreaterThan(0);
+    expect(linha(r, 'bruto-atualizado')?.percentualDoTotal).toBe(100);
+  });
+
+  it('o percentual bate com a divisão pelo bruto atualizado', () => {
+    const r = montarCascata(entradaBase({ fatorCorrecao: 1.2578 }));
+    const bruto = r.brutoAtualizado!;
+    for (const l of r.linhas) {
+      if (l.valor === null) continue;
+      const esperado = Math.round((l.valor / bruto) * 10000) / 100;
+      expect(l.percentualDoTotal).toBe(esperado);
+    }
+  });
+
+  it('linha sem valor não ganha percentual', () => {
+    const r = montarCascata(
+      entradaBase({
+        deducoes: { ...entradaBase().deducoes, pssValor: null },
+      }),
+    );
+    expect(linha(r, 'pss')?.percentualDoTotal).toBeUndefined();
+  });
+
+  it('não calcula percentual quando não há bruto atualizado', () => {
+    const r = montarCascata(entradaBase({ fatorCorrecao: null }));
+    expect(r.linhas.every((l) => l.percentualDoTotal === undefined)).toBe(true);
+  });
+});
+
+describe('cascata — regra do IR vinda da interface da Lajedo', () => {
+  it('RRA com meses maiores que zero', () => {
+    const r = montarCascata(entradaBase());
+    expect(linha(r, 'ir')?.detalhe).toContain('RRA de 83 meses');
+  });
+
+  it('meses zerados aplicam a retenção fixa de 3%', () => {
+    // "Se incidir IR e meses = 0, aplica IR fixo de 3%" — texto da tela deles
+    const r = montarCascata(entradaBase({ tributacao: { irIncide: true, rraMeses: 0 } }));
+    const ir = linha(r, 'ir')!;
+    expect(ir.detalhe).toContain('3%');
+    // 3% do principal na data-base (fator 1)
+    expect(ir.valor).toBe(15708.05);
+  });
+
+  it('IR sai da conta quando o ofício não indica retenção', () => {
+    const r = montarCascata(entradaBase({ tributacao: { irIncide: false, rraMeses: null } }));
+    expect(linha(r, 'ir')?.valor).toBe(0);
+    expect(linha(r, 'ir')?.origem).toBe('oficio');
+  });
+
+  it('a base do IR é o principal atualizado, não o bruto', () => {
+    // Com fator 1,2578 o principal vira 658.586,08 e o bruto 1.179.020,69.
+    // Se a base fosse o bruto, o imposto quase dobraria.
+    const r = montarCascata(entradaBase({ fatorCorrecao: 1.2578 }));
+    const ir = linha(r, 'ir')!.valor!;
+    expect(ir).toBe(106743.17);
+    expect(ir / r.brutoAtualizado!).toBeLessThan(0.12);
   });
 });

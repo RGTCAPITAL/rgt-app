@@ -19,6 +19,7 @@
  */
 
 import type { Serie } from '@/lib/indices/series';
+import type { ModoAliquota } from './ir';
 
 /** Como o crédito está composto na data-base, conforme o ofício. */
 export type ComposicaoOficio = {
@@ -62,10 +63,16 @@ export type Deducoes = {
 
 /** Tributação. Modelada à parte porque a base de incidência é controversa. */
 export type Tributacao = {
-  /** Rendimentos Recebidos Acumuladamente — art. 12-A da Lei 7.713/88. */
-  rraAtivo: boolean;
-  /** Número de meses que o crédito abrange. O ofício informa. */
+  /** O ofício indica se há retenção de IR. */
+  irIncide: boolean;
+  /**
+   * Meses a que o crédito se refere. Maior que zero aplica RRA (art. 12-A);
+   * zero ou null aplica a retenção fixa de 3%. A regra é a mesma que a
+   * Lajedo exibe na própria interface.
+   */
   rraMeses: number | null;
+  /** Padrão conservador: provisiona pela alíquota máxima. */
+  modoAliquota?: ModoAliquota;
 };
 
 export type EntradaCascata = {
@@ -100,6 +107,12 @@ export type LinhaCascata = {
   detalhe?: string;
   /** Dispositivo que obriga essa linha a existir. */
   norma?: string;
+  /**
+   * Peso da linha sobre o total do crédito atualizado. É o que permite ver
+   * que honorário comeu 20% e imposto 6% sem fazer conta — a Lajedo mostra
+   * isso em toda linha e é metade da legibilidade da tela.
+   */
+  percentualDoTotal?: number;
   /** Subtotais recebem peso visual na tela. */
   destaque?: boolean;
 };

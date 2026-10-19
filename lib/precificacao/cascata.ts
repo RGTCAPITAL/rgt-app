@@ -16,6 +16,7 @@
  * depende de parâmetros que o Renato define.
  */
 
+import { calcularIr } from './ir';
 import type { Bloqueio, EntradaCascata, LinhaCascata, ResultadoCascata } from './tipos';
 
 /** Centavos. Dinheiro não carrega fração de centavo entre linhas. */
@@ -243,41 +244,52 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
 
   // ---- Imposto de renda ----
   //
-  // Fica como pendência explícita nesta versão. A base de incidência depende
-  // de teses que variam por tribunal (juros de mora em verba alimentar, Tema
-  // 808 do STF), e um IR errado move o líquido em dezenas de milhares. Melhor
-  // a tela dizer que falta do que entregar número que ninguém conferiu.
+  // A base é o principal ATUALIZADO, não o total: juros de mora em verba
+  // alimentar não são renda tributável (STF, Tema 808) e correção monetária
+  // repõe poder de compra. Isso foi conferido contra um caso real da Lajedo,
+  // onde só o principal reproduz o imposto que eles apuraram. Ver ir.ts.
 
-  if (tributacao.rraAtivo) {
-    linhas.push({
-      id: 'ir',
-      rotulo: 'Imposto de renda',
-      valor: null,
-      sinal: '−',
-      origem: 'falta',
-      detalhe: tributacao.rraMeses
-        ? `RRA de ${tributacao.rraMeses} meses — cálculo a implementar`
-        : 'RRA sem número de meses informado',
-      norma: NORMA_RRA,
-    });
-    bloqueios.push({
-      campo: 'ir',
-      mensagem:
-        'O ofício indica Rendimentos Recebidos Acumuladamente. O cálculo do IR sobre RRA ainda não está implementado — o líquido abaixo está antes do imposto.',
-      impedeTotal: false,
-    });
-  } else {
+  if (!tributacao.irIncide) {
     linhas.push({
       id: 'ir',
       rotulo: 'Imposto de renda',
       valor: 0,
       sinal: '−',
       origem: 'oficio',
-      detalhe: 'ofício não indica RRA',
+      detalhe: 'ofício não indica retenção de IR',
       norma: NORMA_RRA,
     });
+  } else if (brutoAtualizado === null) {
+    // Sem correção não há principal atualizado, e o IR dependeria de um
+    // número que não existe. O bloqueio do fator já impede o total.
+    linhas.push({
+      id: 'ir',
+      rotulo: 'Imposto de renda',
+      valor: null,
+      sinal: '−',
+      origem: 'falta',
+      detalhe: 'depende do principal atualizado',
+      norma: NORMA_RRA,
+    });
+  } else {
+    const principalAtualizado = round2(composicao.principal * (fatorCorrecao ?? 1));
+    const ir = calcularIr({
+      base: principalAtualizado,
+      rraMeses: tributacao.rraMeses,
+      modo: tributacao.modoAliquota,
+      dataIso: dataFinal,
+    });
+    linhas.push({
+      id: 'ir',
+      rotulo: 'Imposto de renda',
+      valor: ir.valor,
+      sinal: '−',
+      origem: 'calculado',
+      detalhe: ir.detalhe,
+      norma: NORMA_RRA,
+    });
+    descontar(ir.valor);
   }
-
   const provisorio = bloqueios.some((b) => !b.impedeTotal);
   const impedido = bloqueios.some((b) => b.impedeTotal);
   const liquidoDisponivel = impedido ? null : acumulado;
@@ -292,6 +304,16 @@ export function montarCascata(entrada: EntradaCascata): ResultadoCascata {
     norma: NORMA_CESSAO,
     destaque: true,
   });
+
+  // Peso de cada linha sobre o crédito atualizado. A Lajedo mostra isso em
+  // toda linha e é o que deixa a conta legível sem calculadora: dá pra ver
+  // que honorário levou 20% e imposto 6% batendo o olho.
+  if (brutoAtualizado !== null && brutoAtualizado > 0) {
+    for (const l of linhas) {
+      if (l.valor === null) continue;
+      l.percentualDoTotal = Math.round((l.valor / brutoAtualizado) * 10000) / 100;
+    }
+  }
 
   return { linhas, brutoAtualizado, liquidoDisponivel, provisorio, bloqueios };
 }
