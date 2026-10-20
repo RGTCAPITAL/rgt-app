@@ -57,6 +57,19 @@ export function traduzirErroAuth(msg: string): string {
   if (m.includes('jwt expired') || m.includes('session expired')) {
     return 'Sua sessão expirou. Entre novamente.';
   }
+  // É o erro que o fluxo de reset produz quando o link não virou sessão —
+  // chegava cru, em inglês, na tela de redefinir senha.
+  if (m.includes('auth session missing') || m.includes('session_not_found')) {
+    return 'Seu link de redefinição expirou ou já foi usado. Peça um novo.';
+  }
+
+  // Envio
+  if (m.includes('error sending recovery email') || m.includes('error sending')) {
+    return 'Falha no envio do email. Avisa o admin.';
+  }
+  if (m.includes('user not found')) {
+    return 'Não achamos conta com esse email.';
+  }
 
   // Fallback
   return msg;

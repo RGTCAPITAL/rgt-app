@@ -42,14 +42,24 @@ export async function GET(request: NextRequest) {
       const target = type === 'recovery' ? '/redefinir-senha' : next;
       return NextResponse.redirect(`${origin}${target}`);
     }
+    console.error('[auth/callback] verifyOtp', { type }, error.message);
   }
 
-  // Fluxo 2: PKCE (code)
+  // Fluxo 2: PKCE (code).
+  // É por aqui que o reset de senha cai: o @supabase/ssr usa flowType pkce por
+  // padrão (as linhas de auth.flow_state têm code_challenge_method='s256').
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      // Mesma resolução do branch OTP, e ela é obrigatória: sem isto, um reset
+      // que chegue sem `next` manda a pessoa LOGADA pro dashboard com a senha
+      // antiga e sem aviso nenhum — o pior modo de falha possível aqui.
+      const target = type === 'recovery' ? '/redefinir-senha' : next;
+      return NextResponse.redirect(`${origin}${target}`);
     }
+    // Token expirado, verifier ausente (link aberto noutro browser) e type
+    // errado colapsavam todos em "Link inválido ou expirado" sem rastro.
+    console.error('[auth/callback] exchangeCodeForSession', error.message);
   }
 
   return NextResponse.redirect(

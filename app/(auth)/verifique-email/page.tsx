@@ -39,7 +39,7 @@ export default async function VerifiqueEmailPage({
       </p>
       <div className="mt-6 rounded-md bg-neutral-50 p-3 text-xs text-neutral-500">
         Não achou o email? Confere a pasta de spam. O remetente é{' '}
-        <span className="font-mono">noreply@mail.supabase.io</span>.
+        <span className="font-mono">no-reply@rgtcapital.com.br</span>.
       </div>
       <div className="mt-6">
         <Link href="/login" className="text-sm font-medium text-neutral-900 hover:underline">

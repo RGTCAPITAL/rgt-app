@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ehRotaPublica, PUBLIC_ROUTES } from './proxy';
+import { deveMandarPraDashboard, ehRotaPublica, PUBLIC_ROUTES, REDIRECT_SE_LOGADO } from './proxy';
 
 /**
  * O proxy é a única coisa entre a internet e o app, e a forma como ele falha
@@ -54,6 +54,67 @@ describe('ehRotaPublica', () => {
     expect(ehRotaPublica('/login')).toBe(true);
     expect(ehRotaPublica('/esqueci-senha')).toBe(true);
     expect(ehRotaPublica('/auth/callback')).toBe(true);
+  });
+});
+
+/**
+ * O outro modo de falha silenciosa do proxy, e o mais caro: ele responde 307
+ * pro dashboard na rota onde a pessoa deveria digitar a senha nova.
+ *
+ * A sessão de recovery é uma sessão REAL — quem chega pelo link do email chega
+ * logado. Então a regra "logado em rota de auth → manda pro dashboard" cospe a
+ * pessoa fora de /redefinir-senha antes do formulário aparecer. Ela cai no app
+ * achando que redefiniu, com a senha antiga valendo e nenhuma mensagem.
+ *
+ * Nem build, nem type-check, nem teste de handler pega isso: é um booleano de
+ * uma linha. Este pega.
+ */
+describe('REDIRECT_SE_LOGADO', () => {
+  it('NAO contém /redefinir-senha — senão o form de senha nova fica inalcançável', () => {
+    expect(REDIRECT_SE_LOGADO).not.toContain('/redefinir-senha');
+  });
+
+  it('ainda manda o logado embora das telas de entrada', () => {
+    // O risco oposto: quem já tem sessão não tem o que fazer no /login.
+    expect(REDIRECT_SE_LOGADO).toContain('/login');
+    expect(REDIRECT_SE_LOGADO).toContain('/esqueci-senha');
+    expect(REDIRECT_SE_LOGADO).toContain('/verifique-email');
+  });
+
+  it('/redefinir-senha segue pública — sem sessão ainda tem que abrir pra mostrar o erro', () => {
+    // Público não é o mesmo que sem sessão: a página checa getUser() e mostra
+    // "link inválido ou expirado" em vez do formulário.
+    expect(ehRotaPublica('/redefinir-senha')).toBe(true);
+  });
+});
+
+/**
+ * O bounce engolia a mensagem de erro, e esse foi o sintoma relatado em 20/10:
+ * "clico no reset e já me joga pro painel sem aparecer a tela de redefinir".
+ *
+ * Quem clica num link de recovery inválido tendo sessão antiga no browser era
+ * mandado de `/login?error=...` direto pro dashboard — sem ver o erro, sem a
+ * senha ter mudado, sem pista nenhuma do que aconteceu.
+ */
+describe('deveMandarPraDashboard', () => {
+  it('nao engole a mensagem de erro do callback', () => {
+    expect(deveMandarPraDashboard('/login', true)).toBe(false);
+    expect(deveMandarPraDashboard('/esqueci-senha', true)).toBe(false);
+  });
+
+  it('sem erro, segue mandando o logado pro dashboard', () => {
+    expect(deveMandarPraDashboard('/login', false)).toBe(true);
+    expect(deveMandarPraDashboard('/esqueci-senha', false)).toBe(true);
+  });
+
+  it('nunca manda embora de /redefinir-senha, com ou sem erro', () => {
+    expect(deveMandarPraDashboard('/redefinir-senha', false)).toBe(false);
+    expect(deveMandarPraDashboard('/redefinir-senha', true)).toBe(false);
+  });
+
+  it('nao interfere em rota do app', () => {
+    expect(deveMandarPraDashboard('/crm', false)).toBe(false);
+    expect(deveMandarPraDashboard('/operacoes', true)).toBe(false);
   });
 });
 

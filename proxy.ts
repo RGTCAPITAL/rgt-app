@@ -6,6 +6,35 @@ import { NextResponse, type NextRequest } from 'next/server';
 const AUTH_ROUTES = ['/login', '/esqueci-senha', '/redefinir-senha', '/verifique-email'];
 
 /**
+ * Rotas de auth que mandam o usuário JÁ LOGADO pro dashboard.
+ *
+ * `/redefinir-senha` está fora desta lista de propósito, e a razão é o oposto
+ * do que parece: a sessão de recovery é uma sessão real. Quem chega pelo link
+ * do email chega **logado**. Com essa rota aqui, o proxy devolve 307 pro
+ * dashboard antes de o formulário aparecer — a pessoa cai no app achando que
+ * redefiniu, com a senha antiga intacta e nenhuma mensagem na tela.
+ *
+ * Isso quebrava o convite de admin (que já passa por /auth/callback) e
+ * quebraria o reset de senha no instante seguinte ao fix do redirectTo.
+ * Coberto por proxy.test.ts.
+ */
+export const REDIRECT_SE_LOGADO = ['/login', '/esqueci-senha', '/verifique-email'];
+
+/**
+ * O bounce não pode engolir mensagem de erro.
+ *
+ * Quando /auth/callback falha, ele manda pra `/login?error=...`. Se a pessoa
+ * ainda tem uma sessão antiga no browser, o bounce acima a leva pro dashboard e
+ * a mensagem morre no caminho: a pessoa clica no link do email de reset e
+ * simplesmente aparece no painel, sem nada explicando o que houve. Foi isso que
+ * aconteceu em 20/10 e o que fez o bug parecer "email não chega".
+ */
+export function deveMandarPraDashboard(path: string, temErro: boolean): boolean {
+  if (temErro) return false;
+  return REDIRECT_SE_LOGADO.includes(path);
+}
+
+/**
  * Rotas que passam sem sessão.
  *
  * `/api/cron` está aqui porque o agendador da Vercel chega sem cookie, e o jeito
@@ -75,8 +104,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Logado tentando página de login/cadastro → dashboard
-  if (user && AUTH_ROUTES.includes(path)) {
+  // Logado tentando página de login/cadastro → dashboard.
+  // NÃO use AUTH_ROUTES aqui: ela contém /redefinir-senha, e quem chega do link
+  // de recovery chega logado (ver comentário em REDIRECT_SE_LOGADO).
+  if (user && deveMandarPraDashboard(path, request.nextUrl.searchParams.has('error'))) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

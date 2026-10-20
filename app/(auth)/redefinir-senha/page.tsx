@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
 import { updatePassword } from './actions';
 
 export default async function RedefinirSenhaPage({
@@ -7,6 +8,41 @@ export default async function RedefinirSenhaPage({
   searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   const { error, message } = await searchParams;
+
+  // Falha na chegada, não no POST.
+  //
+  // Sem esta checagem a página renderizava o formulário pra qualquer visitante,
+  // inclusive com link expirado ou sem token nenhum. A pessoa digitava a senha
+  // nova, clicava em salvar, e só então o updateUser estourava "Auth session
+  // missing" — em inglês, numa tela em português. Era isso que fazia o bug do
+  // redirectTo parecer um problema de email que não chega.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <div>
+        <h1 className="mb-2 text-xl font-semibold">Link inválido ou expirado</h1>
+        <p className="mb-6 text-sm text-neutral-600">
+          Esse link de redefinição não vale mais — ou já foi usado, ou expirou, ou foi aberto num
+          navegador diferente daquele onde você pediu o reset.
+        </p>
+        <Link
+          href="/esqueci-senha"
+          className="bg-primary text-primary-foreground hover:bg-primary/85 block w-full rounded-md py-2.5 text-center text-sm font-medium"
+        >
+          Pedir um link novo
+        </Link>
+        <div className="mt-6 text-center text-sm text-neutral-600">
+          <Link href="/login" className="font-medium text-neutral-900 hover:underline">
+            Voltar pro login
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
