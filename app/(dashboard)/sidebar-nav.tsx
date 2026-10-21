@@ -12,6 +12,7 @@ import {
   Search,
   TrendingUp,
   MessageSquare,
+  Percent,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -33,6 +34,7 @@ export const NAV_ADMIN: NavItem[] = [
   { label: 'Usuários', href: '/admin/usuarios', icon: Shield },
   { label: 'Mensagens', href: '/admin/mensagens', icon: MessageSquare },
   { label: 'Índices', href: '/admin/indices', icon: TrendingUp },
+  { label: 'Percentual', href: '/admin/desagio', icon: Percent },
 ];
 
 function itemAtivo(pathname: string, href: string): boolean {
