@@ -36,11 +36,26 @@ export function PainelDesagio({
   const router = useRouter();
   const [abertoPara, setAbertoPara] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
+  // LOA que ainda não tem operação nem percentual. Sem isto, as LOAs 2025–2028
+  // só apareciam por causa das operações de exemplo, e 2029 não tinha como ser
+  // cadastrada antes de chegar a primeira operação dela (RGT-96).
+  const [anosExtras, setAnosExtras] = useState<number[]>([]);
+  const [novoAno, setNovoAno] = useState('');
 
-  // Todo ano que tem operação, mais todo ano que já tem percentual cadastrado.
-  const anos = [...new Set([...loasEmUso.map((l) => l.ano), ...fatores.map((f) => f.loaAno)])].sort(
-    (a, b) => a - b,
-  );
+  // Todo ano que tem operação, todo ano que já tem percentual, e os que ele abriu à mão.
+  const anos = [
+    ...new Set([...loasEmUso.map((l) => l.ano), ...fatores.map((f) => f.loaAno), ...anosExtras]),
+  ].sort((a, b) => a - b);
+
+  const novoAnoNum = Number(novoAno);
+  const novoAnoValido = Number.isInteger(novoAnoNum) && novoAnoNum >= 2020 && novoAnoNum <= 2100;
+
+  function abrirOutraLoa() {
+    if (!novoAnoValido) return;
+    if (!anos.includes(novoAnoNum)) setAnosExtras((a) => [...a, novoAnoNum]);
+    setAbertoPara(novoAnoNum);
+    setNovoAno('');
+  }
 
   const semPercentual = anos.filter((a) => !fatorVigente(fatores, a, hojeIso));
 
@@ -190,10 +205,42 @@ export function PainelDesagio({
         );
       })}
 
+      <Card>
+        <CardContent className="pt-5">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              abrirOutraLoa();
+            }}
+            className="flex flex-wrap items-end gap-2"
+          >
+            <div>
+              <Label htmlFor="outra-loa">Outra LOA</Label>
+              <Input
+                id="outra-loa"
+                inputMode="numeric"
+                placeholder="2029"
+                value={novoAno}
+                onChange={(e) => setNovoAno(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                className="mt-1 w-28"
+              />
+            </div>
+            <Button type="submit" size="sm" variant="outline" disabled={!novoAnoValido}>
+              <Plus className="size-3.5" />
+              Definir percentual
+            </Button>
+            <p className="w-full text-xs text-neutral-500">
+              Para cadastrar o percentual de uma LOA que ainda não tem operação.
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+
       <p className="text-xs text-neutral-500">
-        O percentual de uma data é o da vigência mais recente que já começou. Vigência no passado
-        não pode ser criada: uma proposta já feita não pode passar a ser explicada por um número que
-        não foi o usado.
+        O percentual de uma data é o da vigência mais recente que já começou. Não dá pra criar
+        vigência anterior a uma que já existe, e um percentual que já foi usado em proposta não muda
+        mais: para mudar o preço, cadastre uma nova vigência. Assim uma proposta já feita continua
+        explicada pelo número que foi de fato usado.
       </p>
     </div>
   );

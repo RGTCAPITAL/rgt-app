@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionHero } from '@/components/ui/section-hero';
 import type { FatorLoa } from '@/lib/precificacao/desagio';
+import { hojeEmSaoPaulo } from '@/lib/datas';
 import { PainelDesagio, type LoaEmUso } from './painel-desagio';
 
 type LinhaFator = {
@@ -83,13 +84,10 @@ export default async function DesagioPage() {
         subtitle="Quanto a RGT paga por ano de LOA. O sistema não calcula isso — quem define é a gestão, e cada mudança fica registrada com a data em que passou a valer."
         color="amber"
       />
-      {/* hojeIso vem do servidor: num componente cliente o fuso do navegador
-          discordaria na virada do dia, bem quando a vigência muda. */}
-      <PainelDesagio
-        fatores={fatores}
-        loasEmUso={loasEmUso}
-        hojeIso={new Date().toISOString().slice(0, 10)}
-      />
+      {/* hojeIso vem do servidor e no fuso de São Paulo: no cliente o fuso do
+          navegador discordaria, e em UTC o dia vira às 21h — bem quando a
+          vigência muda. */}
+      <PainelDesagio fatores={fatores} loasEmUso={loasEmUso} hojeIso={hojeEmSaoPaulo()} />
     </div>
   );
 }
