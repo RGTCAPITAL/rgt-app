@@ -293,8 +293,7 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                   <TableHead>Cedente</TableHead>
                   <TableHead>Advogado</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead>Venc</TableHead>
-                  <TableHead>Ente</TableHead>
+                  <TableHead>Devedor</TableHead>
                   <TableHead>Judit</TableHead>
                   <TableHead>Red flags</TableHead>
                   <TableHead>Status</TableHead>
@@ -320,7 +319,9 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                         </TableCell>
                       )}
                       <TableCell className="font-mono text-xs">{r.numero_processo}</TableCell>
-                      <TableCell>
+                      {/* Nome e advogado quebram linha: em nowrap, um nome longo com OAB
+                          esticava a tabela para 1555px e ela não cabia na tela do Mac. */}
+                      <TableCell className="max-w-56 min-w-36 whitespace-normal">
                         {r.cedente_nome_provavel ? (
                           <span className="font-medium">{r.cedente_nome_provavel}</span>
                         ) : (
@@ -329,12 +330,14 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className="max-w-52 min-w-32 text-xs whitespace-normal">
                         {r.advogado_nome ? (
                           <>
-                            {r.advogado_nome}
+                            <div>{r.advogado_nome}</div>
                             {r.advogado_oab && (
-                              <span className="text-neutral-500"> · OAB {r.advogado_oab}</span>
+                              <div className="text-[10px] text-neutral-500">
+                                OAB {r.advogado_oab}
+                              </div>
                             )}
                           </>
                         ) : (
@@ -352,8 +355,14 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs">{r.vencimento_ano ?? '—'}</TableCell>
-                      <TableCell className="text-xs">{r.ente_devedor_nome ?? '—'}</TableCell>
+                      <TableCell className="text-xs">
+                        <div>{r.ente_devedor_nome ?? '—'}</div>
+                        {r.vencimento_ano && (
+                          <div className="text-[10px] text-neutral-500">
+                            venc. {r.vencimento_ano}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {j && (
                           <span
@@ -363,7 +372,7 @@ export function ProspeccaoTable({ rows, lotes, filtros, role, juditOn }: Props) 
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="max-w-36 whitespace-normal">
                         {r.red_flags.length === 0 ? (
                           <span className="text-xs text-neutral-400">—</span>
                         ) : (
