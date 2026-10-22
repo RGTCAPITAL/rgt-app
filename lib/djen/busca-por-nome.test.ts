@@ -193,6 +193,20 @@ describe('buscarPorNome — triagem pelo devedor', () => {
     expect(r.processos[0].cnj).toBe('07077053720248020001');
   });
 
+  it('quando nenhum tribunal responde, diz que a busca não aconteceu', async () => {
+    // Produção em 22/10: o CNJ bloqueou (403) todos os tribunais e a tela dizia
+    // "Nenhum processo, tente outro nome" — como se a pessoa não tivesse nada.
+    const r = await buscarPorNome('Waldiria', {
+      tribunais: ['TRT19', 'TJAL'],
+      iterador: async function* () {
+        throw new Error('o diário oficial bloqueou a consulta (HTTP 403)');
+      },
+    });
+    expect(r.processos).toHaveLength(0);
+    expect(r.avisos.some((a) => a.includes('a busca não aconteceu'))).toBe(true);
+    expect(r.avisos.some((a) => a.includes('tente só o primeiro nome'))).toBe(false);
+  });
+
   it('avisa quando nenhum processo tem devedor público', async () => {
     // Foi o que aconteceu com os 9 processos da Maria Antonia no TRT19.
     const r = await buscarPorNome('Maria Antonia dos Santos', {

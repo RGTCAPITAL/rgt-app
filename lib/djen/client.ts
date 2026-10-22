@@ -191,6 +191,17 @@ async function requestUmaVez(
 
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
+        // Página HTML no lugar do JSON é bloqueio na borda do CNJ, não erro da
+        // API — em 22/10 a produção (Vercel nos EUA) tomou 403 em todo tribunal.
+        // Repassar o HTML cru jogava "<!DOCTYPE HTML..." na tela do broker.
+        if (bodyText.trimStart().startsWith('<')) {
+          throw new DjenError(
+            'HTTP_ERRO',
+            res.status === 403
+              ? 'o diário oficial bloqueou a consulta (HTTP 403). Costuma ser acesso vindo de fora do Brasil'
+              : `o diário oficial respondeu com erro (HTTP ${res.status})`,
+          );
+        }
         throw new DjenError('HTTP_ERRO', `HTTP ${res.status}: ${bodyText.slice(0, 200)}`);
       }
 

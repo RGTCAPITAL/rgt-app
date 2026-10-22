@@ -185,6 +185,7 @@ export async function buscarPorNome(
   const tribunais = [...(opcoes.tribunais ?? TRIBUNAIS_PADRAO)];
   const iterar = opcoes.iterador ?? iterarPublicacoes;
   const avisos: string[] = [];
+  let tribunaisComFalha = 0;
 
   if (nomeLimpo.length < 3) {
     return {
@@ -221,6 +222,7 @@ export async function buscarPorNome(
       }
     } catch (erro) {
       const msg = erro instanceof DjenError ? erro.message : String(erro);
+      tribunaisComFalha += 1;
       avisos.push(`${tribunal}: falhou (${msg}). O resultado abaixo está incompleto.`);
     }
   }
@@ -239,7 +241,13 @@ export async function buscarPorNome(
 
   const comprados = processos.filter((p) => p.comprado).length;
 
-  if (processos.length === 0) {
+  if (processos.length === 0 && tribunaisComFalha === tribunais.length) {
+    // Nenhum tribunal respondeu: dizer "nenhum processo, tente outro nome"
+    // seria mentir — a busca nem aconteceu.
+    avisos.push(
+      'Nenhum tribunal respondeu, então a busca não aconteceu. Tente de novo em alguns minutos.',
+    );
+  } else if (processos.length === 0) {
     // O casamento é literal: "Waldiria Maria S Aires" não acha nada, mas
     // "Waldiria" acha. Sem este aviso o broker conclui que a pessoa não tem
     // processo, quando na verdade errou uma letra.
