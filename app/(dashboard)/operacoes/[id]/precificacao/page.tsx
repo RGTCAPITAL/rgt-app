@@ -5,6 +5,14 @@ import { createClient } from '@/lib/supabase/server';
 import { obterFatorCorrecao } from '@/lib/precificacao/correcao';
 import { montarCascata } from '@/lib/precificacao/cascata';
 import type { EntradaCascata } from '@/lib/precificacao/tipos';
+import {
+  avaliarProposta,
+  COLUNAS_FATOR_LOA,
+  fatorDaLinha,
+  sugerirPreco,
+  type LinhaFatorLoa,
+} from '@/lib/precificacao/desagio';
+import { hojeEmSaoPaulo } from '@/lib/datas';
 import type { Serie } from '@/lib/indices/series';
 import { buttonVariants } from '@/components/ui/button';
 import { FolhaCalculo } from './folha-calculo';
@@ -49,6 +57,7 @@ type OperacaoPrecificacao = {
   preco_aceito: boolean | null;
   preco_proposto_em: string | null;
   preco_justificativa: string | null;
+  fator_loa_id: string | null;
   definidor: { nome: string } | null;
   etapa_atual: string;
   ente: { nome: string } | null;
@@ -71,7 +80,7 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
        data_base, indice_correcao, atualizar_valores_ate,
        pss_ativo, pss_pct, pss_valor, rra_ativo, rra_meses,
        retencao_honorarios_pct, percentual_aquisicao, etapa_atual,
-       preco_proposto, preco_aceito, preco_proposto_em, preco_justificativa,
+       preco_proposto, preco_aceito, preco_proposto_em, preco_justificativa, fator_loa_id,
        definidor:usuarios!operacoes_preco_proposto_por_fkey(nome),
        ente:entes_devedores(nome)`,
     )
@@ -88,7 +97,7 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
   const role = usuario?.perfil?.slug ?? '';
   const podeEditar = ['admin', 'gestao'].includes(role);
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeEmSaoPaulo();
   const dataFinal = op.atualizar_valores_ate ?? hoje;
 
   // Sem data-base ou sem índice não há o que corrigir. A tela mostra o
@@ -151,6 +160,36 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
 
   const cascata = faltaBase.length === 0 ? montarCascata(entrada) : null;
 
+  // O percentual da LOA é do Renato, não do sistema (RGT-96). Aqui ele só é
+  // aplicado: a sugestão sai do fator vigente hoje, e a situação diz se a
+  // proposta já feita ficou pra trás depois que ele mudou o percentual.
+  const { data: linhasFator } = op.loa
+    ? await supabase
+        .from('fatores_loa')
+        .select(COLUNAS_FATOR_LOA)
+        .eq('loa_ano', op.loa)
+        .returns<LinhaFatorLoa[]>()
+    : { data: [] as LinhaFatorLoa[] };
+  const fatores = (linhasFator ?? []).map(fatorDaLinha);
+
+  const situacao = avaliarProposta({
+    fatores,
+    loaAno: op.loa,
+    fatorUsadoId: op.fator_loa_id,
+    temProposta: op.preco_proposto !== null,
+    hojeIso: hoje,
+  });
+  const fatorAtual = 'atual' in situacao ? situacao.atual : null;
+  const sugestao = fatorAtual
+    ? sugerirPreco({
+        fator: fatorAtual,
+        brutoAtualizado: cascata?.brutoAtualizado ?? null,
+        liquido: cascata?.liquidoDisponivel ?? null,
+        percentualAquisicao: op.percentual_aquisicao ?? 100,
+        provisorio: cascata?.provisorio ?? false,
+      })
+    : null;
+
   return (
     <div className="mx-auto max-w-5xl">
       <Link
@@ -190,6 +229,7 @@ export default async function PrecificacaoPage({ params }: { params: Promise<{ i
         competenciaFinal={competenciaFinal}
         truncado={truncado}
         podeEditar={podeEditar}
+        desagio={{ situacao, sugestao }}
       />
     </div>
   );

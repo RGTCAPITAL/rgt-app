@@ -1,6 +1,7 @@
 import { AlertTriangle, FileText, Calculator, Pencil, Hash } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { LinhaCascata, OrigemValor, ResultadoCascata } from '@/lib/precificacao/tipos';
+import type { PrecoSugerido, SituacaoProposta } from '@/lib/precificacao/desagio';
 import { CampoPreco } from './campo-preco';
 
 /**
@@ -170,6 +171,7 @@ export function FolhaCalculo({
   competenciaFinal,
   truncado,
   podeEditar,
+  desagio,
 }: {
   operacao: Operacao;
   cascata: ResultadoCascata | null;
@@ -180,6 +182,7 @@ export function FolhaCalculo({
   competenciaFinal: string | null;
   truncado: boolean;
   podeEditar: boolean;
+  desagio: { situacao: SituacaoProposta; sugestao: PrecoSugerido | null };
 }) {
   const liquido = cascata?.liquidoDisponivel ?? null;
 
@@ -312,7 +315,7 @@ export function FolhaCalculo({
                 </div>
               </div>
 
-              {/* O deságio ainda não calcula sozinho — o preço é definido aqui. */}
+              {/* O percentual da LOA sugere; quem define o preço é quem salva (RGT-97). */}
               <CampoPreco
                 operacaoId={operacao.id}
                 precoAtual={operacao.precoProposto}
@@ -322,6 +325,8 @@ export function FolhaCalculo({
                 definidoEm={operacao.precoDefinidoEm}
                 definidoPor={operacao.precoDefinidoPor}
                 podeEditar={podeEditar}
+                loa={operacao.loa}
+                desagio={desagio}
               />
             </CardContent>
           </Card>
