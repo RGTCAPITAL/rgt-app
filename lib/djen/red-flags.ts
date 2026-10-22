@@ -154,6 +154,13 @@ export const REDFLAG_8A_BLOQUEIO_DEVEDOR: RedFlagDef = {
     /(bloqueio\s+(?:d[ao]s?\s+contas?|de\s+cr[ée]dito|do\s+levantamento)|sequestro\s+d[eo]\s+(?:valor|verba|numer[áa]rio))/gi,
 };
 
+/**
+ * "Após o trânsito em julgado" é a frase mais comum de sentença e fala do
+ * futuro: o processo ainda NÃO transitou. Sem o lookbehind, o TRT19
+ * 0000952-62.2024.5.19.0008 ganhava selo de trânsito com duas publicações que
+ * só diziam "após o trânsito em julgado" (RGT-95). Pra precatório é o pior
+ * erro possível — trânsito é o portão do ofício requisitório.
+ */
 export const REDFLAG_9_TRANSITO_JULGADO: RedFlagDef = {
   codigo: '9',
   descricao: 'Trânsito em julgado certificado',
@@ -161,7 +168,7 @@ export const REDFLAG_9_TRANSITO_JULGADO: RedFlagDef = {
   cor: 'cinza',
   precisao: 0.95,
   regex:
-    /(tr[âa]nsito\s+em\s+julgad[oa]|certifica[çc][ãa]o\s+do\s+tr[âa]nsito|certid[ãa]o\s+de\s+tr[âa]nsito|transitad[oa]\s+em\s+julgad[oa])/gi,
+    /((?<!\b(?:ap[óo]s|depois\s+d[oe]|at[ée]|antes\s+d[oe]|com|quando\s+d[oe]|aguard\w*(?:-se)?)\s+(?:o\s+)?)tr[âa]nsito\s+em\s+julgad[oa]|certifica[çc][ãa]o\s+do\s+tr[âa]nsito|certid[ãa]o\s+de\s+tr[âa]nsito|transitad[oa]\s+em\s+julgad[oa])/gi,
 };
 
 export const REDFLAG_10_RECURSO_PENDENTE: RedFlagDef = {

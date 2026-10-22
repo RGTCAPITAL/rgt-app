@@ -68,6 +68,40 @@ describe('detectarRedFlags', () => {
     expect(f?.contexto).toContain('Sem custas');
   });
 
+  it('trânsito certificado conta', () => {
+    const casos = [
+      'Certifico o trânsito em julgado da sentença em 10/03/2025.',
+      'Ocorrido o trânsito em julgado, intime-se o exequente.',
+      'sentença transitada em julgado em 12/02/2025',
+      'Juntada a certidão de trânsito em julgado.',
+    ];
+    for (const texto of casos) {
+      expect(
+        detectarRedFlags(texto).some((f) => f.codigo === '9'),
+        texto,
+      ).toBe(true);
+    }
+  });
+
+  it('trânsito que ainda vai acontecer não conta', () => {
+    // As duas primeiras são as publicações reais do TRT19 0000952-62.2024.5.19.0008,
+    // que ganhavam selo de trânsito sem ter transitado (RGT-95).
+    const casos = [
+      'determinando a remessa dos autos à Justiça Comum Estadual para apreciação da lide, após o trânsito em julgado, em arquivo no formato PDF',
+      'para condenar o reclamado a pagar ao espólio, após o trânsito em julgado da sentença, já acrescido de juros',
+      'Com o trânsito em julgado, arquivem-se os autos.',
+      'Aguarde-se o trânsito em julgado.',
+      'suspenso até o trânsito em julgado da ação coletiva',
+      'depois do trânsito em julgado, expeça-se o ofício',
+    ];
+    for (const texto of casos) {
+      expect(
+        detectarRedFlags(texto).some((f) => f.codigo === '9'),
+        texto,
+      ).toBe(false);
+    }
+  });
+
   it('devolve vazio pra texto sem sinal', () => {
     expect(detectarRedFlags('')).toEqual([]);
     expect(detectarRedFlags('Manutenção da sentença.')).toEqual([]);
