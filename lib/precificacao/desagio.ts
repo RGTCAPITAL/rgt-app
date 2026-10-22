@@ -30,6 +30,35 @@ export type FatorLoa = {
   observacao: string | null;
 };
 
+/** Como a linha de `fatores_loa` chega do PostgREST. */
+export type LinhaFatorLoa = {
+  id: string;
+  loa_ano: number;
+  /** `numeric` chega como string no PostgREST. */
+  percentual: string | number;
+  base: BaseDesagio;
+  vigente_desde: string;
+  observacao: string | null;
+};
+
+/** Colunas pra pedir no select, na mesma ordem do tipo acima. */
+export const COLUNAS_FATOR_LOA = 'id, loa_ano, percentual, base, vigente_desde, observacao';
+
+/**
+ * Linha do banco → FatorLoa. Converter o percentual aqui evita que a
+ * comparação vire ordenação alfabética ("100" < "55") em quem consumir.
+ */
+export function fatorDaLinha(l: LinhaFatorLoa): FatorLoa {
+  return {
+    id: l.id,
+    loaAno: l.loa_ano,
+    percentual: Number(l.percentual),
+    base: l.base,
+    vigenteDesde: l.vigente_desde,
+    observacao: l.observacao,
+  };
+}
+
 /**
  * O fator aplicável a uma LOA numa data.
  *
@@ -66,6 +95,46 @@ export function precoPeloFator(
   const valor = fator.base === 'face' ? valores.face : valores.liquido;
   if (valor === null || !Number.isFinite(valor) || valor <= 0) return null;
   return (valor * fator.percentual) / 100;
+}
+
+export type PrecoSugerido =
+  | {
+      ok: true;
+      /** Em reais, arredondado no centavo — é o número que vai pro campo. */
+      preco: number;
+      fator: FatorLoa;
+      /** O valor sobre o qual o percentual incidiu, já antes do % de aquisição. */
+      valorBase: number;
+      percentualAquisicao: number;
+      /** O líquido ainda é faixa: a sugestão é estimativa, não proposta. */
+      provisorio: boolean;
+    }
+  /** O valor que a base exige não foi calculado (falta dado na cascata). */
+  | { ok: false; motivo: 'base_indisponivel'; fator: FatorLoa };
+
+/**
+ * O preço que a tela de precificação sugere (RGT-97).
+ *
+ * `face` é o bruto atualizado até a data do cálculo, não o nominal da
+ * data-base: é o valor cheio do crédito no dia da proposta, que é o que o
+ * cedente compara. O percentual de aquisição (100 = crédito inteiro) entra por
+ * último, porque compra parcial reduz o objeto, não o percentual da LOA.
+ */
+export function sugerirPreco(args: {
+  fator: FatorLoa;
+  brutoAtualizado: number | null;
+  liquido: number | null;
+  /** `operacoes.percentual_aquisicao`, 0–100. */
+  percentualAquisicao: number;
+  provisorio: boolean;
+}): PrecoSugerido {
+  const { fator, brutoAtualizado, liquido, percentualAquisicao, provisorio } = args;
+  const sobreBase = precoPeloFator(fator, { face: brutoAtualizado, liquido });
+  if (sobreBase === null) return { ok: false, motivo: 'base_indisponivel', fator };
+
+  const valorBase = fator.base === 'face' ? brutoAtualizado! : liquido!;
+  const preco = Math.round(sobreBase * percentualAquisicao) / 100;
+  return { ok: true, preco, fator, valorBase, percentualAquisicao, provisorio };
 }
 
 export type SituacaoProposta =
@@ -136,9 +205,18 @@ export function avaliarProposta(args: {
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-/** '2026-10-01' → 'out/2026'. */
+/**
+ * '2026-10-01' → 'out/2026'; '2026-10-22' → '22/10/2026'.
+ *
+ * O mês sozinho só basta quando a vigência começa no dia 1º. Uma mudança no
+ * meio do mês aparecia como "out/2026" ao lado da de 1º de outubro, e o aviso
+ * de proposta desatualizada dizia "feita com 55% (out/2026), hoje 65% desde
+ * out/2026" — duas datas iguais pra percentuais diferentes (RGT-97).
+ */
 export function fmtVigencia(iso: string): string {
-  return `${MESES[Number(iso.slice(5, 7)) - 1]}/${iso.slice(0, 4)}`;
+  const [ano, mes, dia] = iso.slice(0, 10).split('-');
+  if (dia !== '01') return `${dia}/${mes}/${ano}`;
+  return `${MESES[Number(mes) - 1]}/${ano}`;
 }
 
 /** 55 → '55%'; 62.5 → '62,5%'. Sem casa decimal quando é inteiro. */

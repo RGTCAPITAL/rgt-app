@@ -1,19 +1,9 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SectionHero } from '@/components/ui/section-hero';
-import type { FatorLoa } from '@/lib/precificacao/desagio';
+import { COLUNAS_FATOR_LOA, fatorDaLinha, type LinhaFatorLoa } from '@/lib/precificacao/desagio';
 import { hojeEmSaoPaulo } from '@/lib/datas';
 import { PainelDesagio, type LoaEmUso } from './painel-desagio';
-
-type LinhaFator = {
-  id: string;
-  loa_ano: number;
-  percentual: string | number;
-  base: 'face' | 'liquido';
-  vigente_desde: string;
-  observacao: string | null;
-  created_at: string;
-};
 
 export default async function DesagioPage() {
   const supabase = await createClient();
@@ -41,21 +31,12 @@ export default async function DesagioPage() {
 
   const { data: linhas } = await supabase
     .from('fatores_loa')
-    .select('id, loa_ano, percentual, base, vigente_desde, observacao, created_at')
+    .select(COLUNAS_FATOR_LOA)
     .order('loa_ano')
     .order('vigente_desde', { ascending: false })
-    .returns<LinhaFator[]>();
+    .returns<LinhaFatorLoa[]>();
 
-  // `numeric` chega como string no PostgREST; converter aqui evita que a
-  // comparação de percentual vire ordenação alfabética na tela.
-  const fatores: FatorLoa[] = (linhas ?? []).map((l) => ({
-    id: l.id,
-    loaAno: l.loa_ano,
-    percentual: Number(l.percentual),
-    base: l.base,
-    vigenteDesde: l.vigente_desde,
-    observacao: l.observacao,
-  }));
+  const fatores = (linhas ?? []).map(fatorDaLinha);
 
   // Quais LOAs a carteira realmente tem. Sem isso a tela seria um formulário
   // vazio pedindo um ano que ele teria que lembrar de cabeça — e uma LOA sem

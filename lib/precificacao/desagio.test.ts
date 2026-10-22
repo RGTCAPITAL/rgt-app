@@ -5,6 +5,7 @@ import {
   fmtPercentual,
   fmtVigencia,
   precoPeloFator,
+  sugerirPreco,
   type FatorLoa,
 } from './desagio';
 
@@ -108,6 +109,56 @@ describe('precoPeloFator', () => {
   });
 });
 
+describe('sugerirPreco', () => {
+  const VALORES = { brutoAtualizado: 1_000_000, liquido: 600_000, provisorio: false };
+
+  it('líquido × percentual da LOA, crédito inteiro', () => {
+    const r = sugerirPreco({ fator: OUT, ...VALORES, percentualAquisicao: 100 });
+    expect(r).toMatchObject({ ok: true, preco: 330_000, valorBase: 600_000 });
+  });
+
+  it('face usa o bruto atualizado', () => {
+    const r = sugerirPreco({
+      fator: { ...OUT, base: 'face' },
+      ...VALORES,
+      percentualAquisicao: 100,
+    });
+    expect(r).toMatchObject({ ok: true, preco: 550_000, valorBase: 1_000_000 });
+  });
+
+  it('compra parcial reduz o preço, não o percentual da LOA', () => {
+    const r = sugerirPreco({ fator: OUT, ...VALORES, percentualAquisicao: 50 });
+    expect(r).toMatchObject({ ok: true, preco: 165_000 });
+  });
+
+  it('arredonda no centavo', () => {
+    const r = sugerirPreco({
+      fator: { ...OUT, percentual: 62.5 },
+      brutoAtualizado: null,
+      liquido: 123_456.78,
+      provisorio: false,
+      percentualAquisicao: 100,
+    });
+    expect(r).toMatchObject({ ok: true, preco: 77_160.49 });
+  });
+
+  it('sem o valor que a base exige, não inventa preço', () => {
+    const r = sugerirPreco({
+      fator: OUT,
+      brutoAtualizado: 1_000_000,
+      liquido: null,
+      provisorio: false,
+      percentualAquisicao: 100,
+    });
+    expect(r).toEqual({ ok: false, motivo: 'base_indisponivel', fator: OUT });
+  });
+
+  it('líquido provisório passa adiante como estimativa', () => {
+    const r = sugerirPreco({ fator: OUT, ...VALORES, provisorio: true, percentualAquisicao: 100 });
+    expect(r).toMatchObject({ ok: true, provisorio: true });
+  });
+});
+
 describe('avaliarProposta', () => {
   const BASE = { fatores: TODOS, hojeIso: '2026-10-20' };
 
@@ -200,6 +251,11 @@ describe('formatação', () => {
   it('vigência em mês abreviado', () => {
     expect(fmtVigencia('2026-10-01')).toBe('out/2026');
     expect(fmtVigencia('2027-01-01')).toBe('jan/2027');
+  });
+
+  it('vigência no meio do mês mostra o dia, senão empata com a do dia 1º', () => {
+    expect(fmtVigencia('2026-10-22')).toBe('22/10/2026');
+    expect(fmtVigencia('2026-10-22')).not.toBe(fmtVigencia('2026-10-01'));
   });
 
   it('percentual inteiro sem casa decimal', () => {
