@@ -225,9 +225,15 @@ export async function buscarPorNome(
     }
   }
 
+  // Entre os que a RGT compra, federal e estadual valem o mesmo: o que separa
+  // é estar vivo. Ordenar por esfera punha um processo arquivado de 2009 (de
+  // um homônimo, no TRF5) acima do TJAL com publicação de 2026 (RGT-95).
   const processos = [...acc.values()].map(finalizar).sort((x, y) => {
-    const porClasse = ordemDeRelevancia(x.classe) - ordemDeRelevancia(y.classe);
-    if (porClasse !== 0) return porClasse;
+    if (x.comprado !== y.comprado) return x.comprado ? -1 : 1;
+    if (!x.comprado) {
+      const porClasse = ordemDeRelevancia(x.classe) - ordemDeRelevancia(y.classe);
+      if (porClasse !== 0) return porClasse;
+    }
     return y.ultimaPublicacao.localeCompare(x.ultimaPublicacao);
   });
 

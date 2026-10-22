@@ -160,6 +160,39 @@ describe('buscarPorNome — triagem pelo devedor', () => {
     expect(r.comprados).toBe(1);
   });
 
+  it('entre devedores públicos, o mais recente vem primeiro, qualquer que seja a esfera', async () => {
+    // Na tela real, o TRF5 arquivado de 2009 (outra Waldiria) aparecia acima do
+    // TJAL vivo de 2026 só por ser federal.
+    const r = await buscarPorNome('Waldiria', {
+      tribunais: ['TJAL', 'TRF5'],
+      iterador: iteradorDe([
+        pub({
+          cnj: '00536463120094050000',
+          tribunal: 'TRF5',
+          data: '2025-01-14',
+          orgao: 'Seção de Arquivo e Documentação',
+          partes: [
+            ['WALDIRIA GONÇALVES DE MEDEIROS', 'A'],
+            ['UNIÃO', 'P'],
+          ],
+        }),
+        pub({
+          cnj: '07077053720248020001',
+          tribunal: 'TJAL',
+          data: '2026-05-14',
+          orgao: '3ª Câmara Cível',
+          partes: [
+            ['WALDIRIA MARIA SIQUEIRA AYRES', 'A'],
+            ['ESTADO DE ALAGOAS', 'P'],
+          ],
+        }),
+      ]),
+    });
+
+    expect(r.processos.map((p) => p.classe)).toEqual(['estadual', 'federal']);
+    expect(r.processos[0].cnj).toBe('07077053720248020001');
+  });
+
   it('avisa quando nenhum processo tem devedor público', async () => {
     // Foi o que aconteceu com os 9 processos da Maria Antonia no TRT19.
     const r = await buscarPorNome('Maria Antonia dos Santos', {

@@ -134,7 +134,15 @@ export function BuscaForm() {
 
       <Card className="mt-6">
         <CardContent className="pt-6">
-          <form action={onSubmit} className="space-y-4">
+          {/* onSubmit, não action: com action o React 19 limpa o form ao terminar, e o
+              broker perde o nome que acabou de testar e os tribunais que desmarcou. */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSubmit(new FormData(e.currentTarget));
+            }}
+            className="space-y-4"
+          >
             <div>
               <Label htmlFor="nome">Nome da pessoa</Label>
               <Input
@@ -204,7 +212,7 @@ export function BuscaForm() {
 
           {resultado.processos.length > 0 && (
             <p className="text-sm text-neutral-600">
-              {resultado.processos.length} processo
+              <strong>&ldquo;{resultado.nome}&rdquo;</strong>: {resultado.processos.length} processo
               {resultado.processos.length === 1 ? '' : 's'} em {resultado.totalPublicacoes}{' '}
               publicações · <strong>{comprados.length}</strong> com devedor público
             </p>
