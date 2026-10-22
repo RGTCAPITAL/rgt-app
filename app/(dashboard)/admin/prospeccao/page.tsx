@@ -18,6 +18,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
 import { ProspeccaoTable } from './client-table';
+import { CartaoBuscaNome } from './cartao-busca-nome';
 
 const PAGE_SIZE = 200;
 
@@ -138,6 +139,8 @@ export default async function ProspeccaoPage({
           </div>
         }
       />
+
+      <CartaoBuscaNome />
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiTile

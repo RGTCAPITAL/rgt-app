@@ -9,7 +9,12 @@ import { BuscaForm } from './busca-form';
  */
 export const maxDuration = 300;
 
-export default async function BuscarPorNomePage() {
+export default async function BuscarPorNomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ nome?: string }>;
+}) {
+  const { nome } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -34,5 +39,6 @@ export default async function BuscarPorNomePage() {
     );
   }
 
-  return <BuscaForm />;
+  // Vindo do cartão da Prospecção (?nome=...): a busca começa sozinha.
+  return <BuscaForm nomeInicial={nome?.trim() || undefined} />;
 }

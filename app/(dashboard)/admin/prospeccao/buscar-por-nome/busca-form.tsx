@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { AlertTriangle, Building2, Info, Landmark, Search, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -102,7 +102,7 @@ function LinhaProcesso({ p }: { p: ProcessoEncontrado }) {
   );
 }
 
-export function BuscaForm() {
+export function BuscaForm({ nomeInicial }: { nomeInicial?: string }) {
   const [resultado, setResultado] = useState<ResultadoBusca | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarResto, setMostrarResto] = useState(false);
@@ -120,6 +120,18 @@ export function BuscaForm() {
       }
     });
   }
+
+  // Chegou com ?nome= (cartão da Prospecção): roda a busca uma vez, nos três
+  // tribunais. O ref segura o double-invoke do StrictMode em dev.
+  const jaBuscou = useRef(false);
+  useEffect(() => {
+    if (!nomeInicial || jaBuscou.current) return;
+    jaBuscou.current = true;
+    const fd = new FormData();
+    fd.set('nome', nomeInicial);
+    for (const t of TRIBUNAIS) fd.append('tribunais', t.sigla);
+    onSubmit(fd);
+  }, [nomeInicial]);
 
   const comprados = resultado?.processos.filter((p) => p.comprado) ?? [];
   const resto = resultado?.processos.filter((p) => !p.comprado) ?? [];
@@ -148,6 +160,7 @@ export function BuscaForm() {
               <Input
                 id="nome"
                 name="nome"
+                defaultValue={nomeInicial}
                 required
                 minLength={3}
                 placeholder="Waldiria Maria Siqueira Ayres"
@@ -226,9 +239,16 @@ export function BuscaForm() {
             </div>
           )}
 
-          {resto.length > 0 && !mostrarResto && (
-            <Button variant="outline" onClick={() => setMostrarResto(true)} className="w-full">
-              Mostrar os {resto.length} sem devedor público
+          {/* Um botão só, que alterna: antes ele mostrava e sumia, sem jeito de
+              esconder de novo a lista de quem não vira precatório. */}
+          {resto.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setMostrarResto((v) => !v)}
+              className="w-full"
+              aria-expanded={mostrarResto}
+            >
+              {mostrarResto ? 'Esconder' : 'Mostrar'} os {resto.length} sem devedor público
             </Button>
           )}
 
