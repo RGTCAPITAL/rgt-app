@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { AlertTriangle, Building2, Info, Landmark, Search, User } from 'lucide-react';
+import {
+  AlertTriangle,
+  Building2,
+  Copy,
+  Info,
+  Landmark,
+  Search,
+  User,
+  UserPlus,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +23,7 @@ import { cn } from '@/lib/utils';
 import type { ClasseDevedor } from '@/lib/djen/devedor-publico';
 import type { ProcessoEncontrado, ResultadoBusca } from '@/lib/djen/busca-por-nome';
 import { buscarNomeNoDjen } from './actions';
+import { DialogCriarLead, type ProcessoParaLead } from './dialog-criar-lead';
 
 const TRIBUNAIS = [
   { sigla: 'TRT19', rotulo: 'TRT19 — trabalhista de Alagoas' },
@@ -39,7 +50,13 @@ function mascararCnj(cnj: string): string {
   return `${cnj.slice(0, 7)}-${cnj.slice(7, 9)}.${cnj.slice(9, 13)}.${cnj.slice(13, 14)}.${cnj.slice(14, 16)}.${cnj.slice(16)}`;
 }
 
-function LinhaProcesso({ p }: { p: ProcessoEncontrado }) {
+function LinhaProcesso({
+  p,
+  onCriarLead,
+}: {
+  p: ProcessoEncontrado;
+  onCriarLead?: (p: ProcessoParaLead) => void;
+}) {
   const selo = SELO[p.classe];
   return (
     <div
@@ -98,6 +115,31 @@ function LinhaProcesso({ p }: { p: ProcessoEncontrado }) {
           ))}
         </div>
       )}
+
+      {/* Próximo passo: antes a busca só informava, e o advogado redigitava
+          tudo no CRM. Só em processo contra governo — os outros não viram
+          precatório, e um botão ali só convidaria ao erro. */}
+      {p.comprado && onCriarLead && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => onCriarLead({ ...p, cnjExibido: mascararCnj(p.cnj) })}>
+            <UserPlus className="size-3.5" />
+            Criar lead
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard
+                .writeText(mascararCnj(p.cnj))
+                .then(() => toast.success('Número copiado'))
+                .catch(() => toast.error('Não consegui copiar. Selecione o número e copie à mão.'));
+            }}
+          >
+            <Copy className="size-3.5" />
+            Copiar nº
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -107,6 +149,7 @@ export function BuscaForm({ nomeInicial }: { nomeInicial?: string }) {
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarResto, setMostrarResto] = useState(false);
   const [pendente, iniciar] = useTransition();
+  const [paraLead, setParaLead] = useState<ProcessoParaLead | null>(null);
 
   function onSubmit(formData: FormData) {
     setErro(null);
@@ -234,7 +277,11 @@ export function BuscaForm({ nomeInicial }: { nomeInicial?: string }) {
           {comprados.length > 0 && (
             <div className="space-y-3">
               {comprados.map((p) => (
-                <LinhaProcesso key={`${p.siglaTribunal}-${p.cnj}`} p={p} />
+                <LinhaProcesso
+                  key={`${p.siglaTribunal}-${p.cnj}`}
+                  p={p}
+                  onCriarLead={setParaLead}
+                />
               ))}
             </div>
           )}
@@ -261,6 +308,12 @@ export function BuscaForm({ nomeInicial }: { nomeInicial?: string }) {
           )}
         </div>
       )}
+
+      <DialogCriarLead
+        key={paraLead?.cnj ?? 'fechado'}
+        processo={paraLead}
+        onFechar={() => setParaLead(null)}
+      />
     </div>
   );
 }
