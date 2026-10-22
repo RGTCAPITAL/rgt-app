@@ -16,7 +16,12 @@
 import { maskCNJ, maskCPF } from '@/lib/masks';
 import { TRIBUNAIS_POR_ESFERA, type Esfera } from '@/lib/tribunais';
 import { titleCase } from '@/lib/formatters';
-import { ESPECIES, NATUREZAS, TIPOS_ATIVO } from '@/app/(dashboard)/operacoes/nova/schemas';
+import {
+  ESPECIES,
+  INDICES_CORRECAO,
+  NATUREZAS,
+  TIPOS_ATIVO,
+} from '@/app/(dashboard)/operacoes/nova/schemas';
 import { decodificarCnj, digitosCnj } from './cnj';
 import {
   CAMPO_AUSENTE,
@@ -133,6 +138,27 @@ function parseOpcao(
   if (!v) return null;
   const alvo = semAcento(v).replace(/[\s-]+/g, '_');
   return opcoes.find((o) => o.value === alvo || semAcento(o.label) === semAcento(v)) ?? null;
+}
+
+/**
+ * Índice de correção como o ofício escreve → valor do select.
+ *
+ * Os ofícios dizem "IPCA-E", que nos cálculos judiciais é o IPCA-15 mensal
+ * (Manual de Cálculos do CJF). `parseOpcao` leria isso como "ipca_e" e
+ * rejeitaria; aqui o sinônimo é explícito. "Selic (EC 113/2021)" também passa.
+ */
+export function parseIndice(v: string | null): string | null {
+  if (!v) return null;
+  const t = semAcento(v)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  if (/\bipca ?(e|15)\b/.test(t)) return 'ipca_15';
+  if (/\bselic\b/.test(t)) return 'selic';
+  if (/\binpc\b/.test(t)) return 'inpc';
+  if (/\bipca\b/.test(t)) return 'ipca';
+  if (/\bpoupanca\b/.test(t)) return 'poupanca';
+  if (/\b(tr|taxa referencial)\b/.test(t)) return 'tr';
+  return null;
 }
 
 // ------------------------------------------------------------- resolvers
@@ -335,6 +361,14 @@ export function montarRevisao(
       exibir: fmtData,
     },
     {
+      id: 'indice_correcao',
+      passo: 1,
+      label: 'Índice de correção',
+      campo: ler('indice_correcao'),
+      parse: parseIndice,
+      exibir: (v) => INDICES_CORRECAO.find((i) => i.value === v)?.label ?? v,
+    },
+    {
       id: 'data_autuacao',
       passo: 1,
       label: 'Data de autuação',
@@ -476,6 +510,7 @@ const ORDEM = [
   'ente_devedor_id',
   'tribunal',
   'data_base',
+  'indice_correcao',
   'data_autuacao',
   'loa',
   'valor_principal',

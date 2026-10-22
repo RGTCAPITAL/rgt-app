@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { SectionHero } from '@/components/ui/section-hero';
 import { DEF_SERIES, SERIES } from '@/lib/indices/series';
 import { IndicesPainel, type ResumoSerie } from './indices-painel';
+import { hojeEmSaoPaulo } from '@/lib/datas';
 
 export default async function IndicesPage() {
   const supabase = await createClient();
@@ -72,7 +73,7 @@ export default async function IndicesPage() {
       {/* hojeIso vem do servidor de propósito: `new Date()` num componente
           cliente roda no fuso do navegador e pode discordar do servidor na
           virada do mês — justamente quando o aviso de frescor mais importa. */}
-      <IndicesPainel resumos={resumos} hojeIso={new Date().toISOString().slice(0, 10)} />
+      <IndicesPainel resumos={resumos} hojeIso={hojeEmSaoPaulo()} />
     </div>
   );
 }

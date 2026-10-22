@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { criarTarefa, atualizarStatusTarefa } from './tarefas-actions';
 import { fmtDataBR } from '@/lib/formatters';
+import { hojeEmSaoPaulo } from '@/lib/datas';
 
 const LABEL_STATUS: Record<string, string> = {
   pendente: 'reaberta',
@@ -43,7 +44,7 @@ const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
 
 function estaAtrasada(prazo: string | null, status: string): boolean {
   if (!prazo || status === 'concluida' || status === 'cancelada') return false;
-  return prazo < new Date().toISOString().slice(0, 10);
+  return prazo < hojeEmSaoPaulo();
 }
 
 type Props = {

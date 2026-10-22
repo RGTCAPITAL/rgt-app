@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   montarRevisao,
   parseData,
+  parseIndice,
   parseLoa,
   parsePercentual,
   parseValor,
@@ -83,6 +84,24 @@ describe('parseLoa e parsePercentual', () => {
   it('recusa percentual acima de 100', () => {
     expect(parsePercentual('20')).toBe('20');
     expect(parsePercentual('150')).toBeNull();
+  });
+});
+
+describe('parseIndice', () => {
+  it('lê o índice como os ofícios escrevem', () => {
+    expect(parseIndice('Selic (EC 113/2021)')).toBe('selic');
+    expect(parseIndice('IPCA-E')).toBe('ipca_15');
+    expect(parseIndice('ipca_e')).toBe('ipca_15');
+    expect(parseIndice('IPCA-15')).toBe('ipca_15');
+    expect(parseIndice('IPCA')).toBe('ipca');
+    expect(parseIndice('INPC')).toBe('inpc');
+    expect(parseIndice('Poupança')).toBe('poupanca');
+    expect(parseIndice('Taxa Referencial')).toBe('tr');
+  });
+
+  it('não chuta quando o texto não é índice', () => {
+    expect(parseIndice('conforme sentença')).toBeNull();
+    expect(parseIndice(null)).toBeNull();
   });
 });
 

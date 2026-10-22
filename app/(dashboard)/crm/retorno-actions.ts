@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { hojeEmSaoPaulo, somarDias } from '@/lib/datas';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -27,9 +28,9 @@ type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 function resolverPrazo(atalho: string): string | null {
   const dias: Record<string, number> = { hoje: 0, amanha: 1, '2d': 2, '1s': 7, '15d': 15 };
   if (!(atalho in dias)) return null;
-  const d = new Date();
-  d.setDate(d.getDate() + dias[atalho]!);
-  return d.toISOString().slice(0, 10);
+  // Em UTC, "hoje" depois das 21h em Maceió já era amanhã, e o retorno caía
+  // um dia depois do que o broker clicou.
+  return somarDias(hojeEmSaoPaulo(), dias[atalho]!);
 }
 
 export async function agendarRetornoLead(
@@ -99,7 +100,13 @@ export async function concluirRetorno(tarefaId: string): Promise<Result> {
 
   const { error } = await supabase
     .from('tarefas')
-    .update({ status: 'concluida', concluida_em: new Date().toISOString() })
+    // concluida_por_id é exigido pelo CHECK tarefas_concluida_coerencia: sem ele
+    // o update falhava, e por isso nenhuma tela chegou a usar esta ação.
+    .update({
+      status: 'concluida',
+      concluida_em: new Date().toISOString(),
+      concluida_por_id: user.id,
+    })
     .eq('id', tarefaId);
 
   if (error) return { ok: false, error: error.message };

@@ -7,6 +7,18 @@
  *
  * `agora` entra por parâmetro pra dar pra testar a virada do dia.
  */
+/**
+ * Soma dias a uma data ISO (YYYY-MM-DD), sem passar por fuso nenhum.
+ *
+ * Feito em UTC de propósito: a data entra e sai como dia de calendário, então
+ * o horário de verão ou o fuso de quem roda não podem empurrar pro dia errado.
+ */
+export function somarDias(iso: string, dias: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
 export function hojeEmSaoPaulo(agora: Date = new Date()): string {
   // en-CA formata como YYYY-MM-DD, que é exatamente o ISO de data.
   return new Intl.DateTimeFormat('en-CA', {

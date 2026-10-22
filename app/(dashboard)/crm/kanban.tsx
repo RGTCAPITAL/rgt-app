@@ -26,6 +26,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { hojeEmSaoPaulo } from '@/lib/datas';
 
 export type LeadCard = {
   id: string;
@@ -84,7 +85,7 @@ function proximoRetornoDe(
   const comPrazo = retornos.filter((r) => r.prazo).sort((a, b) => a.prazo!.localeCompare(b.prazo!));
   const r = comPrazo[0];
   if (!r) return null;
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeEmSaoPaulo();
   const [ano, mes, dia] = r.prazo!.split('-');
   return {
     titulo: r.titulo,

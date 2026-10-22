@@ -20,6 +20,20 @@ export const NATUREZAS = [
   { value: 'tributaria', label: 'Tributária' },
 ] as const;
 
+/**
+ * Índice que corrige o crédito a partir da data-base, como o ofício manda.
+ * Sem ele a precificação não calcula — e nenhuma tela gravava isso até a
+ * revisão de 22/10: toda operação nova travava em "falta índice de correção".
+ */
+export const INDICES_CORRECAO = [
+  { value: 'selic', label: 'Selic' },
+  { value: 'ipca', label: 'IPCA' },
+  { value: 'ipca_15', label: 'IPCA-E (IPCA-15)' },
+  { value: 'inpc', label: 'INPC' },
+  { value: 'poupanca', label: 'Poupança' },
+  { value: 'tr', label: 'TR' },
+] as const;
+
 export const ESPECIES = [
   { value: 'credito_total', label: 'Crédito total (servidor + advogado)' },
   { value: 'apenas_principal', label: 'Apenas principal' },
@@ -76,6 +90,9 @@ export const step1Schema = z.object({
   ente_devedor_id: z.string().uuid('Selecione o ente devedor'),
   especie: z.enum(['credito_total', 'apenas_principal', 'honorarios']),
   data_base: z.string().min(1, 'Data-base é obrigatória'),
+  indice_correcao: z.enum(['selic', 'ipca', 'ipca_15', 'inpc', 'poupanca', 'tr'], {
+    message: 'Escolha o índice de correção que o ofício indica',
+  }),
   data_autuacao: z.string().optional().or(z.literal('')),
   loa: z
     .string()

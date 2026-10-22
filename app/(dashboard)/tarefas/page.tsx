@@ -4,6 +4,8 @@ import { CheckSquare, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { fmtDataBR } from '@/lib/formatters';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
+import { hojeEmSaoPaulo } from '@/lib/datas';
+import { ConcluirRetorno } from './concluir-retorno';
 
 type SearchParams = { status?: string };
 
@@ -17,6 +19,8 @@ type TarefaLinha = {
   status: string;
   created_at: string;
   operacao: { id: string; numero_processo: string; cedente_nome: string } | null;
+  /** Retorno agendado no CRM: a tarefa é do lead, não de uma operação. */
+  lead: { id: string; nome: string } | null;
   criado_por: { nome: string | null } | null;
   destinatario: { nome: string | null } | null;
 };
@@ -37,7 +41,7 @@ const PERFIS_LABEL: Record<string, string> = {
 
 function estaAtrasada(prazo: string | null, status: string): boolean {
   if (!prazo || status === 'concluida' || status === 'cancelada') return false;
-  return prazo < new Date().toISOString().slice(0, 10);
+  return prazo < hojeEmSaoPaulo();
 }
 
 export default async function TarefasPage({
@@ -65,7 +69,7 @@ export default async function TarefasPage({
   let query = supabase
     .from('tarefas')
     .select(
-      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, operacao:operacoes(id, numero_processo, cedente_nome), criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome)',
+      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, operacao:operacoes(id, numero_processo, cedente_nome), lead:leads(id, nome), criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome)',
     )
     .order('prazo', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false });
@@ -143,50 +147,64 @@ export default async function TarefasPage({
           {listaFinal.map((t) => {
             const stat = STATUS_LABEL[t.status] ?? STATUS_LABEL.pendente;
             const atrasada = estaAtrasada(t.prazo, t.status);
+            // Retorno de lead não tem operação: o link ia pra "/operacoes/" (quebrado).
+            const href = t.operacao ? `/operacoes/${t.operacao.id}` : '/crm';
+            const aberta = t.status === 'pendente' || t.status === 'em_andamento';
             return (
-              <Link
-                key={t.id}
-                href={`/operacoes/${t.operacao?.id ?? ''}`}
-                className={`block rounded-md border p-3 text-sm transition-colors ${
-                  atrasada
-                    ? 'border-red-300 bg-red-50/50 hover:bg-red-50'
-                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${stat.cor}`}
-                      >
-                        {stat.label}
-                      </span>
-                      {atrasada && (
-                        <span className="rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-medium text-red-800">
-                          Atrasada
+              <div key={t.id} className="relative">
+                <Link
+                  href={href}
+                  className={`block rounded-md border p-3 text-sm transition-colors ${
+                    atrasada
+                      ? 'border-red-300 bg-red-50/50 hover:bg-red-50'
+                      : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${stat.cor}`}
+                        >
+                          {stat.label}
                         </span>
-                      )}
-                      <span className="font-medium text-neutral-900">{t.titulo}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-neutral-600">
-                      {t.operacao?.numero_processo ?? '—'} · {t.operacao?.cedente_nome ?? ''}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-neutral-500">
-                      {t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>}
-                      <span>
-                        Para:{' '}
-                        {t.destinatario?.nome ??
-                          (t.destinatario_perfil ? PERFIS_LABEL[t.destinatario_perfil] : '—')}
-                      </span>
-                      {t.prazo && (
-                        <span className={atrasada ? 'font-medium text-red-700' : ''}>
-                          Prazo {fmtDataBR(t.prazo)}
+                        {atrasada && (
+                          <span className="rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-medium text-red-800">
+                            Atrasada
+                          </span>
+                        )}
+                        <span className="font-medium text-neutral-900">{t.titulo}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-neutral-600">
+                        {t.operacao
+                          ? `${t.operacao.numero_processo} · ${t.operacao.cedente_nome}`
+                          : t.lead
+                            ? `Retorno de lead · ${t.lead.nome}`
+                            : '—'}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-neutral-500">
+                        {t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>}
+                        <span>
+                          Para:{' '}
+                          {t.destinatario?.nome ??
+                            (t.destinatario_perfil ? PERFIS_LABEL[t.destinatario_perfil] : '—')}
                         </span>
-                      )}
+                        {t.prazo && (
+                          <span className={atrasada ? 'font-medium text-red-700' : ''}>
+                            Prazo {fmtDataBR(t.prazo)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+                {/* Fora do <Link>: botão dentro de âncora é HTML inválido e o clique navegaria. */}
+                {t.lead && aberta && (
+                  <div className="absolute top-3 right-3">
+                    <ConcluirRetorno tarefaId={t.id} />
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

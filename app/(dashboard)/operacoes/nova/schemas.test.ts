@@ -18,6 +18,7 @@ const base = {
   ente_devedor_id: '550e8400-e29b-41d4-a716-446655440000',
   especie: 'credito_total' as const,
   data_base: '2026-01-15',
+  indice_correcao: 'selic' as const,
 };
 
 function validarCnj(numero_processo: string) {
@@ -68,5 +69,19 @@ describe('step1Schema · número do processo', () => {
 
   it('ignora espaços nas pontas', () => {
     expect(validarCnj('  0001234-56.2020.5.19.0001  ').success).toBe(true);
+  });
+});
+
+describe('step1Schema · índice de correção', () => {
+  it('é obrigatório: sem ele a precificação não calcula', () => {
+    const semIndice: Partial<typeof base> = { ...base };
+    delete semIndice.indice_correcao;
+    const r = step1Schema.safeParse(semIndice);
+    expect(r.success).toBe(false);
+  });
+
+  it('só aceita série que o motor de índices conhece', () => {
+    expect(step1Schema.safeParse({ ...base, indice_correcao: 'igpm' }).success).toBe(false);
+    expect(step1Schema.safeParse({ ...base, indice_correcao: 'ipca_15' }).success).toBe(true);
   });
 });

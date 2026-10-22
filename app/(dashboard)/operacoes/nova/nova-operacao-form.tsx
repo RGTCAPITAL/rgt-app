@@ -8,6 +8,7 @@ import {
   ESFERAS,
   ESPECIES,
   ESTADOS_CIVIS,
+  INDICES_CORRECAO,
   NATUREZAS,
   TIPOS_ATIVO,
   step1Schema,
@@ -56,6 +57,7 @@ type Step1State = {
   ente_devedor_id: string;
   especie: string;
   data_base: string;
+  indice_correcao: string;
   data_autuacao: string;
   loa: string;
 };
@@ -86,6 +88,7 @@ const initialStep1: Step1State = {
   ente_devedor_id: '',
   especie: '',
   data_base: '',
+  indice_correcao: '',
   data_autuacao: '',
   loa: '',
 };
@@ -178,8 +181,10 @@ export function NovaOperacaoForm({
     if (leadInicial) return;
     const r = lerRascunho();
     if (r) {
-      setS1(r.s1);
-      setS2(r.s2);
+      // Rascunho de antes de um campo novo existir não traz a chave: completa
+      // com o vazio em vez de deixar o select com valor undefined.
+      setS1({ ...initialStep1, ...r.s1 });
+      setS2({ ...initialStep2, ...r.s2 });
       setStep(r.step);
       toast.info(`Rascunho restaurado (${fmtRascunhoIdade(r.savedAt)})`, {
         description:
@@ -516,6 +521,16 @@ export function NovaOperacaoForm({
                 daIA={origemIA.has('data_base')}
                 required
               />
+              <FieldSelect
+                label="Índice de correção"
+                value={s1.indice_correcao}
+                onChange={(v) => updateS1('indice_correcao', v)}
+                options={INDICES_CORRECAO}
+                error={erros.indice_correcao}
+                daIA={origemIA.has('indice_correcao')}
+                required
+                hint="O que o ofício manda aplicar depois da data-base. Precatório com cálculo a partir de dez/2021 costuma ser Selic (EC 113/2021)."
+              />
               <FieldText
                 label="Data de autuação"
                 value={s1.data_autuacao}
@@ -705,6 +720,12 @@ export function NovaOperacaoForm({
                     value={ESPECIES.find((e) => e.value === s1.especie)?.label ?? '—'}
                   />
                   <ReviewItem label="Data-base" value={fmtDataBR(s1.data_base)} />
+                  <ReviewItem
+                    label="Índice de correção"
+                    value={
+                      INDICES_CORRECAO.find((i) => i.value === s1.indice_correcao)?.label ?? '—'
+                    }
+                  />
                   <ReviewItem label="LOA" value={s1.loa || '—'} />
                   <ReviewItem
                     label="Principal"

@@ -37,6 +37,7 @@ Devolva **só os que você encontrou**. Use exatamente estes nomes; omita o rest
 | \`ente_devedor\` | quem paga | nome como escrito no documento |
 | \`tribunal_sigla\` | tribunal do processo | sigla: TRT19, TJAL, TRF5, STJ… |
 | \`data_base\` | data a que os valores se referem | yyyy-mm-dd |
+| \`indice_correcao\` | índice que o ofício manda aplicar a partir da data-base | \`selic\`, \`ipca\`, \`ipca_e\`, \`inpc\`, \`poupanca\` ou \`tr\` |
 | \`data_autuacao\` | autuação/distribuição do processo | yyyy-mm-dd |
 | \`loa\` | ano do orçamento de pagamento | 4 dígitos |
 | \`valor_principal\` | valor principal do crédito | 125430.55 |

@@ -30,6 +30,7 @@ export const CAMPOS_CONHECIDOS = [
   'ente_devedor',
   'tribunal_sigla',
   'data_base',
+  'indice_correcao',
   'data_autuacao',
   'loa',
   'valor_principal',

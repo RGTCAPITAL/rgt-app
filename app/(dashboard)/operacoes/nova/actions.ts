@@ -70,6 +70,7 @@ export async function criarOperacao(payload: PayloadNovaOperacao): Promise<Criar
     rra_ativo: s2.data.rra_ativo,
     rra_meses: s2.data.rra_ativo ? Number(s2.data.rra_meses) : null,
     data_base: s1.data.data_base,
+    indice_correcao: s1.data.indice_correcao,
     data_autuacao: s1.data.data_autuacao || null,
     loa: s1.data.loa ? Number(s1.data.loa) : null,
     cedente_nome: titleCase(s1.data.cedente_nome),
