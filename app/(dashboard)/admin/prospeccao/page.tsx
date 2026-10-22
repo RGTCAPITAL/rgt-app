@@ -111,16 +111,31 @@ export default async function ProspeccaoPage({
         subtitle="Fila pré-lead alimentada por planilhas oficiais dos tribunais. Judit enriquece com nome do credor, broker busca contato, vira lead."
         color="blue"
         action={
-          <Link
-            href="/admin/prospeccao/importar"
-            className={cn(
-              buttonVariants({ variant: 'default' }),
-              'bg-white text-blue-700 hover:bg-white/90',
-            )}
-          >
-            <Upload className="size-4" />
-            Importar planilha
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/prospeccao/importar"
+              className={cn(
+                buttonVariants({ variant: 'default' }),
+                'bg-white text-blue-700 hover:bg-white/90',
+              )}
+            >
+              <Upload className="size-4" />
+              Importar planilha
+            </Link>
+            {/* Segundo caminho de entrada na fila: nome em vez de planilha.
+                O broker recebe nome por WhatsApp e precisa saber na hora se
+                vira operação (RGT-95). */}
+            <Link
+              href="/admin/prospeccao/buscar-por-nome"
+              className={cn(
+                buttonVariants({ variant: 'outline' }),
+                'border-white/40 bg-transparent text-white hover:bg-white/10',
+              )}
+            >
+              <Search className="size-4" />
+              Buscar por nome
+            </Link>
+          </div>
         }
       />
 
