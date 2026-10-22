@@ -1,14 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import {
-  Upload,
-  Search,
-  Sparkles,
-  UserPlus,
-  XCircle,
-  FileSpreadsheet,
-  FlaskConical,
-} from 'lucide-react';
+import { Upload, Sparkles, UserPlus, XCircle, FileSpreadsheet, FlaskConical } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 // DJEN é público, sem chave — não precisa de flag de "configurado".
 // O batch de enriquecimento sempre roda; se um processo não tiver publicação
@@ -122,19 +114,6 @@ export default async function ProspeccaoPage({
             >
               <Upload className="size-4" />
               Importar planilha
-            </Link>
-            {/* Segundo caminho de entrada na fila: nome em vez de planilha.
-                O broker recebe nome por WhatsApp e precisa saber na hora se
-                vira operação (RGT-95). */}
-            <Link
-              href="/admin/prospeccao/buscar-por-nome"
-              className={cn(
-                buttonVariants({ variant: 'outline' }),
-                'border-white/40 bg-transparent text-white hover:bg-white/10',
-              )}
-            >
-              <Search className="size-4" />
-              Buscar por nome
             </Link>
           </div>
         }
