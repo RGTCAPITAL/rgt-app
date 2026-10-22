@@ -62,7 +62,8 @@ export function KpiTile({
   const iconClasses: Record<string, string> = {
     emerald: 'bg-emerald-50 text-emerald-600',
     blue: 'bg-blue-50 text-blue-600',
-    amber: 'bg-amber-50 text-amber-600',
+    // Amarelo é reservado para aviso de atenção (globals.css); quadro decorativo fica neutro.
+    amber: 'bg-neutral-100 text-neutral-600',
     violet: 'bg-violet-50 text-violet-600',
     rose: 'bg-rose-50 text-rose-600',
     neutral: 'bg-neutral-100 text-neutral-600',
@@ -70,7 +71,7 @@ export function KpiTile({
   const valueClasses: Record<string, string> = {
     emerald: 'text-emerald-700',
     blue: 'text-blue-700',
-    amber: 'text-amber-700',
+    amber: 'text-neutral-700',
     violet: 'text-violet-700',
     rose: 'text-rose-700',
     neutral: 'text-neutral-900',

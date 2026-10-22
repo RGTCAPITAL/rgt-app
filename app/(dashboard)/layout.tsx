@@ -56,7 +56,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <UserMenu email={user.email ?? ''} />
         </div>
       </aside>
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0: sem ele, item de flex não encolhe abaixo do conteúdo, e uma
+          tabela larga (prospecção, operações) esticava a página inteira para
+          além da tela em vez de rolar dentro do próprio overflow-x-auto. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3">
           <Breadcrumbs />
           <NotifSino notifs={notifs ?? []} />
