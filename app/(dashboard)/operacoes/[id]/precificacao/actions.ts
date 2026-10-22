@@ -2,6 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { hojeEmSaoPaulo } from '@/lib/datas';
+import {
+  COLUNAS_FATOR_LOA,
+  fatorDaLinha,
+  fatorVigente,
+  type LinhaFatorLoa,
+} from '@/lib/precificacao/desagio';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -28,6 +35,12 @@ export async function salvarPrecoProposto(
   operacaoId: string,
   preco: number | null,
   justificativa: string | null,
+  /**
+   * O fator da LOA que gerou o preço, quando ele veio do "usar o sugerido".
+   * Null em preço digitado à mão. É o que permite dizer depois, sem adivinhar,
+   * que a proposta ficou desatualizada (RGT-97).
+   */
+  fatorLoaId: string | null = null,
 ): Promise<Result> {
   const supabase = await createClient();
 
@@ -58,9 +71,9 @@ export async function salvarPrecoProposto(
 
   const { data: op } = await supabase
     .from('operacoes')
-    .select('etapa_atual, preco_aceito')
+    .select('etapa_atual, preco_aceito, loa')
     .eq('id', operacaoId)
-    .single<{ etapa_atual: string; preco_aceito: boolean | null }>();
+    .single<{ etapa_atual: string; preco_aceito: boolean | null; loa: number | null }>();
 
   if (!op) return { ok: false, error: 'Operação não encontrada.' };
 
@@ -88,6 +101,27 @@ export async function salvarPrecoProposto(
     };
   }
 
+  // O fator só é aceito se for o que vale hoje pra LOA desta operação. Se o
+  // Renato mudou o percentual enquanto a tela estava aberta, gravar o antigo
+  // pregaria na proposta um número que já não é o dele.
+  if (fatorLoaId !== null && preco !== null) {
+    if (op.loa === null) {
+      return { ok: false, error: 'A operação não tem LOA, então não há percentual a aplicar.' };
+    }
+    const { data: linhas } = await supabase
+      .from('fatores_loa')
+      .select(COLUNAS_FATOR_LOA)
+      .eq('loa_ano', op.loa)
+      .returns<LinhaFatorLoa[]>();
+    const vigente = fatorVigente((linhas ?? []).map(fatorDaLinha), op.loa, hojeEmSaoPaulo());
+    if (vigente?.id !== fatorLoaId) {
+      return {
+        ok: false,
+        error: 'O percentual desta LOA mudou desde que a tela foi aberta. Recarregue a página.',
+      };
+    }
+  }
+
   const { error } = await supabase
     .from('operacoes')
     .update({
@@ -95,6 +129,7 @@ export async function salvarPrecoProposto(
       preco_proposto_em: preco === null ? null : new Date().toISOString(),
       preco_proposto_por: preco === null ? null : user.id,
       preco_justificativa: justificativa?.trim() || null,
+      fator_loa_id: preco === null ? null : fatorLoaId,
     })
     .eq('id', operacaoId);
 
