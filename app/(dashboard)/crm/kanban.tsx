@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ArrowRight, CalendarClock, MessageCircle } from 'lucide-react';
+import { ArrowRight, CalendarClock } from 'lucide-react';
+import { IconeWhatsApp } from '@/components/ui/icone-whatsapp';
 import { mudarStatusLead } from './actions';
 import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
@@ -368,9 +369,9 @@ export function Kanban({
                                     ? 'Abrir WhatsApp com a mensagem pronta'
                                     : 'Abrir conversa no WhatsApp'
                                 }
-                                className="rounded p-1 text-neutral-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600"
+                                className="rounded p-1 text-[#25D366] transition-colors hover:bg-[#25D366]/10 hover:text-[#128C7E]"
                               >
-                                <MessageCircle className="size-3.5" />
+                                <IconeWhatsApp className="size-4" />
                               </a>
                             )}
                             <button
