@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  artigoDoEnte,
+  enteComArtigo,
   escolherModelo,
   formatarEnte,
   linkWhatsAppComTexto,
@@ -224,5 +226,87 @@ describe('formatarEnte', () => {
       enteDevedor: 'ALAGOAS',
     });
     expect(r).toBe('crédito contra Estado de Alagoas');
+  });
+});
+
+/**
+ * O modelo escreve "contra {ente}" e saía "contra Estado de Alagoas", sem o
+ * artigo. Pôr "o" direto no modelo não resolve: o mesmo campo pode ser
+ * "União", e viraria "contra o União". Daí a variável separada.
+ */
+describe('artigoDoEnte', () => {
+  it('Estado e Município são masculinos', () => {
+    expect(artigoDoEnte('Estado de Alagoas')).toBe('o');
+    expect(artigoDoEnte('Município de Maceió')).toBe('o');
+  });
+
+  it('União é feminina', () => {
+    expect(artigoDoEnte('União')).toBe('a');
+  });
+
+  it('sigla não entrega o gênero — tem que ser na mão', () => {
+    // O substantivo escondido manda: Instituto x Agência x Universidade.
+    expect(artigoDoEnte('INSS')).toBe('o');
+    expect(artigoDoEnte('IFAL')).toBe('o');
+    expect(artigoDoEnte('ANAC')).toBe('a');
+    expect(artigoDoEnte('UFAL')).toBe('a');
+  });
+
+  it('nomes por extenso pelo começo da palavra', () => {
+    expect(artigoDoEnte('Prefeitura de Arapiraca')).toBe('a');
+    expect(artigoDoEnte('Universidade Federal de Alagoas')).toBe('a');
+    expect(artigoDoEnte('Defensoria Pública do Estado de Alagoas')).toBe('a');
+    expect(artigoDoEnte('Departamento de Estradas')).toBe('o');
+  });
+});
+
+describe('enteComArtigo', () => {
+  it('monta o ente já com artigo, a partir do valor cru', () => {
+    expect(enteComArtigo('ALAGOAS')).toBe('o Estado de Alagoas');
+    expect(enteComArtigo('união')).toBe('a União');
+  });
+
+  it('ente vazio não vira artigo solto', () => {
+    expect(enteComArtigo(null)).toBe('');
+    expect(enteComArtigo('   ')).toBe('');
+  });
+});
+
+describe('{o_ente} na mensagem', () => {
+  const LEAD = {
+    nome: 'José',
+    valorProposta: null,
+    valorProcesso: null,
+    numeroProcesso: null,
+    enteDevedor: 'ALAGOAS',
+  };
+
+  it('a frase que motivou tudo isso', () => {
+    expect(montarMensagem('crédito contra {o_ente}', LEAD)).toBe(
+      'crédito contra o Estado de Alagoas',
+    );
+  });
+
+  it('concorda com ente feminino', () => {
+    expect(montarMensagem('crédito contra {o_ente}', { ...LEAD, enteDevedor: 'União' })).toBe(
+      'crédito contra a União',
+    );
+  });
+
+  it('{ente} continua sem artigo, pra quem usa em outra posição', () => {
+    expect(montarMensagem('do {ente} aqui', LEAD)).toBe('do Estado de Alagoas aqui');
+  });
+
+  it('os dois no mesmo texto não se atrapalham', () => {
+    // A troca é literal: se {ente} fosse trocado primeiro, sobraria "{o_".
+    expect(montarMensagem('{o_ente} / {ente}', LEAD)).toBe(
+      'o Estado de Alagoas / Estado de Alagoas',
+    );
+  });
+
+  it('sem ente, não sobra artigo nem espaço duplo', () => {
+    const r = montarMensagem('crédito contra {o_ente}.', { ...LEAD, enteDevedor: null });
+    expect(r).toBe('crédito contra.');
+    expect(r).not.toMatch(/\bo\s*\./);
   });
 });

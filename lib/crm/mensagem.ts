@@ -155,6 +155,39 @@ export function formatarEnte(bruto: string | null): string | null {
   return tituloSimples(limpo);
 }
 
+/**
+ * Siglas femininas. O resto do conjunto é masculino.
+ *
+ * Não dá pra deduzir da sigla: "o INSS" mas "a ANAC", "o IFAL" mas "a UFAL".
+ * O gênero vem do substantivo que a sigla esconde (Instituto, Agência,
+ * Universidade, Fundação), então vai na mão mesmo.
+ */
+const SIGLAS_FEMININAS = new Set(['ECT', 'CEF', 'FUNAI', 'ANAC', 'CNEN', 'SUDENE', 'UFAL', 'UFPE']);
+
+/** Começos de nome que pedem "a". O que não casar é "o". */
+const COMECOS_FEMININOS =
+  /^(uni[ãa]o|prefeitura|funda[çc][ãa]o|universidade|ag[êe]ncia|defensoria|procuradoria|assembleia|companhia|caixa|empresa|superintend[êe]ncia|comiss[ãa]o|autarquia|secretaria)\b/i;
+
+/**
+ * O artigo definido que acompanha o ente.
+ *
+ * Existe porque o modelo escreve "contra {ente}" e saía "contra Estado de
+ * Alagoas", sem o "o". Pôr o artigo direto no modelo não resolve: o mesmo
+ * campo pode ser "União", e viraria "contra o União".
+ */
+export function artigoDoEnte(enteFormatado: string): 'o' | 'a' {
+  const t = enteFormatado.trim();
+  if (SIGLAS_FEMININAS.has(t.toLocaleUpperCase('pt-BR'))) return 'a';
+  return COMECOS_FEMININOS.test(t) ? 'a' : 'o';
+}
+
+/** "o Estado de Alagoas", "a União", "o INSS". Vazio se não há ente. */
+export function enteComArtigo(bruto: string | null): string {
+  const ente = formatarEnte(bruto);
+  if (!ente) return '';
+  return `${artigoDoEnte(ente)} ${ente}`;
+}
+
 /** Variáveis que um modelo pode usar, documentadas pra quem edita o texto. */
 export const VARIAVEIS_DISPONIVEIS = [
   { chave: '{nome}', descricao: 'Primeiro nome da pessoa' },
@@ -173,6 +206,9 @@ export function montarMensagem(texto: string, lead: DadosLead): string {
       .replaceAll('{nome_completo}', lead.nome.trim())
       .replaceAll('{nome}', primeiroNome(lead.nome))
       .replaceAll('{valor}', valor !== null ? fmtBRL(valor) : '')
+      // {o_ente} antes de {ente}: a troca é literal, e trocar o menor
+      // primeiro deixaria "{o_" órfão no texto.
+      .replaceAll('{o_ente}', enteComArtigo(lead.enteDevedor))
       .replaceAll('{ente}', formatarEnte(lead.enteDevedor) ?? '')
       .replaceAll('{processo}', lead.numeroProcesso ?? '')
       // Espaço duplo e espaço antes de pontuação denunciam variável vazia que

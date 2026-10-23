@@ -55,11 +55,11 @@ export async function salvarModelo(id: string, nome: string, texto: string): Pro
   // Variável escrita errada vira texto literal na mensagem do cliente.
   const invalidas = [...textoLimpo.matchAll(/\{(\w+)\}/g)]
     .map((m) => m[1]!)
-    .filter((v) => !['nome', 'nome_completo', 'valor', 'ente', 'processo'].includes(v));
+    .filter((v) => !['nome', 'nome_completo', 'valor', 'ente', 'processo', 'o_ente'].includes(v));
   if (invalidas.length > 0) {
     return {
       ok: false,
-      error: `Variável desconhecida: {${invalidas[0]}}. As disponíveis são {nome}, {nome_completo}, {valor}, {ente} e {processo}.`,
+      error: `Variável desconhecida: {${invalidas[0]}}. As disponíveis são {nome}, {nome_completo}, {valor}, {ente}, {o_ente} e {processo}.`,
     };
   }
 

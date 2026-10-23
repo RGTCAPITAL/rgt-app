@@ -76,3 +76,33 @@ describe('leadFormSchema — dados do precatório', () => {
     expect(r.success && r.data.ente_devedor).toBe('Estado de Alagoas');
   });
 });
+
+/**
+ * O "+" é o único sinal de que o número não é brasileiro. Antes ele era
+ * descartado junto com os outros não-dígitos, e aí "+1 415 555 0100" virava
+ * "14155550100" — que o fmtTelefone lia como DDD 14 (Marília) e exibia
+ * "(14) 15555-0100". Com o "+" perdido na escrita, não há como corrigir na
+ * exibição. Achado na revisão do 9ffb299.
+ */
+describe('telefone estrangeiro guarda o +', () => {
+  const parse = (telefone: string) => leadFormSchema.parse({ ...BASE, telefone });
+
+  it('número de outro país mantém o sinal', () => {
+    expect(parse('+1 415 555 0100').telefone).toBe('+14155550100');
+  });
+
+  it('+55 vira dígito puro — é brasileiro e tem DDD', () => {
+    expect(parse('+55 82 99123-4567').telefone).toBe('5582991234567');
+  });
+
+  it('número brasileiro sem + segue igual', () => {
+    expect(parse('(82) 99123-4567').telefone).toBe('82991234567');
+  });
+
+  it('o + não conta no limite de 10-13 dígitos', () => {
+    // 11 dígitos + o sinal = 12 caracteres; a validação olha só os dígitos.
+    expect(() => parse('+1 415 555 0100')).not.toThrow();
+    // E número curto demais continua sendo recusado, com ou sem +.
+    expect(() => parse('+1 415')).toThrow();
+  });
+});

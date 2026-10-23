@@ -2,6 +2,22 @@ import { z } from 'zod';
 
 const somenteDigitos = (s: string) => s.replace(/\D/g, '');
 
+/**
+ * Guarda o "+" de número estrangeiro.
+ *
+ * Com `somenteDigitos`, "+1 415 555 0100" virava "14155550100" — e aí o
+ * `fmtTelefone` lia "14" como DDD de Marília e mostrava "(14) 15555-0100".
+ * O "+" é o único sinal que diz "não é brasileiro"; perdê-lo na escrita
+ * torna o erro impossível de corrigir na exibição.
+ *
+ * "+55" segue virando dígito puro: é brasileiro, tem DDD, e o resto do
+ * sistema já sabe tirar o 55.
+ */
+const normalizarTelefone = (s: string) => {
+  const d = somenteDigitos(s);
+  return s.trim().startsWith('+') && !d.startsWith('55') ? `+${d}` : d;
+};
+
 export const leadFormSchema = z.object({
   nome: z.string().trim().min(2, 'Nome muito curto'),
   telefone: z
@@ -9,9 +25,10 @@ export const leadFormSchema = z.object({
     .trim()
     .optional()
     .or(z.literal(''))
-    .transform((v) => (v ? somenteDigitos(v) : ''))
+    .transform((v) => (v ? normalizarTelefone(v) : ''))
     .refine(
-      (v) => !v || (v.length >= 10 && v.length <= 13),
+      // O "+" não conta como dígito na validação de tamanho.
+      (v) => !v || (somenteDigitos(v).length >= 10 && somenteDigitos(v).length <= 13),
       'Telefone deve ter 10-13 dígitos (com DDD)',
     ),
   email: z

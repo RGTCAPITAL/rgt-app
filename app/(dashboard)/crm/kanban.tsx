@@ -429,7 +429,12 @@ export function Kanban({
                             {lead.nome}
                             {lead.is_exemplo && <SeloExemplo className="ml-1.5 align-middle" />}
                           </span>
+                          {/* O texto vem de Date.now(): se o servidor renderiza
+                              às 10h59 e o browser hidrata às 11h00, "há 3 h"
+                              vira "há 4 h" e o React reclama de divergência.
+                              O valor certo é sempre o do cliente. */}
                           <span
+                            suppressHydrationWarning
                             title={`Entrou no CRM em ${dataSP.format(new Date(lead.created_at))}`}
                             className="mt-0.5 shrink-0 text-xs text-neutral-500"
                           >
@@ -482,7 +487,9 @@ export function Kanban({
                           >
                             <CalendarClock className="mt-px size-3.5 shrink-0" />
                             <span className="line-clamp-2">
-                              <span className="font-medium">
+                              {/* "Atrasado" depende da hora atual — mesma
+                                  divergência de hidratação do "há 3 h". */}
+                              <span className="font-medium" suppressHydrationWarning>
                                 {proximoRetorno.atrasado
                                   ? `Atrasado desde ${proximoRetorno.quando}`
                                   : `Retorno ${proximoRetorno.quando}`}
