@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle, FlaskConical, RefreshCw, Search, XCircle } from 'lucide-react';
+import { CheckCircle, RefreshCw, Search, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
@@ -16,7 +16,6 @@ type Props = {
   atualizadoEm: string | null;
   redFlags: RedFlag[];
   juditConfigurada: boolean;
-  juditSimulada: boolean;
 };
 
 function fmtRel(iso: string): string {
@@ -32,7 +31,6 @@ export function JuditCard({
   atualizadoEm,
   redFlags,
   juditConfigurada,
-  juditSimulada,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [ultimasFlags, setUltimasFlags] = useState<RedFlag[]>(redFlags);
@@ -55,28 +53,10 @@ export function JuditCard({
     });
   }
 
-  if (!juditConfigurada) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-            <Search className="size-4 text-blue-600" />
-            Consulta Judit
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            <AlertTriangle className="size-4 shrink-0" />
-            <div>
-              Integração Judit ainda não configurada. Adicione{' '}
-              <code className="rounded bg-amber-100 px-1">JUDIT_API_KEY</code> no{' '}
-              <code>.env.local</code> pra habilitar consulta automática de processos.
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Sem chave real, o cartão não aparece. Antes mostrava um aviso pedindo a
+  // JUDIT_API_KEY no .env.local — jargão de dev na tela do Renato, e sobre uma
+  // integração que decidimos não contratar (RGT-80: o DJEN cobre 99%).
+  if (!juditConfigurada) return null;
 
   const semConsulta = !ultimaConsulta;
 
@@ -110,15 +90,6 @@ export function JuditCard({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {juditSimulada && (
-          <div className="mb-3 flex gap-2 rounded-md border-2 border-dashed border-violet-400 bg-violet-50 p-2 text-[11px] text-violet-900">
-            <FlaskConical className="size-3.5 shrink-0" />
-            <span>
-              <strong>Modo simulado</strong> — dados inventados a partir do número do processo, não
-              vieram da Judit. Não use pra decidir compra.
-            </span>
-          </div>
-        )}
         {semConsulta ? (
           <p className="text-sm text-neutral-600">
             Nenhuma consulta feita ainda pro processo{' '}

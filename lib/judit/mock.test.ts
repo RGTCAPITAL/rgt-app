@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cenarioDoCnj, processoSimulado, modoMockLigado } from './mock';
+import { juditConfigurada } from './client';
 import { extrairRedFlags } from './red-flags';
 import { extrairMetadadosProspeccao } from './extract';
 
@@ -85,5 +86,24 @@ describe('mock da Judit', () => {
   it('só liga com JUDIT_MODO=mock explícito', () => {
     // Nunca por acidente: sem a variável, o modo simulado fica desligado.
     expect(modoMockLigado()).toBe(process.env.JUDIT_MODO === 'mock');
+  });
+});
+
+describe('juditConfigurada', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  // O localhost grava no banco de produção: se o mock liberasse o cartão, um
+  // clique gravaria consulta inventada numa operação real (foi assim que os
+  // 8 [SIMULADO] da prospecção nasceram — RGT-77).
+  it('modo simulado sem chave não libera a consulta', () => {
+    vi.stubEnv('JUDIT_MODO', 'mock');
+    vi.stubEnv('JUDIT_API_KEY', '');
+    expect(juditConfigurada()).toBe(false);
+  });
+
+  it('só a chave real libera', () => {
+    vi.stubEnv('JUDIT_MODO', '');
+    vi.stubEnv('JUDIT_API_KEY', 'chave-de-teste');
+    expect(juditConfigurada()).toBe(true);
   });
 });

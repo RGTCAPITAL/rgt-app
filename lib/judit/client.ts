@@ -148,10 +148,13 @@ export async function baixarAutos(cnj: string): Promise<{ url: string }> {
 }
 
 /**
- * True quando dá pra consultar — com chave real OU em modo simulado.
- * A UI usa isto pra liberar os botões; o aviso de que os dados são falsos vem
- * de `usandoMock()`, não daqui.
+ * True só com chave real. É o que libera o cartão da Judit e as actions.
+ *
+ * O modo simulado também liberava, mas o banco é um só: o localhost grava
+ * na produção, e o mock deixou 8 processos da prospecção com credor e CPF
+ * inventados (RGT-77). Com a decisão de não contratar a Judit (RGT-80), o
+ * mock fica só pros testes — nenhuma tela grava dado simulado.
  */
 export function juditConfigurada(): boolean {
-  return Boolean(process.env.JUDIT_API_KEY) || usandoMock();
+  return Boolean(process.env.JUDIT_API_KEY);
 }

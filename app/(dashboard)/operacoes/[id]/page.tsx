@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { juditConfigurada, usandoMock } from '@/lib/judit/client';
+import { juditConfigurada } from '@/lib/judit/client';
 import { DetalheTabs } from './detalhe-tabs';
 import { AcoesEtapa } from './acoes-etapa';
 import { ToastNovaOperacao } from './toast-auto-hide';
@@ -286,7 +286,6 @@ export default async function OperacaoDetalhePage({
               atualizadoEm: op.dd_judit_atualizado_em,
               redFlags: (op.dd_judit_red_flags ?? []) as never,
               juditConfigurada: juditConfigurada(),
-              juditSimulada: usandoMock(),
             }}
             operacao={{
               valor_total: op.valor_total,

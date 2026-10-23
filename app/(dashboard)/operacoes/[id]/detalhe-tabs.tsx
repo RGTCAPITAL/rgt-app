@@ -72,7 +72,6 @@ type Props = {
     atualizadoEm: string | null;
     redFlags: RedFlag[];
     juditConfigurada: boolean;
-    juditSimulada: boolean;
   };
 };
 
