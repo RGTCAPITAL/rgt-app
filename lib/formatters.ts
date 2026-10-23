@@ -49,3 +49,19 @@ export function titleCase(v: string): string {
     })
     .join(' ');
 }
+
+/**
+ * Telefone salvo só com dígitos vira "(82) 99123-4567".
+ * Aceita o 55 do país na frente. Formato que não reconhece volta como veio —
+ * melhor mostrar o número cru do que um número errado.
+ */
+export function fmtTelefone(v: string | null | undefined): string {
+  if (!v) return '';
+  let d = v.replace(/\D/g, '');
+  // "+" com outro país: não é número brasileiro, não tem DDD pra separar.
+  if (v.trim().startsWith('+') && !d.startsWith('55')) return v;
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return v;
+}

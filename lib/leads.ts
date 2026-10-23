@@ -54,6 +54,15 @@ export function labelStatus(v: string): string {
   return STATUS_LEAD.find((s) => s.value === v)?.label ?? v;
 }
 
+/**
+ * Origens que o sistema grava sozinho (importação, prospecção) e que por isso
+ * não aparecem no seletor do formulário — mas precisam de rótulo no cartão.
+ */
+const ORIGEM_AUTOMATICA: Record<string, string> = {
+  importacao_planilha: 'Planilha',
+  lista_processual: 'Lista processual',
+};
+
 export function labelOrigem(v: string): string {
-  return ORIGEM_LEAD.find((o) => o.value === v)?.label ?? v;
+  return ORIGEM_LEAD.find((o) => o.value === v)?.label ?? ORIGEM_AUTOMATICA[v] ?? v;
 }
