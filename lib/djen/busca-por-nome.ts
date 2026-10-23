@@ -53,6 +53,9 @@ const SINAIS_DE_FASE: Record<string, string> = {
   '10': 'recurso pendente',
   '5': 'suspenso',
   '4': 'quitado ou arquivado',
+  // Extinção citada sem falar em pagamento: no TRT19 quase sempre é o texto
+  // padrão pós-expedição, mas pode ser prescrição — vale abrir e ler.
+  '4e': 'extinção citada (ler)',
 };
 
 export interface ProcessoEncontrado {

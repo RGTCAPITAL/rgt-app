@@ -94,14 +94,65 @@ export const REDFLAG_3A_PERCENTUAL_EM_CESSAO: RedFlagDef = {
     /cess[ãa]o[^.]{0,120}?\d{1,3}(?:[,.]\d{1,2})?\s*%(?:[^.]{0,80}?do\s+(?:valor|cr[ée]dito|montante|precat[óo]rio))?/gi,
 };
 
+/**
+ * Só sinal FORTE de pagamento: quitação do crédito/precatório, pagamento
+ * integral, arquivamento definitivo, extinção pelo pagamento.
+ *
+ * Até out/2026 esta flag também casava "extinção da execução", "extinção do
+ * cumprimento" e "arquivamento dos autos" — e era falso positivo nos 16
+ * processos do TRT19 em que aparecia. O texto padrão do tribunal declara "a
+ * EXTINÇÃO DA EXECUÇÃO ... aguardando a disponibilização dos valores
+ * requisitados", ou seja, sai logo DEPOIS de expedir o precatório e ANTES de
+ * pagar. Marcar isso de vermelho escondia justamente os precatórios bons.
+ * Essas menções agora são a 4e (aviso amarelo, logo abaixo).
+ *
+ * O lookbehind derruba a referência ao futuro, mesmo raciocínio do trânsito
+ * na flag 9: "mantenham-se os autos sobrestados até a quitação integral do
+ * precatório" é texto real do TRT19 e fala de um pagamento que AINDA vai vir.
+ *
+ * "Satisfação da obrigação" / art. 924, II do CPC ficam de fora de propósito:
+ * o TRT19 escreve "Com a expedição do precatório a obrigação foi satisfeita,
+ * nos termos do art. 924, II, CPC. Julgo extinta a execução" e, na mesma
+ * sentença, manda sobrestar "enquanto se aguarda o pagamento do precatório".
+ *
+ * "Dou por extint[ao]" fica por precaução: é a fórmula da sentença de
+ * extinção cível, que costuma vir com o pagamento logo atrás. A precisão não
+ * foi remedida depois do corte — no corpus atual a flag não aparece mais.
+ */
 export const REDFLAG_4_QUITACAO_ARQUIVAMENTO: RedFlagDef = {
   codigo: '4',
-  descricao: 'Quitação integral, pagamento ou arquivamento definitivo',
+  descricao: 'Quitação, pagamento integral ou arquivamento definitivo',
   categoria: 'BLOQUEADOR',
   cor: 'vermelho',
   precisao: 0.9,
   regex:
-    /(quitad[oa]\s+(?:integralmente|o\s+cr[ée]dito|o\s+precat)|pagament[oe]\s+integral\s+(?:do\s+cr[ée]dito|efetuad|realizad)|arquivament[oe]?\s+(?:definitivo|dos?\s+autos)|extin[çc][ãa]o\s+(?:da\s+execu[çc][ãa]o|pelo\s+pagamento|do\s+cumprimento)|dou\s+por\s+extint[ao])/gi,
+    /((?<!\b(?:at[ée]|para|ap[óo]s|antes\s+d[aeo]|quando\s+d[aeo]|aguard\w*(?:-se)?)\s+(?:[oa]\s+)?)(?:quita[çc][ãa]o\s+(?:integral\s+|total\s+)?d[oa]\s+(?:cr[ée]dito|precat[óo]rio)|pagament[oe]\s+integral\s+(?:do\s+cr[ée]dito|efetuad|realizad))|quitad[oa]\s+(?:integralmente|o\s+cr[ée]dito|o\s+precat)|(?:cr[ée]dito|precat[óo]rio)\s+(?:foi\s+)?(?:integralmente\s+)?quitad[oa]|arquivament[oe]\s+definitiv[oa]|arquiv(?:em|e)-se\s+(?:os\s+autos\s+)?definitivamente|(?:extin[çc][ãa]o(?:\s+d[ao]\s+(?:execu[çc][ãa]o|cumprimento(?:\s+de\s+senten[çc]a)?))?|extint[ao]\s+a\s+execu[çc][ãa]o),?\s+(?:pelo|pela|em\s+raz[ãa]o\s+d[oa]|ante\s+[oa]|diante\s+d[oa])\s+(?:pagamento|quita[çc][ãa]o)|dou\s+por\s+extint[ao])/gi,
+};
+
+/**
+ * Extinção da execução/cumprimento ou arquivamento dos autos citado SEM sinal
+ * forte de pagamento. No TRT19 isso é quase sempre o texto padrão pós-ofício
+ * (processo sobrestado aguardando o pagamento do precatório) — mas um dos 16
+ * casos medidos era prescrição intercorrente, que extingue SEM pagar. Por isso
+ * a menção não pode sumir: vira aviso pra ler a publicação antes de ligar.
+ *
+ * Quando o mesmo trecho já tem sinal forte (a 4 bate na vizinhança), a 4e é
+ * descartada pelo `excludeIf` — o alerta grave já diz tudo.
+ *
+ * A precisão mede a detecção da menção (alta), não o risco: nos 16 processos,
+ * só 1 era extinção de verdade.
+ */
+export const REDFLAG_4E_EXTINCAO_CITADA: RedFlagDef = {
+  codigo: '4e',
+  descricao:
+    'Extinção da execução/cumprimento ou arquivamento dos autos citado, sem menção a pagamento',
+  categoria: 'NAVEGACIONAL',
+  cor: 'amarelo',
+  precisao: 0.95,
+  regex:
+    /(extin[çc][ãa]o\s+d[ao]\s+(?:execu[çc][ãa]o|cumprimento)|extint[ao]\s+(?:a\s+execu[çc][ãa]o|o\s+cumprimento)|arquivament[oe]?\s+dos?\s+autos)/gi,
+  // Sem a flag `g`: excludeIf roda com .test() e não pode carregar lastIndex
+  excludeIf: new RegExp(REDFLAG_4_QUITACAO_ARQUIVAMENTO.regex.source, 'i'),
 };
 
 export const REDFLAG_5_SUSPENSO: RedFlagDef = {
@@ -249,6 +300,7 @@ export const TODAS_REDFLAGS: RedFlagDef[] = [
   REDFLAG_3_PERCENTUAL_CREDITO,
   REDFLAG_3A_PERCENTUAL_EM_CESSAO,
   REDFLAG_4_QUITACAO_ARQUIVAMENTO,
+  REDFLAG_4E_EXTINCAO_CITADA,
   REDFLAG_5_SUSPENSO,
   REDFLAG_6_REGIME_ESPECIAL,
   REDFLAG_7_HERDEIROS_OBITO,
@@ -401,7 +453,8 @@ const DESCRICOES_HUMANAS: Record<string, string> = {
   '2': 'FIDC ou securitizadora aparece no processo. Concorrência já entrou.',
   '3': '"% do crédito" mencionado. Pode ser cessão parcial — vale checar.',
   '3a': 'Percentual de crédito EM cessão. Negociação em andamento.',
-  '4': 'Processo já foi quitado ou arquivado. Não tem mais o que comprar.',
+  '4': 'O texto fala em quitação, pagamento integral ou arquivamento definitivo. Confira se já foi pago.',
+  '4e': 'Fala em extinção da execução. No TRT19 isso costuma sair logo depois da expedição do precatório, com o processo aguardando o pagamento — mas também pode ser prescrição. Leia a publicação antes de ligar.',
   '5': 'Execução suspensa. Vai demorar mais pra receber.',
   '6': 'Regime especial de pagamento — precifica diferente do normal.',
   '7': 'Credor faleceu, herdeiros no processo. Negociação com espólio.',
@@ -448,4 +501,56 @@ export function infoRedFlag(codigo: string): RedFlagInfo {
     categoria: def.categoria,
     cor: def.cor,
   };
+}
+
+// ---- Gravidade pra fila de prospecção ----
+
+/**
+ * Códigos que, sozinhos, tiram o precatório da mão do broker: alguém já
+ * comprou (cessão 1/1a/1b/1c, FIDC 2, percentual dentro de cessão 3a), já foi
+ * pago (4) ou o crédito está penhorado (8).
+ *
+ * Não é o mesmo que `categoria === 'BLOQUEADOR'`, de propósito:
+ *   - 3a é PRICING no catálogo (o percentual precifica), mas só aparece em
+ *     parágrafo de cessão — é negociação em andamento ou cessão feita.
+ *   - X7 é BLOQUEADOR/vermelho no catálogo, mas na prática é o boilerplate do
+ *     art. 100 §14 CF que sai em qualquer expedição de ofício. Tratar como
+ *     grave marcaria quase todo precatório do TRT19.
+ *   - 4e é só aviso: no TRT19 a extinção da execução sai antes do pagamento.
+ */
+export const CODIGOS_ALERTA_GRAVE: ReadonlySet<string> = new Set([
+  '1',
+  '1a',
+  '1b',
+  '1c',
+  '2',
+  '3a',
+  '4',
+  '8',
+]);
+
+/** True quando algum código da lista é alerta grave (desconhecido não conta). */
+export function temAlertaGrave(codigos: readonly string[]): boolean {
+  return codigos.some((c) => CODIGOS_ALERTA_GRAVE.has(c));
+}
+
+/**
+ * Peso de exibição: grave primeiro (é o que impede a ligação), depois o ofício
+ * requisitório (o sinal POSITIVO que o broker procura), depois avisos
+ * amarelos, e o resto (cinza, X7, desconhecido) no fim.
+ */
+function pesoExibicao(codigo: string): number {
+  if (CODIGOS_ALERTA_GRAVE.has(codigo)) return 0;
+  if (codigo === 'X1') return 1;
+  if (LOOKUP.get(codigo)?.cor === 'amarelo') return 2;
+  return 3;
+}
+
+/**
+ * Ordena códigos pra UI. A tabela corta nas primeiras flags, então o alerta
+ * grave não pode ficar escondido atrás do "+N". Sort estável: dentro do mesmo
+ * peso fica a ordem de entrada. Devolve cópia — não muta a entrada.
+ */
+export function ordenarFlagsParaExibir(codigos: readonly string[]): string[] {
+  return [...codigos].sort((a, b) => pesoExibicao(a) - pesoExibicao(b));
 }

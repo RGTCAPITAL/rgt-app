@@ -4,8 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { exigirPerfil } from '@/lib/auth/roles';
 import { buscarPorCnj } from '@/lib/djen/client';
+import { consolidarProcesso, peritosCitados } from '@/lib/djen/consolidar';
 import { paraLinhaBanco } from '@/lib/djen/mappers';
-import { DjenError, type Publicacao, type RedFlag } from '@/lib/djen/types';
+import { DjenError, type Publicacao } from '@/lib/djen/types';
 
 // 100 leva ~5-6 min no rate limiter (3.3s/request serial). DJEN é grátis e
 // permite 20 req/min; o gargalo real é o timeout do server action, não a API.
@@ -21,9 +22,13 @@ const BATCH_MAX = 100;
  * e o broker sabe que precisa buscar por outro caminho.
  *
  * Pra cada item:
- *   1. `buscarPorCnj` no DJEN, pega até 20 publicações mais recentes
+ *   1. `buscarPorCnj` no DJEN, pega até 100 publicações mais recentes — o
+ *      máximo de 1 página, então continua sendo 1 request por processo. Com 20,
+ *      39 dos 127 processos do TRT19 batiam no teto (23/10): o histórico vinha
+ *      cortado justo onde a consolidação busca cabeçalho e red flag antiga.
  *   2. Persiste cada uma em `djen_publicacoes` (upsert por id)
- *   3. Consolida: pega o credor + advogado + red flags da mais recente e
+ *   3. Consolida TODAS (ver `lib/djen/consolidar.ts`): credor pelo cabeçalho
+ *      PJe, advogado do lado do credor, red flags de todas as publicações — e
  *      escreve em `prospeccao_precatorios`
  *
  * Não gasta dinheiro por consulta — o gate de perfil existe pra manter
@@ -62,13 +67,18 @@ export async function enriquecerLoteDjen(
   }
 
   const resumo = { ok: 0, not_found: 0, error: 0 };
+  // O calculista do TRT19 é polo A em todo processo onde fez a conta, mas só
+  // alguns textos dizem "perito". Acumula quem já apareceu como perito no lote
+  // pra não virar credor nos processos seguintes — é melhor-esforço: depende
+  // da ordem, e o processo onde ele é citado continua se protegendo sozinho.
+  const peritosDoLote = new Set<string>();
 
   for (const p of pendentes) {
     let publicacoes: Publicacao[] = [];
     let erroMsg: string | null = null;
 
     try {
-      publicacoes = await buscarPorCnj(p.numero_processo, { limite: 20 });
+      publicacoes = await buscarPorCnj(p.numero_processo, { limite: 100 });
     } catch (e) {
       erroMsg =
         e instanceof DjenError
@@ -122,31 +132,31 @@ export async function enriquecerLoteDjen(
       continue;
     }
 
-    // Consolida pra fila de prospecção: pega o SINAL mais forte da publicação
-    // mais recente, mas juntando red flags de TODAS as publicações do processo.
-    // Uma cessão averbada 6 meses atrás continua contando hoje.
-    const maisRecente = publicacoes[0]!;
-    const todasRedFlags: RedFlag[] = publicacoes.flatMap((pub) => pub.redFlags);
-    const cedenteReal = maisRecente.destinatarios.find((d) => d.polo === 'A' && !d.mascarado);
-    const primeiroAdv = maisRecente.advogados[0];
+    // Consolida pra fila de prospecção olhando TODAS as publicações do
+    // processo, não só a mais recente: o DJEN lista destinatários e advogados
+    // em ordem alfabética, então "1º do polo A" e "advogados[0]" pegavam ente,
+    // perito ou procurador do devedor. Advogado sem evidência no texto fica
+    // null de propósito — melhor vazio que o telefone do outro lado.
+    for (const nome of peritosCitados(publicacoes)) peritosDoLote.add(nome);
+    const { credor, advogado, redFlags } = consolidarProcesso(publicacoes, {
+      peritos: peritosDoLote,
+    });
 
     // `prospeccao_precatorios.red_flags` é text[] (herdado da Judit, que usava
     // enum simples). Guardamos só os códigos aqui — o detalhe completo (trecho,
     // categoria, contexto) fica em `djen_publicacoes.red_flags` (jsonb),
     // consultado no detalhe da operação quando o broker precisar.
-    const codigosRedFlags = codigosDedup(todasRedFlags);
-
     await supabase
       .from('prospeccao_precatorios')
       .update({
         judit_status: 'ok',
         judit_enriquecido_em: new Date().toISOString(),
-        cedente_nome_provavel: cedenteReal?.nome ?? null,
+        cedente_nome_provavel: credor.nome,
         // DJEN não devolve CPF em campo algum — deixa vazio pra ficar honesto
         cedente_cpf_provavel: null,
-        advogado_nome: primeiroAdv?.nome ?? null,
-        advogado_oab: primeiroAdv ? `${primeiroAdv.oab}/${primeiroAdv.uf}` : null,
-        red_flags: codigosRedFlags,
+        advogado_nome: advogado?.nome ?? null,
+        advogado_oab: advogado?.oab ?? null,
+        red_flags: redFlags,
         status: 'enriquecido',
       })
       .eq('id', p.id);
@@ -155,20 +165,4 @@ export async function enriquecerLoteDjen(
 
   revalidatePath('/admin/prospeccao');
   return { ok: true, data: resumo };
-}
-
-/**
- * Deduplica red flags por código e devolve só os códigos, na ordem em que
- * apareceram. Se o mesmo padrão bateu 5x em 3 publicações, entra uma vez.
- * O detalhe completo (trecho, contexto) fica em `djen_publicacoes.red_flags`.
- */
-function codigosDedup(flags: RedFlag[]): string[] {
-  const vistos = new Set<string>();
-  const codigos: string[] = [];
-  for (const f of flags) {
-    if (vistos.has(f.codigo)) continue;
-    vistos.add(f.codigo);
-    codigos.push(f.codigo);
-  }
-  return codigos;
 }

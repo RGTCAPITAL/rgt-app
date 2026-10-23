@@ -9,8 +9,10 @@ import { createClient } from '@/lib/supabase/server';
 import { buttonVariants } from '@/components/ui/button';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
+import { resolverVisao, STATUS_NA_FILA } from '@/lib/prospeccao/fila';
 import { ProspeccaoTable } from './client-table';
 import { CartaoBuscaNome } from './cartao-busca-nome';
+import { ReconsolidarDialog } from './reconsolidar-dialog';
 
 const PAGE_SIZE = 200;
 
@@ -18,6 +20,7 @@ type SearchParams = {
   lote?: string;
   status?: string;
   q?: string;
+  visao?: string;
 };
 
 export default async function ProspeccaoPage({
@@ -49,6 +52,10 @@ export default async function ProspeccaoPage({
     );
   }
 
+  // Broker abre na fila (só o que ainda pede ligação); admin e gestão abrem em
+  // "todos". O parâmetro na URL sempre vale — ver resolverVisao.
+  const visao = resolverVisao(sp.visao, role);
+
   // Query com filtros
   let query = supabase
     .from('prospeccao_precatorios')
@@ -58,6 +65,7 @@ export default async function ProspeccaoPage({
     .order('valor_face', { ascending: false, nullsFirst: false })
     .limit(PAGE_SIZE);
 
+  if (visao === 'fila') query = query.in('status', STATUS_NA_FILA);
   if (sp.lote) query = query.eq('fonte_lote', sp.lote);
   if (sp.status) query = query.eq('status', sp.status);
   if (sp.q) {
@@ -101,7 +109,7 @@ export default async function ProspeccaoPage({
     <div>
       <SectionHero
         title="Prospecção de precatórios"
-        subtitle="Fila pré-lead alimentada por planilhas oficiais dos tribunais. Judit enriquece com nome do credor, broker busca contato, vira lead."
+        subtitle="Fila pré-lead alimentada por planilhas oficiais dos tribunais. O DJEN traz o credor e o advogado; o broker busca o contato e o processo vira lead."
         color="blue"
         action={
           <div className="flex flex-wrap gap-2">
@@ -115,6 +123,15 @@ export default async function ProspeccaoPage({
               <Upload className="size-4" />
               Importar planilha
             </Link>
+            {/* "Recalcular credores" mexe na base inteira de uma vez, então
+                fica só com o admin. O wrapper devolve a cor do texto: o hero
+                pinta tudo de branco e o botão outline não define cor, então o
+                rótulo sumia no fundo branco do botão. */}
+            {role === 'admin' && (
+              <div className="text-neutral-900">
+                <ReconsolidarDialog />
+              </div>
+            )}
           </div>
         }
       />
@@ -163,7 +180,7 @@ export default async function ProspeccaoPage({
       <ProspeccaoTable
         rows={rows ?? []}
         lotes={lotes}
-        filtros={{ lote: sp.lote ?? '', status: sp.status ?? '', q: sp.q ?? '' }}
+        filtros={{ lote: sp.lote ?? '', status: sp.status ?? '', q: sp.q ?? '', visao }}
         role={role}
         juditOn={djenOn}
       />
