@@ -61,6 +61,11 @@ export function fmtTelefone(v: string | null | undefined): string {
   // "+" com outro país: não é número brasileiro, não tem DDD pra separar.
   if (v.trim().startsWith('+') && !d.startsWith('55')) return v;
   if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  // Nenhum DDD brasileiro tem 0 — nem na primeira casa, nem na segunda. Sem
+  // esta guarda o 0800 virava DDD: "08001234567" saía "(08) 00123-4567", e
+  // número anotado com o 0 da operadora na frente ("08231234567") saía
+  // "(08) 23123-4567". Melhor devolver cru do que inventar um DDD.
+  if (!/^[1-9][1-9]/.test(d)) return v;
   if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
   return v;
