@@ -19,7 +19,8 @@ export const runtime = 'nodejs';
 
 const somenteDigitos = (s: string) => s.replace(/\D/g, '');
 
-const payloadSchema = z.object({
+/** Exportado pro teste: é aqui que mora a normalização, não no handler. */
+export const payloadSchema = z.object({
   nome: z.string().trim().min(2, 'Nome muito curto').max(200),
   telefone: z
     .string()
@@ -41,6 +42,26 @@ const payloadSchema = z.object({
     .or(z.literal(''))
     .transform((v) => (v ? somenteDigitos(v) : ''))
     .refine((v) => !v || v.length === 11 || v.length === 14, 'CPF ou CNPJ inválido'),
+  /**
+   * O que o credor digita no campo "número do processo ou ofício
+   * requisitório". Não dá pra exigir CNJ: muita gente tem em mãos o número
+   * do ofício, que tem formato de tribunal, não do CNJ.
+   *
+   * Quando vier um CNJ de verdade, guardamos só os 20 dígitos — é assim que
+   * a prospecção grava, e é o que permite descobrir que esse credor já está
+   * na nossa fila. Qualquer outra coisa fica como a pessoa escreveu.
+   */
+  numero_processo: z
+    .string()
+    .trim()
+    .max(60)
+    .optional()
+    .or(z.literal(''))
+    .transform((v) => {
+      if (!v) return '';
+      const d = somenteDigitos(v);
+      return d.length === 20 ? d : v;
+    }),
   mensagem: z.string().trim().max(2000).optional().or(z.literal('')),
 });
 
@@ -84,6 +105,7 @@ export async function POST(req: Request) {
       telefone: data.telefone || null,
       email: data.email || null,
       cpf_cnpj: data.cpf_cnpj || null,
+      numero_processo: data.numero_processo || null,
       origem: 'site',
       status: 'novo',
       notas: notasFinal,
@@ -112,13 +134,25 @@ export async function POST(req: Request) {
       .in('perfil_id', perfilIds);
 
     if (destinatarios && destinatarios.length > 0) {
+      // A notificação é o que o comercial lê antes de abrir o CRM, então ela
+      // precisa dizer se dá pra ligar agora. A versão anterior escrevia
+      // "Sem contato preenchido" sempre que faltava telefone, mesmo havendo
+      // e-mail — e o formulário do site nem pedia telefone.
+      const contato = [data.telefone ? `Tel ${data.telefone}` : null, data.email || null].filter(
+        Boolean,
+      );
+      const descricao = [
+        contato.length > 0 ? contato.join(' · ') : 'Sem telefone nem e-mail',
+        data.numero_processo ? `Processo ${data.numero_processo}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
       const notifs = destinatarios.map((d: { id: string }) => ({
         destinatario: d.id,
         tipo: 'comentario_novo',
         titulo: `Novo lead do site: ${data.nome}`,
-        descricao: data.telefone
-          ? `Telefone: ${data.telefone}${data.email ? ' · ' + data.email : ''}`
-          : data.email || 'Sem contato preenchido',
+        descricao,
         link: `/crm`,
       }));
       const { error: notifErr } = await supabase.from('notificacoes').insert(notifs);
