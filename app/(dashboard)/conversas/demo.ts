@@ -51,7 +51,7 @@ export function conversasDemo(agora = Date.now()): {
       msg('contato', 'Boa tarde. Vi o site de vocês, tenho um processo contra o estado', 70 * MIN),
       msg(
         'bot',
-        'Boa tarde! Eu sou o assistente automático da RGT Capital — sou um robô, e vou te passar pra uma pessoa da equipe sempre que precisar.\n\nO senhor não me conhece, então é normal desconfiar. Pode conferir o CNPJ da RGT no site da Receita, e perguntar ao advogado do seu processo.',
+        'Boa tarde! Eu sou o assistente automático da RGT Capital — sou um robô, e vou te passar pra uma pessoa da equipe sempre que precisar.\n\nVocê não me conhece, então é normal desconfiar. Pode conferir o CNPJ da RGT no site da Receita, e perguntar ao advogado do seu processo.',
         69 * MIN,
       ),
       msg('contato', 'entendi. e quanto vocês pagam?', 50 * MIN),
@@ -72,14 +72,14 @@ export function conversasDemo(agora = Date.now()): {
       msg('contato', 'isso, é da época que eu era professora', 20 * MIN),
       msg(
         'bot',
-        'Perfeito. Não tem resposta errada pra próxima pergunta: a senhora tem interesse em vender esse crédito agora, ou prefere continuar esperando o pagamento?',
+        'Perfeito. Não tem resposta errada pra próxima pergunta: você tem interesse em vender esse crédito agora, ou prefere continuar esperando o pagamento?',
         19 * MIN,
       ),
     ],
     'demo-advogado': [
       msg(
         'humano',
-        'Dr. Carlos, boa tarde. Sou o Broker de exemplo, da RGT Capital. Vi que o senhor representa um credor com ofício requisitório expedido no TRT19. Temos interesse em apresentar uma proposta de cessão. Podemos conversar?',
+        'Dr. Carlos, boa tarde. Sou o Broker de exemplo, da RGT Capital. Vi que você representa um credor com ofício requisitório expedido no TRT19. Temos interesse em apresentar uma proposta de cessão. Podemos conversar?',
         3 * HORA,
         { template_nome: 'abordagem_advogado' },
       ),
