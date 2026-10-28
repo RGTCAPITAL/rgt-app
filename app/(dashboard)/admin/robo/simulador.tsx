@@ -9,7 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { MensagemHistorico, PlanoRobo } from '@/lib/whatsapp/robo/decidir';
-import type { DadosColetados } from '@/lib/whatsapp/robo/schema';
+import { ROTULO_DADO, valorDado, type DadosColetados } from '@/lib/whatsapp/robo/schema';
 import type { UsoIA } from '@/lib/whatsapp/robo/claude';
 import { simularRobo } from './actions';
 
@@ -37,23 +37,6 @@ const FONTE: Record<PlanoRobo['fonte'], { rotulo: string; explica: string; cor: 
     cor: 'bg-rose-100 text-rose-900',
   },
 };
-
-const ROTULO_DADO: Record<keyof DadosColetados, string> = {
-  titularidade_confirmada: 'Processo é dela',
-  interesse_em_vender: 'Interesse em vender',
-  estado_civil: 'Estado civil',
-  cessao_anterior: 'Já assinou com outra empresa',
-  tem_advogado_no_processo: 'Tem contato com o advogado',
-  acompanhante_familiar: 'Quer familiar junto',
-  motivo_da_venda: 'Motivo (espontâneo)',
-};
-
-function valorDado(v: DadosColetados[keyof DadosColetados]): string {
-  if (v === null) return '—';
-  if (v === true) return 'sim';
-  if (v === false) return 'não';
-  return String(v).replace('_', ' ');
-}
 
 const ABERTURA_FRIA =
   'Olá! Aqui é da RGT Capital. Vimos que você tem um processo com ofício requisitório expedido. Podemos conversar sobre ele?';

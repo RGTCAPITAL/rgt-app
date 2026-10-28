@@ -33,6 +33,13 @@ describe('ehRotaPublica', () => {
     expect(ehRotaPublica('/api/leads/webhook')).toBe(true);
   });
 
+  it('deixa o webhook do WhatsApp público: quem autentica é a assinatura da Meta', () => {
+    // Sem isso a Meta toma redirect pro /login e nenhuma mensagem chega,
+    // sem erro nenhum aparecendo do nosso lado.
+    expect(ehRotaPublica('/api/whatsapp/webhook')).toBe(true);
+    expect(ehRotaPublica('/api/whatsapp')).toBe(false);
+  });
+
   it('mantém as telas do app privadas', () => {
     // O risco oposto: abrir demais. Se um dia alguém trocar o `startsWith`
     // por um `includes`, estes casos quebram.

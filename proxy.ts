@@ -55,6 +55,7 @@ export const PUBLIC_ROUTES = [
   '/auth/callback',
   '/auth/signout',
   '/api/leads/webhook',
+  '/api/whatsapp/webhook',
   '/api/cron',
 ];
 

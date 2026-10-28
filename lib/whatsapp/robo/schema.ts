@@ -64,3 +64,21 @@ export const CAMPOS_OBRIGATORIOS = [
 export function coletaCompleta(d: DadosColetados): boolean {
   return CAMPOS_OBRIGATORIOS.every((campo) => d[campo] !== null);
 }
+
+/** Rótulos pra tela: simulador e conversa do broker mostram igual. */
+export const ROTULO_DADO: Record<keyof DadosColetados, string> = {
+  titularidade_confirmada: 'Processo é dela',
+  interesse_em_vender: 'Interesse em vender',
+  estado_civil: 'Estado civil',
+  cessao_anterior: 'Já assinou com outra empresa',
+  tem_advogado_no_processo: 'Tem contato com o advogado',
+  acompanhante_familiar: 'Quer familiar junto',
+  motivo_da_venda: 'Motivo (espontâneo)',
+};
+
+export function valorDado(v: DadosColetados[keyof DadosColetados] | undefined): string {
+  if (v === null || v === undefined) return '—';
+  if (v === true) return 'sim';
+  if (v === false) return 'não';
+  return String(v).replace('_', ' ');
+}

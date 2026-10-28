@@ -87,6 +87,39 @@ describe('robô · freio de entrada vem antes da IA', () => {
   });
 });
 
+describe('robô · áudio, foto e documento', () => {
+  it.each([
+    ['audio', /um áudio/],
+    ['imagem', /uma foto/],
+    ['documento', /um documento/],
+  ] as const)('%s passa pro broker sem chamar a IA', async (tipoMensagem, motivo) => {
+    const ia = iaQueResponde({});
+    const plano = await decidirProximoPasso(entrada('', { tipoMensagem }), ia);
+    expect(ia).not.toHaveBeenCalled();
+    expect(plano.gatilho).toBe('midia');
+    expect(plano.pausar?.motivo).toMatch(motivo);
+    // Nunca "não consigo ouvir áudio": a pesquisa proíbe.
+    expect(plano.enviar).not.toMatch(/áudio|ouvir/i);
+  });
+
+  it('legenda com SAIR ainda é opt-out', async () => {
+    const plano = await decidirProximoPasso(
+      entrada('SAIR', { tipoMensagem: 'imagem' }),
+      iaQueResponde({}),
+    );
+    expect(plano.optout).toBe(true);
+  });
+
+  it('foto com legenda perguntando preço passa, não responde só o texto', async () => {
+    const plano = await decidirProximoPasso(
+      entrada('quanto vocês pagam nesse?', { tipoMensagem: 'imagem' }),
+      iaQueResponde({}),
+    );
+    expect(plano.gatilho).toBe('midia');
+    expect(plano.pausar).not.toBeNull();
+  });
+});
+
 describe('robô · freio de saída barra a IA', () => {
   it.each([
     'Normalmente a gente paga uns 70% do valor.',

@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { esperaBroker, estadoJanela, ordenarConversas } from '@/lib/whatsapp/conversas';
 import { whatsappConectado } from '@/lib/whatsapp/cloud-api';
 import { conversasDemo, demoDisponivel } from './demo';
+import { ROTULO_DADO, valorDado, type DadosColetados } from '@/lib/whatsapp/robo/schema';
 import { nomeDaConversa, type ConversaLinha, type MensagemLinha } from './tipos';
 import { Composer } from './composer';
 import { AssumirConversa } from './assumir';
@@ -34,7 +35,7 @@ async function carregar(
   const { data: brutas } = await supabase
     .from('whatsapp_conversas')
     .select(
-      `id, telefone, nome_perfil, janela_expira_em, bot_pausado, pausado_motivo, status, updated_at,
+      `id, telefone, nome_perfil, janela_expira_em, bot_pausado, pausado_motivo, status, updated_at, dados_coletados,
        lead:leads(id, nome, dono:usuarios!leads_dono_id_fkey(nome))`,
     )
     .order('updated_at', { ascending: false })
@@ -320,6 +321,8 @@ function Conversa({
         </p>
       )}
 
+      {c.dados_coletados && <DadosConfirmados dados={c.dados_coletados} />}
+
       {/* column-reverse: a rolagem já começa no fim, sem JavaScript. */}
       <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-neutral-50 px-4 py-4">
         <ol className="flex flex-col gap-2">
@@ -380,5 +383,24 @@ function Balao({ m, agora }: { m: MensagemLinha; agora: Date }) {
         )}
       </span>
     </li>
+  );
+}
+
+/** O que a pessoa já confirmou ao robô. O broker lê antes de responder. */
+function DadosConfirmados({ dados }: { dados: DadosColetados }) {
+  const preenchidos = (Object.keys(ROTULO_DADO) as (keyof DadosColetados)[]).filter(
+    (k) => dados[k] !== null && dados[k] !== undefined,
+  );
+  if (!preenchidos.length) return null;
+  return (
+    <dl className="flex flex-wrap gap-x-4 gap-y-1 border-b border-neutral-200 bg-white px-4 py-2 text-xs">
+      <dt className="sr-only">Confirmado ao robô</dt>
+      {preenchidos.map((k) => (
+        <div key={k} className="flex gap-1">
+          <dt className="text-neutral-500">{ROTULO_DADO[k]}:</dt>
+          <dd className="font-medium text-neutral-900">{valorDado(dados[k])}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }

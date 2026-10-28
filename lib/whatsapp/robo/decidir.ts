@@ -54,7 +54,8 @@ export interface PlanoRobo {
   naoEntendeu: boolean;
   /** Quem decidiu. Vai pro log e pra tela do simulador. */
   fonte: 'freio_entrada' | 'ia' | 'freio_saida' | 'erro_ia';
-  gatilho: MotivoGatilho | null;
+  /** `midia`: áudio, foto ou documento — o robô não lê, passa pro broker. */
+  gatilho: MotivoGatilho | 'midia' | null;
 }
 
 /**
@@ -97,11 +98,14 @@ export async function decidirProximoPasso(
 ): Promise<PlanoRobo> {
   const ultima = entrada.historico.at(-1);
   const textoRecebido = ultima?.autor === 'contato' ? ultima.conteudo : '';
+  const tipo = entrada.ctx.tipoMensagem;
+  const midia = Boolean(tipo && tipo !== 'texto');
 
-  // 1. Freio de entrada.
+  // 1. Freio de entrada. Vale também pra legenda de foto: "SAIR" escrito
+  // embaixo de uma imagem ainda é opt-out.
   const g = avaliarGuardrails(textoRecebido, entrada.ctx);
   if (g && g.motivo !== 'coleta_completa') {
-    if (g.acao === 'responder_e_seguir') {
+    if (g.acao === 'responder_e_seguir' && !midia) {
       return {
         ...VAZIO,
         fonte: 'freio_entrada',
@@ -110,13 +114,35 @@ export async function decidirProximoPasso(
         recusouPreco: g.motivo === 'preco',
       };
     }
+    if (g.acao !== 'responder_e_seguir') {
+      return {
+        ...VAZIO,
+        fonte: 'freio_entrada',
+        gatilho: g.motivo,
+        enviar: passagem(g.motivo),
+        pausar: { motivo: g.explicacao, urgente: g.urgente },
+        optout: g.acao === 'encerrar',
+      };
+    }
+  }
+
+  // Áudio, foto ou documento: o robô ainda não ouve nem lê. Passa sem dizer
+  // "não consigo ouvir áudio" — a pesquisa proíbe, soa a robô quebrado. O
+  // broker vê o motivo e decide se liga ou responde. Transcrever áudio é
+  // decisão em aberto; quando vier, é aqui que muda.
+  if (midia) {
+    const nome = { audio: 'um áudio', imagem: 'uma foto', documento: 'um documento' }[
+      tipo as 'audio' | 'imagem' | 'documento'
+    ];
     return {
       ...VAZIO,
       fonte: 'freio_entrada',
-      gatilho: g.motivo,
-      enviar: passagem(g.motivo),
-      pausar: { motivo: g.explicacao, urgente: g.urgente },
-      optout: g.acao === 'encerrar',
+      gatilho: 'midia',
+      enviar: PASSAGEM_PADRAO,
+      pausar: {
+        motivo: `A pessoa mandou ${nome ?? 'uma mídia'}. O robô não ouve áudio nem lê foto — abra e responda, ou ligue.`,
+        urgente: false,
+      },
     };
   }
 
