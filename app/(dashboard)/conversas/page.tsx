@@ -13,6 +13,7 @@ import { nomeDaConversa, type ConversaLinha, type MensagemLinha } from './tipos'
 import { Composer } from './composer';
 import { AssumirConversa } from './assumir';
 import { ConversasAoVivo } from './ao-vivo';
+import { AtribuirDono } from './atribuir-dono';
 
 type SearchParams = { c?: string; demo?: string };
 
@@ -37,7 +38,7 @@ async function carregar(
     .from('whatsapp_conversas')
     .select(
       `id, telefone, nome_perfil, janela_expira_em, bot_pausado, pausado_motivo, status, updated_at, dados_coletados,
-       lead:leads(id, nome, dono:usuarios!leads_dono_id_fkey(nome))`,
+       lead:leads(id, nome, dono_id, dono:usuarios!leads_dono_id_fkey(nome))`,
     )
     .order('updated_at', { ascending: false })
     .limit(200)
@@ -132,6 +133,21 @@ export default async function ConversasPage({
   const selecionada = ordenadas.find((c) => c.id === sp.c) ?? null;
   const esperando = ordenadas.filter(esperaBroker).length;
   const verTodas = role !== 'broker';
+
+  // Quem pode receber conversa: os mesmos donos que o CRM oferece.
+  let donos: { id: string; nome: string | null }[] = [];
+  if (verTodas) {
+    if (demo) donos = [{ id: 'demo-broker', nome: 'Broker de exemplo' }];
+    else {
+      const { data } = await supabase
+        .from('usuarios')
+        .select('id, nome')
+        .eq('ativo', true)
+        .order('nome')
+        .returns<{ id: string; nome: string | null }[]>();
+      donos = data ?? [];
+    }
+  }
   const sufixo = demo ? '&demo=1' : '';
 
   return (
@@ -236,6 +252,11 @@ export default async function ConversasPage({
                         Sem lead
                       </span>
                     )}
+                    {verTodas && c.lead && !c.lead.dono_id && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-900">
+                        Sem dono
+                      </span>
+                    )}
                     {verTodas && c.lead?.dono?.nome && (
                       <span className="text-neutral-500">{c.lead.dono.nome}</span>
                     )}
@@ -253,6 +274,7 @@ export default async function ConversasPage({
             optout={optout}
             conectado={conectado}
             demo={demo}
+            donos={verTodas ? donos : null}
             agora={agora}
           />
         ) : (
@@ -273,6 +295,7 @@ function Conversa({
   conectado,
   demo,
   agora,
+  donos,
 }: {
   c: ConversaLinha;
   mensagens: MensagemLinha[];
@@ -280,6 +303,8 @@ function Conversa({
   conectado: boolean;
   demo: boolean;
   agora: Date;
+  /** Lista de donos possíveis. Null: quem vê não pode distribuir (broker). */
+  donos: { id: string; nome: string | null }[] | null;
 }) {
   const janela = estadoJanela(c.janela_expira_em, agora);
   const nome = nomeDaConversa(c);
@@ -320,6 +345,16 @@ function Conversa({
                 janela {janela.rotulo}
               </span>
             </p>
+            {donos && c.lead && (
+              <div className="mt-1">
+                <AtribuirDono
+                  leadId={c.lead.id}
+                  donoId={c.lead.dono_id}
+                  donos={donos}
+                  desligado={demo}
+                />
+              </div>
+            )}
           </div>
         </div>
         {!c.bot_pausado && c.status !== 'encerrada' && (

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceClient } from '@/lib/supabase/service';
+import { fmtTelefone } from '@/lib/formatters';
 import { enviarTexto } from './cloud-api';
 import type { AutorMensagem } from './conversas';
 import type { MensagemRecebida, StatusRecebido } from './webhook-meta';
@@ -55,7 +56,26 @@ async function acharOuCriarConversa(sb: SupabaseClient, m: MensagemRecebida): Pr
     .select(COLUNAS)
     .single<Conversa>();
 
-  if (criada) return criada;
+  if (criada) {
+    if (criada.lead_id) return criada;
+    // Ninguém conhecia esse número: escreveu direto, sem formulário. Vira lead
+    // já na primeira mensagem, senão a conversa não aparece pra broker nenhum
+    // (a RLS de /conversas passa pelo dono do lead) e some do CRM. Criado
+    // DEPOIS da conversa: se duas mensagens chegam juntas, só quem criou a
+    // conversa cria o lead — não sobra lead duplicado.
+    const leadNovo = await criarLeadDoWhatsapp(sb, m);
+    if (leadNovo) {
+      await sb.from('whatsapp_conversas').update({ lead_id: leadNovo }).eq('id', criada.id);
+      criada.lead_id = leadNovo;
+      await notificar(sb, criada, {
+        titulo: `Novo contato pelo WhatsApp: ${m.nomePerfil ?? `+${m.telefone}`}`,
+        descricao:
+          'Escreveu direto no número da RGT. O robô está atendendo; o lead está no CRM sem dono.',
+        urgente: false,
+      });
+    }
+    return criada;
+  }
   // Duas mensagens da mesma pessoa chegando juntas: a outra criou primeiro.
   if (error?.code === '23505') {
     const { data } = await sb
@@ -66,6 +86,32 @@ async function acharOuCriarConversa(sb: SupabaseClient, m: MensagemRecebida): Pr
     if (data) return data;
   }
   throw new Error(`não foi possível criar a conversa: ${error?.message}`);
+}
+
+/** Lead mínimo de quem escreveu direto. Admin ou gestão distribuem depois. */
+async function criarLeadDoWhatsapp(
+  sb: SupabaseClient,
+  m: MensagemRecebida,
+): Promise<string | null> {
+  // Leads guardam telefone sem o 55, como o formulário do site.
+  const t = m.telefone;
+  const nacional = (t.length === 12 || t.length === 13) && t.startsWith('55') ? t.slice(2) : t;
+  const { data, error } = await sb
+    .from('leads')
+    .insert({
+      nome: m.nomePerfil?.trim() || `WhatsApp ${fmtTelefone(nacional)}`,
+      telefone: nacional,
+      origem: 'whatsapp',
+      status: 'novo',
+      notas: 'Escreveu direto no WhatsApp da RGT. O robô atendeu primeiro.',
+    })
+    .select('id')
+    .single<{ id: string }>();
+  if (error || !data) {
+    console.error('[whatsapp] não criou o lead do contato novo', error?.message);
+    return null;
+  }
+  return data.id;
 }
 
 /**
@@ -317,6 +363,33 @@ async function aplicarPlano(
         : {}),
     })
     .eq('id', conversa.id);
+
+  // O que a pessoa contou do processo vai pro cartão do CRM — mas só em campo
+  // vazio: o que veio do formulário ou da prospecção vale mais que a lembrança.
+  if (conversa.lead_id && plano.dados) {
+    const d = plano.dados;
+    if (d.devedor_informado) {
+      await sb
+        .from('leads')
+        .update({ ente_devedor: d.devedor_informado })
+        .eq('id', conversa.lead_id)
+        .is('ente_devedor', null);
+    }
+    const digitos = d.numero_processo_informado?.replace(/\D/g, '') ?? '';
+    // Só CNJ de 20 dígitos vai pro lead: a regra de integridade do banco
+    // recusa texto livre ("não lembro, tá com o advogado" — testado em 28/10).
+    // O que não for número válido fica nos dados da conversa, onde o broker vê.
+    if (digitos.length === 20) {
+      const { error } = await sb
+        .from('leads')
+        .update({ numero_processo: digitos })
+        .eq('id', conversa.lead_id)
+        .is('numero_processo', null);
+      // Dígito verificador errado também é recusado. Não é falha do robô:
+      // o número segue nos dados da conversa.
+      if (error) console.warn('[whatsapp] número de processo não gravado no lead', error.message);
+    }
+  }
 
   if (plano.pausar && !plano.optout) {
     await notificar(sb, conversa, {

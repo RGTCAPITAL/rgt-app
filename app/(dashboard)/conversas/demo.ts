@@ -116,11 +116,14 @@ export function conversasDemo(agora = Date.now()): {
         tem_advogado_no_processo: null,
         acompanhante_familiar: null,
         motivo_da_venda: null,
+        devedor_informado: null,
+        tribunal_informado: null,
+        numero_processo_informado: null,
       },
       telefone: '5582999990001',
       nome_perfil: 'José R.',
       janela_expira_em: ate(23.5 * HORA),
-      lead: { id: 'demo-l1', nome: 'José Ribamar da Silva', dono },
+      lead: { id: 'demo-l1', nome: 'José Ribamar da Silva', dono_id: null, dono: null },
       ultima: ultima('demo-jose'),
     },
     {
@@ -133,7 +136,7 @@ export function conversasDemo(agora = Date.now()): {
       telefone: '5582999990002',
       nome_perfil: 'Maria',
       janela_expira_em: ate(23.6 * HORA),
-      lead: { id: 'demo-l2', nome: 'Maria das Graças Lima', dono },
+      lead: { id: 'demo-l2', nome: 'Maria das Graças Lima', dono_id: 'demo-broker', dono },
       ultima: ultima('demo-maria'),
     },
     {
@@ -146,7 +149,7 @@ export function conversasDemo(agora = Date.now()): {
       telefone: '5582999990003',
       nome_perfil: 'Carlos Adv',
       janela_expira_em: ate(80 * MIN),
-      lead: { id: 'demo-l3', nome: 'Dr. Carlos Menezes (advogado)', dono },
+      lead: { id: 'demo-l3', nome: 'Dr. Carlos Menezes (advogado)', dono_id: 'demo-broker', dono },
       ultima: ultima('demo-advogado'),
     },
     {
@@ -159,7 +162,7 @@ export function conversasDemo(agora = Date.now()): {
       telefone: '5582999990004',
       nome_perfil: null,
       janela_expira_em: null,
-      lead: { id: 'demo-l4', nome: 'Antônio Ferreira', dono },
+      lead: { id: 'demo-l4', nome: 'Antônio Ferreira', dono_id: 'demo-broker', dono },
       ultima: ultima('demo-antonio'),
     },
   ];

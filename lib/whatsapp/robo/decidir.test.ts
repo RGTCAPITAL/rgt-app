@@ -11,6 +11,9 @@ const DADOS_VAZIOS: DadosColetados = {
   tem_advogado_no_processo: null,
   acompanhante_familiar: null,
   motivo_da_venda: null,
+  devedor_informado: null,
+  tribunal_informado: null,
+  numero_processo_informado: null,
 };
 
 function entrada(texto: string, ctx: EntradaRobo['ctx'] = {}): EntradaRobo {

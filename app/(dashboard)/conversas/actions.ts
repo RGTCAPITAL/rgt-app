@@ -10,6 +10,48 @@ import { enviarTexto, whatsappConectado } from '@/lib/whatsapp/cloud-api';
 type Resultado = { ok: true } | { ok: false; error: string };
 
 /**
+ * Admin ou gestão dão dono ao lead da conversa. É o dono que faz a conversa
+ * aparecer pro broker (RLS de /conversas passa por leads.dono_id), e ele é
+ * avisado na hora pelo sino.
+ */
+export async function atribuirDono(leadId: string, donoId: string): Promise<Resultado> {
+  const auth = await exigirPerfil(['admin', 'gestao']);
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('leads')
+    .update({ dono_id: donoId })
+    .eq('id', leadId)
+    .select('id, nome')
+    .single<{ id: string; nome: string }>();
+  if (error || !data) return { ok: false, error: 'Não foi possível atribuir.' };
+
+  // Aviso pelo sino. Service role porque notificação não tem policy de
+  // INSERT pra usuário — quem cria aviso é sempre o sistema.
+  if (donoId !== auth.userId) {
+    const { data: conversa } = await supabase
+      .from('whatsapp_conversas')
+      .select('id')
+      .eq('lead_id', leadId)
+      .maybeSingle<{ id: string }>();
+    await createServiceClient()
+      .from('notificacoes')
+      .insert({
+        destinatario: donoId,
+        tipo: 'whatsapp',
+        titulo: `Conversa atribuída a você: ${data.nome}`,
+        descricao: 'Abra pra ver o que a pessoa já contou ao robô antes de responder.',
+        link: conversa ? `/conversas?c=${conversa.id}` : '/crm',
+      });
+  }
+
+  revalidatePath('/conversas');
+  revalidatePath('/crm');
+  return { ok: true };
+}
+
+/**
  * Broker tira o robô da conversa. Não volta sozinho: a pesquisa de 2026-09-23
  * é explícita que o robô não retoma uma conversa que um humano assumiu.
  */

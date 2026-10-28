@@ -51,6 +51,21 @@ describe('freio de saída · deixa passar', () => {
     'Vou chamar uma pessoa da equipe pra continuar com o senhor.',
   ])('%s', (t) => expect(verificarSaida(t)).toEqual({ ok: true }));
 
+  it('repetir o número do processo não é dinheiro', () => {
+    // A IA confirma o número que a pessoa mandou. "45.2019" não é R$ 45.201.
+    expect(
+      verificarSaida('Anotei o processo 0700123-45.2019.8.02.0001. Está no seu nome?'),
+    ).toEqual({
+      ok: true,
+    });
+    expect(verificarSaida('Processo 0001107-33.2017.5.19.0001, certo?')).toEqual({ ok: true });
+  });
+
+  it('mas valor com ponto de milhar continua barrado', () => {
+    expect(bloqueia('Dá uns 150.000 à vista.')).toBe(true);
+    expect(bloqueia('Fica em 1.250.000,00.')).toBe(true);
+  });
+
   it('a negação só vale na própria frase', () => {
     // "não" na primeira frase não pode perdoar o pedido na segunda.
     expect(bloqueia('Não se preocupe. Me manda seu CPF.')).toBe(true);

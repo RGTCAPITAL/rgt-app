@@ -27,8 +27,11 @@ interface Regra {
 const REGRAS: Regra[] = [
   {
     motivo: 'citou valor, percentual ou moeda',
+    // O `(?!\d)` no fim do "123.456": sem ele, o robô repetindo o número do
+    // processo ("0700123-45.2019.8...") casava "45.201" como dinheiro e a
+    // conversa ia pro broker à toa. Visto no simulador em 28/10.
     re: palavra(
-      /(R\$|\d+([.,]\d+)?\s*%|por cento|reais|\d+\s*mil\b|milh[ãa]o|milh[õo]es|\d{1,3}(\.\d{3})+(,\d{2})?)/,
+      /(R\$|\d+([.,]\d+)?\s*%|por cento|reais|\d+\s*mil\b|milh[ãa]o|milh[õo]es|\d{1,3}(\.\d{3})+(,\d{2})?(?!\d))/,
     ),
   },
   {

@@ -33,6 +33,21 @@ export const dadosColetadosSchema = z.object({
     .string()
     .nullable()
     .describe('Só se a pessoa contou espontaneamente. Nunca perguntar.'),
+  // Os três abaixo só existem quando a RGT não sabia nada da pessoa (escreveu
+  // direto, sem formulário). Com processo conhecido, ficam null: o dado da
+  // RGT é mais confiável que a lembrança do credor.
+  devedor_informado: z
+    .string()
+    .nullable()
+    .describe('Contra quem é o processo, como a pessoa disse. Só se a RGT não sabia.'),
+  tribunal_informado: z
+    .string()
+    .nullable()
+    .describe('Tribunal ou cidade do processo, como a pessoa disse. Só se a RGT não sabia.'),
+  numero_processo_informado: z
+    .string()
+    .nullable()
+    .describe('Número do processo como a pessoa escreveu, sem corrigir. Só se a RGT não sabia.'),
 });
 
 export type DadosColetados = z.infer<typeof dadosColetadosSchema>;
@@ -74,6 +89,9 @@ export const ROTULO_DADO: Record<keyof DadosColetados, string> = {
   tem_advogado_no_processo: 'Tem contato com o advogado',
   acompanhante_familiar: 'Quer familiar junto',
   motivo_da_venda: 'Motivo (espontâneo)',
+  devedor_informado: 'Contra quem (disse)',
+  tribunal_informado: 'Tribunal (disse)',
+  numero_processo_informado: 'Nº do processo (disse)',
 };
 
 export function valorDado(v: DadosColetados[keyof DadosColetados] | undefined): string {

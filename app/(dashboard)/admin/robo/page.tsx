@@ -4,6 +4,7 @@ import { iaConfigurada } from '@/lib/ia/client';
 import { SectionHero } from '@/components/ui/section-hero';
 import { MODELO_ROBO } from '@/lib/whatsapp/robo/claude';
 import { Simulador } from './simulador';
+import { PainelConexao } from './painel-conexao';
 
 export default async function RoboPage() {
   const auth = await exigirPerfil(['admin', 'gestao']);
@@ -16,6 +17,7 @@ export default async function RoboPage() {
         subtitle="Você faz o papel do cliente. O robô responde de verdade, mas nada é gravado e nada vai pro WhatsApp."
         color="violet"
       />
+      <PainelConexao />
       {iaConfigurada() ? (
         <Simulador modelo={MODELO_ROBO} />
       ) : (
