@@ -12,6 +12,7 @@ import {
   Search,
   TrendingUp,
   MessageSquare,
+  MessagesSquare,
   Percent,
   type LucideIcon,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ export const NAV_BASE: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: Home },
   { label: 'Prospecção', href: '/admin/prospeccao', icon: Search },
   { label: 'CRM', href: '/crm', icon: Users },
+  { label: 'Conversas', href: '/conversas', icon: MessagesSquare },
   { label: 'Operações', href: '/operacoes', icon: Briefcase },
   { label: 'Tarefas', href: '/tarefas', icon: CheckSquare },
 ];
