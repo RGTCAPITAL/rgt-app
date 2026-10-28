@@ -90,6 +90,42 @@ describe('robô · freio de entrada vem antes da IA', () => {
   });
 });
 
+describe('robô · botão "Não quero receber" dos modelos', () => {
+  it('o toque no botão, como a Meta entrega, vira opt-out', async () => {
+    // Os modelos rgt_proposta_credor e rgt_proposta_advogado (submetidos em
+    // 28/10) têm esse botão de resposta rápida. A primeira versão do freio não
+    // conhecia a frase: quem tocasse receberia resposta do robô.
+    const { lerWebhook } = await import('../webhook-meta');
+    const { mensagens } = lerWebhook({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '558299530897',
+                    id: 'wamid.botao',
+                    timestamp: '1761700000',
+                    type: 'button',
+                    button: { text: 'Não quero receber', payload: 'Não quero receber' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const plano = await decidirProximoPasso(
+      entrada(mensagens[0].conteudo ?? '', { tipoMensagem: mensagens[0].tipo }),
+      iaQueResponde({}),
+    );
+    expect(plano.optout).toBe(true);
+    expect(plano.gatilho).toBe('optout');
+  });
+});
+
 describe('robô · áudio, foto e documento', () => {
   it.each([
     ['audio', /um áudio/],

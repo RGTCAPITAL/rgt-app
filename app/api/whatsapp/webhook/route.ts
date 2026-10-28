@@ -1,6 +1,10 @@
 import { after, NextResponse, type NextRequest } from 'next/server';
 import { assinaturaValida, lerWebhook } from '@/lib/whatsapp/webhook-meta';
-import { processarMensagemRecebida, processarStatus } from '@/lib/whatsapp/executor';
+import {
+  processarAvisoModelo,
+  processarMensagemRecebida,
+  processarStatus,
+} from '@/lib/whatsapp/executor';
 
 /**
  * Webhook do WhatsApp Cloud API. Rota pública (está em PUBLIC_ROUTES do
@@ -44,9 +48,12 @@ export async function POST(req: NextRequest) {
     return new NextResponse('JSON inválido', { status: 400 });
   }
 
-  const { mensagens, status } = lerWebhook(payload);
+  const { mensagens, status, modelos } = lerWebhook(payload);
 
   after(async () => {
+    for (const a of modelos) {
+      await processarAvisoModelo(a).catch((e) => console.error('[whatsapp] modelo', e));
+    }
     for (const s of status) {
       await processarStatus(s).catch((e) => console.error('[whatsapp] status', e));
     }

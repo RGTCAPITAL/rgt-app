@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { assinaturaValida, lerWebhook, statusAvanca } from './webhook-meta';
+import { assinaturaValida, lerWebhook, resumirAvisoModelo, statusAvanca } from './webhook-meta';
 
 function pacote(value: Record<string, unknown>) {
   return {
@@ -125,8 +125,8 @@ describe('lerWebhook', () => {
   });
 
   it('pacote estranho não derruba: devolve vazio', () => {
-    expect(lerWebhook(null)).toEqual({ mensagens: [], status: [] });
-    expect(lerWebhook({ entry: 'x' })).toEqual({ mensagens: [], status: [] });
+    expect(lerWebhook(null)).toEqual({ mensagens: [], status: [], modelos: [] });
+    expect(lerWebhook({ entry: 'x' })).toEqual({ mensagens: [], status: [], modelos: [] });
     expect(lerWebhook(pacote({ messages: [{ type: 'text' }] })).mensagens).toHaveLength(0);
   });
 
@@ -178,5 +178,84 @@ describe('statusAvanca', () => {
     expect(statusAvanca('enviada', 'falhou')).toBe(true);
     expect(statusAvanca('falhou', 'lida')).toBe(false);
     expect(statusAvanca('falhou', 'falhou')).toBe(false);
+  });
+});
+
+describe('avisos de modelo', () => {
+  const pacoteModelo = (field: string, value: Record<string, unknown>) => ({
+    entry: [{ id: 'WABA', changes: [{ field, value }] }],
+  });
+
+  it('lê aprovação e recusa de modelo', () => {
+    const aprovado = lerWebhook(
+      pacoteModelo('message_template_status_update', {
+        event: 'APPROVED',
+        message_template_name: 'rgt_proposta_credor',
+        message_template_language: 'pt_BR',
+        reason: 'NONE',
+      }),
+    );
+    expect(aprovado.modelos).toEqual([
+      {
+        modelo: 'rgt_proposta_credor',
+        tipo: 'status',
+        valor: 'APPROVED',
+        anterior: null,
+        motivo: null,
+      },
+    ]);
+    expect(aprovado.mensagens).toHaveLength(0);
+
+    const recusado = lerWebhook(
+      pacoteModelo('message_template_status_update', {
+        event: 'REJECTED',
+        message_template_name: 'rgt_proposta_advogado',
+        reason: 'INCORRECT_CATEGORY',
+      }),
+    );
+    expect(recusado.modelos[0]).toMatchObject({ valor: 'REJECTED', motivo: 'INCORRECT_CATEGORY' });
+  });
+
+  it('lê mudança de qualidade', () => {
+    const { modelos } = lerWebhook(
+      pacoteModelo('message_template_quality_update', {
+        previous_quality_score: 'GREEN',
+        new_quality_score: 'RED',
+        message_template_name: 'rgt_proposta_credor',
+      }),
+    );
+    expect(modelos).toEqual([
+      {
+        modelo: 'rgt_proposta_credor',
+        tipo: 'qualidade',
+        valor: 'RED',
+        anterior: 'GREEN',
+        motivo: null,
+      },
+    ]);
+  });
+
+  it('pausa, recusa e vermelho são urgentes; aprovação não', () => {
+    const base = { modelo: 'm', anterior: null, motivo: null };
+    expect(resumirAvisoModelo({ ...base, tipo: 'status', valor: 'PAUSED' })?.urgente).toBe(true);
+    expect(resumirAvisoModelo({ ...base, tipo: 'status', valor: 'REJECTED' })?.urgente).toBe(true);
+    expect(resumirAvisoModelo({ ...base, tipo: 'qualidade', valor: 'RED' })?.urgente).toBe(true);
+    expect(resumirAvisoModelo({ ...base, tipo: 'status', valor: 'APPROVED' })?.urgente).toBe(false);
+    expect(resumirAvisoModelo({ ...base, tipo: 'qualidade', valor: 'YELLOW' })?.urgente).toBe(
+      false,
+    );
+  });
+
+  it('não avisa o que não muda nada', () => {
+    const base = { modelo: 'm', motivo: null };
+    expect(
+      resumirAvisoModelo({ ...base, tipo: 'status', valor: 'PENDING', anterior: null }),
+    ).toBeNull();
+    expect(
+      resumirAvisoModelo({ ...base, tipo: 'qualidade', valor: 'GREEN', anterior: 'GREEN' }),
+    ).toBeNull();
+    expect(
+      resumirAvisoModelo({ ...base, tipo: 'qualidade', valor: 'GREEN', anterior: 'YELLOW' }),
+    ).not.toBeNull();
   });
 });

@@ -160,7 +160,7 @@ const REGRAS: Regra[] = [
     explicacao:
       'A pessoa pediu pra não ser mais contatada. Vale pra sempre, inclusive pro broker humano.',
     re: palavra(
-      /^\s*(sair|parar|pare|para|stop|chega)\s*[.!]?\s*$|(n[ãa]o quero mais|n[ãa]o me (mande|manda|mandem|procure|procurem)|para de me (mandar|chamar|ligar)|me (tira|tire|remova|remove) da lista|descadastr|sai do meu (zap|whatsapp)|me deixa em paz)/,
+      /^\s*(sair|parar|pare|para|stop|chega)\s*[.!]?\s*$|(n[ãa]o quero mais|n[ãa]o quero receber|n[ãa]o me (mande|manda|mandem|procure|procurem)|para de me (mandar|chamar|ligar)|me (tira|tire|remova|remove) da lista|descadastr|sai do meu (zap|whatsapp)|me deixa em paz)/,
     ),
   },
 

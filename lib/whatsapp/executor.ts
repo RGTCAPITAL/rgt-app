@@ -3,8 +3,8 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { fmtTelefone } from '@/lib/formatters';
 import { enviarTexto } from './cloud-api';
 import type { AutorMensagem } from './conversas';
-import type { MensagemRecebida, StatusRecebido } from './webhook-meta';
-import { statusAvanca } from './webhook-meta';
+import type { AvisoModelo, MensagemRecebida, StatusRecebido } from './webhook-meta';
+import { resumirAvisoModelo, statusAvanca } from './webhook-meta';
 import { decidirProximoPasso, type MensagemHistorico, type PlanoRobo } from './robo/decidir';
 import { chamarClaude } from './robo/claude';
 import type { DadosColetados } from './robo/schema';
@@ -412,4 +412,38 @@ export async function processarStatus(s: StatusRecebido): Promise<void> {
   // Status de mensagem que não está no banco (enviada por fora) é ignorado.
   if (!msg || !statusAvanca(msg.status_entrega as string | null, s.status)) return;
   await sb.from('whatsapp_mensagens').update({ status_entrega: s.status }).eq('id', msg.id);
+}
+
+/**
+ * Aviso de modelo (aprovado, recusado, pausado, qualidade) vai pros admins:
+ * modelo é coisa da conta da Meta, não de uma conversa. Ver
+ * `resumirAvisoModelo` pra o que é urgente.
+ */
+export async function processarAvisoModelo(a: AvisoModelo): Promise<void> {
+  const texto = resumirAvisoModelo(a);
+  console.info('[whatsapp] modelo', a.modelo, a.tipo, a.valor, a.motivo ?? '');
+  if (!texto) return;
+
+  const sb = createServiceClient();
+  const { data: perfis } = await sb.from('perfis').select('id').eq('slug', 'admin');
+  const { data: admins } = await sb
+    .from('usuarios')
+    .select('id')
+    .eq('ativo', true)
+    .in(
+      'perfil_id',
+      (perfis ?? []).map((p) => p.id),
+    );
+  if (!admins?.length) return;
+
+  const { error } = await sb.from('notificacoes').insert(
+    admins.map((u) => ({
+      destinatario: u.id as string,
+      tipo: 'whatsapp',
+      titulo: texto.urgente ? `URGENTE: ${texto.titulo}` : texto.titulo,
+      descricao: texto.descricao,
+      link: '/admin/robo',
+    })),
+  );
+  if (error) console.error('[whatsapp] aviso de modelo não gravado', error.message);
 }

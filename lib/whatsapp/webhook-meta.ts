@@ -102,17 +102,65 @@ function lerMensagem(m: Obj, nomes: Map<string, string>): MensagemRecebida | nul
   };
 }
 
+/**
+ * Aviso da Meta sobre um modelo de mensagem (o texto aprovado do contato frio).
+ *
+ * Sem isto os dois tipos eram descartados em silêncio. O de qualidade é o que
+ * importa no meio de uma campanha: quando a Meta pausa um modelo por denúncia
+ * ou bloqueio, os envios param e, sem o aviso, ninguém entende por quê.
+ */
+export interface AvisoModelo {
+  modelo: string;
+  tipo: 'status' | 'qualidade';
+  /** status: APPROVED, REJECTED, PAUSED, DISABLED... qualidade: GREEN, YELLOW, RED. */
+  valor: string;
+  anterior: string | null;
+  motivo: string | null;
+}
+
 export function lerWebhook(payload: unknown): {
   mensagens: MensagemRecebida[];
   status: StatusRecebido[];
+  modelos: AvisoModelo[];
 } {
   const mensagens: MensagemRecebida[] = [];
   const status: StatusRecebido[] = [];
+  const modelos: AvisoModelo[] = [];
 
   for (const entry of arr(obj(payload)?.entry)) {
     for (const change of arr(obj(entry)?.changes)) {
       const value = obj(obj(change)?.value);
       if (!value) continue;
+
+      const campo = str(obj(change)?.field);
+      const modelo = str(value.message_template_name);
+      if (campo === 'message_template_status_update' && modelo) {
+        const evento = str(value.event);
+        if (evento) {
+          const motivo = str(value.reason);
+          modelos.push({
+            modelo,
+            tipo: 'status',
+            valor: evento,
+            anterior: null,
+            motivo: motivo === 'NONE' ? null : motivo,
+          });
+        }
+        continue;
+      }
+      if (campo === 'message_template_quality_update' && modelo) {
+        const nova = str(value.new_quality_score);
+        if (nova) {
+          modelos.push({
+            modelo,
+            tipo: 'qualidade',
+            valor: nova,
+            anterior: str(value.previous_quality_score),
+            motivo: null,
+          });
+        }
+        continue;
+      }
 
       const nomes = new Map<string, string>();
       for (const c of arr(value.contacts)) {
@@ -136,7 +184,7 @@ export function lerWebhook(payload: unknown): {
 
   // Em ordem de chegada: a Meta pode agrupar várias mensagens da mesma pessoa.
   mensagens.sort((a, b) => a.recebidaEm.localeCompare(b.recebidaEm));
-  return { mensagens, status };
+  return { mensagens, status, modelos };
 }
 
 /**
@@ -169,4 +217,66 @@ export function statusAvanca(atual: string | null, novo: StatusEntrega): boolean
   if (novo === 'falhou') return atual !== 'falhou';
   if (atual === 'falhou') return false;
   return (ORDEM_STATUS[novo] ?? 0) > (ORDEM_STATUS[atual ?? 'enviando'] ?? 0);
+}
+
+/**
+ * O texto do aviso pro admin, ou `null` quando não há o que fazer.
+ *
+ * Recusado, pausado, desligado ou qualidade vermelha são urgentes: param o
+ * contato frio. Amarelo é o aviso antes do vermelho. Aprovado é a notícia
+ * que destrava o envio. "Em análise" e o resto não geram aviso.
+ */
+export function resumirAvisoModelo(
+  a: AvisoModelo,
+): { titulo: string; descricao: string; urgente: boolean } | null {
+  if (a.tipo === 'status') {
+    switch (a.valor) {
+      case 'APPROVED':
+        return {
+          titulo: `Meta aprovou o modelo ${a.modelo}`,
+          descricao: 'Já dá pra usar no contato frio.',
+          urgente: false,
+        };
+      case 'REJECTED':
+        return {
+          titulo: `Meta recusou o modelo ${a.modelo}`,
+          descricao: `Motivo: ${a.motivo ?? 'não informado'}. Precisa reescrever e submeter de novo.`,
+          urgente: true,
+        };
+      case 'PAUSED':
+      case 'DISABLED':
+        return {
+          titulo: `Meta ${a.valor === 'PAUSED' ? 'pausou' : 'desligou'} o modelo ${a.modelo}`,
+          descricao:
+            'Os envios com este modelo param até a Meta liberar. Costuma vir de denúncia ou bloqueio de quem recebeu.',
+          urgente: true,
+        };
+      default:
+        return null;
+    }
+  }
+
+  if (a.valor === 'RED') {
+    return {
+      titulo: `Qualidade do modelo ${a.modelo} ficou vermelha`,
+      descricao:
+        'Muita gente bloqueando ou denunciando. A Meta pausa o modelo se continuar — reveja o texto e pra quem está indo.',
+      urgente: true,
+    };
+  }
+  if (a.valor === 'YELLOW') {
+    return {
+      titulo: `Qualidade do modelo ${a.modelo} caiu pra amarela`,
+      descricao: 'Primeiro aviso da Meta, antes de pausar. Vale olhar as últimas respostas.',
+      urgente: false,
+    };
+  }
+  if (a.valor === 'GREEN' && a.anterior && a.anterior !== 'GREEN') {
+    return {
+      titulo: `Qualidade do modelo ${a.modelo} voltou pro verde`,
+      descricao: 'Sem ação necessária.',
+      urgente: false,
+    };
+  }
+  return null;
 }
