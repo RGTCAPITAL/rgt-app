@@ -12,6 +12,7 @@ import { ROTULO_DADO, valorDado, type DadosColetados } from '@/lib/whatsapp/robo
 import { nomeDaConversa, type ConversaLinha, type MensagemLinha } from './tipos';
 import { Composer } from './composer';
 import { AssumirConversa } from './assumir';
+import { ConversasAoVivo } from './ao-vivo';
 
 type SearchParams = { c?: string; demo?: string };
 
@@ -135,6 +136,8 @@ export default async function ConversasPage({
 
   return (
     <div>
+      {/* Exemplo não está no banco: não há o que escutar. */}
+      {!demo && <ConversasAoVivo />}
       <SectionHero
         title="Conversas"
         subtitle={

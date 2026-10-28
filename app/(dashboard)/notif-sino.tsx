@@ -32,6 +32,24 @@ export function NotifSino({ notifs }: { notifs: Notif[] }) {
   const naoLidas = notifs.filter((n) => !n.lida_em).length;
   const ref = useRef<HTMLDivElement>(null);
 
+  // "(2) Plataforma RGT" na aba: quem está em outra aba vê que tem aviso.
+  //
+  // Observa o <head> em vez de só escrever uma vez: o Next reescreve o título
+  // depois da hidratação e a cada navegação, e apagava o número na hora (visto
+  // no teste de 28/10). Reaplicar só quando difere encerra o ciclo do
+  // observador, que dispara de novo com a própria escrita.
+  useEffect(() => {
+    const aplicar = () => {
+      const base = document.title.replace(/^\(\d+\) /, '');
+      const alvo = naoLidas > 0 ? `(${naoLidas}) ${base}` : base;
+      if (document.title !== alvo) document.title = alvo;
+    };
+    aplicar();
+    const observador = new MutationObserver(aplicar);
+    observador.observe(document.head, { childList: true, subtree: true, characterData: true });
+    return () => observador.disconnect();
+  }, [naoLidas]);
+
   useEffect(() => {
     function fechar(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);

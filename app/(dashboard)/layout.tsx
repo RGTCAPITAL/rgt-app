@@ -7,6 +7,7 @@ import { SidebarNav } from './sidebar-nav';
 import { UserMenu } from './user-menu';
 import { Breadcrumbs } from './breadcrumbs';
 import { AvisoDadosExemplo } from './aviso-dados-exemplo';
+import { AvisosAoVivo } from './avisos-ao-vivo';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -63,6 +64,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3">
           <Breadcrumbs />
           <NotifSino notifs={notifs ?? []} />
+          <AvisosAoVivo userId={user.id} />
         </header>
         <main className="p-10 lg:p-12">
           <AvisoDadosExemplo />
