@@ -13,6 +13,15 @@ const LABELS: Record<string, string> = {
   tarefas: 'Tarefas',
   admin: 'Admin',
   usuarios: 'Usuários',
+  conversas: 'Conversas',
+  robo: 'Robô',
+  prospeccao: 'Prospecção',
+  importar: 'Importar',
+  'buscar-por-nome': 'Buscar por nome',
+  mensagens: 'Mensagens',
+  indices: 'Índices',
+  desagio: 'Percentual',
+  precificacao: 'Precificação',
 };
 
 type Crumb = { href: string; label: string; last: boolean };
@@ -40,12 +49,22 @@ export function Breadcrumbs() {
   const crumbs = trilha(pathname);
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-neutral-500">
+    // No celular só a página atual: a trilha inteira não cabe ao lado do
+    // botão de menu e do sino.
+    <nav
+      aria-label="Breadcrumb"
+      className="flex min-w-0 items-center gap-1 text-sm text-neutral-500"
+    >
       {crumbs.map((c, i) => (
-        <span key={c.href} className="flex items-center gap-1">
-          {i > 0 && <ChevronRight className="size-3.5 text-neutral-400" />}
+        <span
+          key={c.href}
+          className={
+            c.last ? 'flex min-w-0 items-center gap-1' : 'hidden items-center gap-1 sm:flex'
+          }
+        >
+          {i > 0 && <ChevronRight className="hidden size-3.5 shrink-0 text-neutral-400 sm:block" />}
           {c.last ? (
-            <span className="font-medium text-neutral-900">{c.label}</span>
+            <span className="truncate font-medium text-neutral-900">{c.label}</span>
           ) : (
             <Link href={c.href} className="transition-colors hover:text-neutral-900">
               {c.label}

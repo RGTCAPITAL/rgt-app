@@ -150,11 +150,14 @@ export default async function TarefasPage({
             // Retorno de lead não tem operação: o link ia pra "/operacoes/" (quebrado).
             const href = t.operacao ? `/operacoes/${t.operacao.id}` : '/crm';
             const aberta = t.status === 'pendente' || t.status === 'em_andamento';
+            const temBotao = Boolean(t.lead && aberta);
             return (
               <div key={t.id} className="relative">
                 <Link
                   href={href}
-                  className={`block rounded-md border p-3 text-sm transition-colors ${
+                  // pr-28 reserva o lugar do botão "Concluir", que fica por
+                  // cima do cartão: no celular ele cobria o título.
+                  className={`block rounded-md border p-3 text-sm transition-colors ${temBotao ? 'pr-28' : ''} ${
                     atrasada
                       ? 'border-red-300 bg-red-50/50 hover:bg-red-50'
                       : 'border-neutral-200 bg-white hover:bg-neutral-50'
@@ -199,7 +202,7 @@ export default async function TarefasPage({
                   </div>
                 </Link>
                 {/* Fora do <Link>: botão dentro de âncora é HTML inválido e o clique navegaria. */}
-                {t.lead && aberta && (
+                {temBotao && (
                   <div className="absolute top-3 right-3">
                     <ConcluirRetorno tarefaId={t.id} />
                   </div>

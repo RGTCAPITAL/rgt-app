@@ -138,30 +138,39 @@ export default async function ConversasPage({
     <div>
       {/* Exemplo não está no banco: não há o que escutar. */}
       {!demo && <ConversasAoVivo />}
-      <SectionHero
-        title="Conversas"
-        subtitle={
-          esperando
-            ? `${esperando} conversa${esperando === 1 ? '' : 's'} esperando você`
-            : 'Nenhuma conversa esperando você'
-        }
-        color="emerald"
-      />
+      {/* Com uma conversa aberta no celular, cabeçalho e avisos somem: a
+          conversa precisa da tela. Sem isso sobravam ~250px pras mensagens. */}
+      <div className={cn(selecionada && 'hidden md:block')}>
+        <SectionHero
+          title="Conversas"
+          subtitle={
+            esperando
+              ? `${esperando} conversa${esperando === 1 ? '' : 's'} esperando você`
+              : 'Nenhuma conversa esperando você'
+          }
+          color="emerald"
+        />
 
-      {demo ? (
-        <p className="mb-4 rounded-md border border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-900">
-          Conversas de exemplo. Nada aqui está no banco, e o envio está desligado.
-        </p>
-      ) : (
-        !conectado && (
-          <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
-            O número da RGT ainda não está conectado ao WhatsApp. As conversas aparecem aqui quando
-            estiver.
+        {demo ? (
+          <p className="mb-4 rounded-md border border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-900">
+            Conversas de exemplo. Nada aqui está no banco, e o envio está desligado.
           </p>
-        )
-      )}
+        ) : (
+          !conectado && (
+            <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+              O número da RGT ainda não está conectado ao WhatsApp. As conversas aparecem aqui
+              quando estiver.
+            </p>
+          )
+        )}
+      </div>
 
-      <div className="grid h-[calc(100dvh-20rem)] min-h-[28rem] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm md:grid-cols-[20rem_1fr]">
+      <div
+        className={cn(
+          'grid min-h-[28rem] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm md:h-[calc(100dvh-20rem)] md:grid-cols-[20rem_1fr]',
+          selecionada ? 'h-[calc(100dvh-6rem)]' : 'h-[calc(100dvh-20rem)]',
+        )}
+      >
         {/* Lista. No celular some quando uma conversa está aberta. */}
         <ul
           className={cn(

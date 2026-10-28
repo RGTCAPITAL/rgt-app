@@ -127,18 +127,23 @@ export function DetalheTabs({
   return (
     <Card className="p-0">
       <Tabs defaultValue="detalhes" className="gap-0">
-        <TabsList variant="line" className="border-b border-neutral-200 px-4 pt-2">
-          {TABS.map((t) => (
-            <TabsTrigger key={t.key} value={t.key}>
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* Cinco abas não cabem num celular: rolam de lado em vez de cortar
+            a última. O pb segura o sublinhado da aba ativa, que fica 5px
+            abaixo da lista e seria cortado pela rolagem. */}
+        <div className="[scrollbar-width:none] overflow-x-auto border-b border-neutral-200 pb-[5px] [&::-webkit-scrollbar]:hidden">
+          <TabsList variant="line" className="min-w-full justify-start px-4 pt-2">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.key} value={t.key} className="flex-none">
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-        <TabsContent value="detalhes" className="p-6">
+        <TabsContent value="detalhes" className="p-4 sm:p-6">
           <TabDetalhes op={operacao} operacaoId={operacaoId} />
         </TabsContent>
-        <TabsContent value="documentos" className="p-6">
+        <TabsContent value="documentos" className="p-4 sm:p-6">
           <TabDocumentos
             operacaoId={operacaoId}
             tipoAtivo={tipoAtivo}
@@ -149,7 +154,7 @@ export function DetalheTabs({
             juditProps={juditProps}
           />
         </TabsContent>
-        <TabsContent value="tarefas" className="p-6">
+        <TabsContent value="tarefas" className="p-4 sm:p-6">
           <TabTarefas
             operacaoId={operacaoId}
             tarefas={tarefas}
@@ -157,7 +162,7 @@ export function DetalheTabs({
             meuId={usuarioAtualId}
           />
         </TabsContent>
-        <TabsContent value="comentarios" className="p-6">
+        <TabsContent value="comentarios" className="p-4 sm:p-6">
           <TabComentarios
             operacaoId={operacaoId}
             usuarioAtualId={usuarioAtualId}
@@ -165,7 +170,7 @@ export function DetalheTabs({
             comentarios={comentarios}
           />
         </TabsContent>
-        <TabsContent value="historico" className="p-6">
+        <TabsContent value="historico" className="p-4 sm:p-6">
           <TabHistorico historico={historico} />
         </TabsContent>
       </Tabs>
@@ -180,7 +185,9 @@ function TabDetalhes({ op, operacaoId }: { op: OperacaoDetalhes; operacaoId: str
     <div className="space-y-6">
       <section>
         <h3 className="mb-3 text-sm font-semibold text-neutral-900">Valores do crédito</h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* "R$ 250.000,00" precisa de ~150px. Quatro colunas só em tela
+            grande; antes disso o valor saía cortado dentro do cartão. */}
+        <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 xl:grid-cols-4">
           <FinanceTile
             label="Valor Principal"
             value={fmtBRL(op.valor_principal)}

@@ -266,7 +266,9 @@ export default async function OperacaoDetalhePage({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+      {/* Lado a lado só a partir de xl: em lg o menu lateral já ocupa 224px e
+          sobravam ~720 pra conteúdo + 320 de coluna — vazava 41px (medido). */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div>
           <DetalheTabs
             operacaoId={op.id}

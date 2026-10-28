@@ -17,7 +17,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             className="h-12 w-auto"
           />
         </div>
-        <div className="rounded-xl border border-neutral-200 bg-white p-8 shadow-sm">
+        <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
           {children}
         </div>
       </div>

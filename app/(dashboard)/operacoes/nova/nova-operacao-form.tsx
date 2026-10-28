@@ -859,6 +859,8 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
     { n: 3, label: 'Documentos e envio' },
   ];
   return (
+    // No celular só a etapa atual tem nome; as outras ficam no número. Os três
+    // nomes juntos passavam de 450px numa tela de 360.
     <ol className="mb-6 flex items-center gap-2">
       {items.map((item, i) => {
         const active = item.n === step;
@@ -867,7 +869,7 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
           <li key={item.n} className="flex items-center gap-2">
             <span
               className={cn(
-                'flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+                'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
                 active && 'bg-neutral-900 text-white ring-4 ring-neutral-900/10',
                 done && 'bg-emerald-600 text-white',
                 !active && !done && 'bg-neutral-200 text-neutral-500',
@@ -878,7 +880,7 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
             <span
               className={cn(
                 'text-sm',
-                active ? 'font-medium text-neutral-900' : 'text-neutral-500',
+                active ? 'font-medium text-neutral-900' : 'hidden text-neutral-500 sm:inline',
               )}
             >
               {item.label}
@@ -886,7 +888,7 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
             {i < items.length - 1 && (
               <span
                 className={cn(
-                  'mx-2 h-px w-8 transition-colors',
+                  'mx-1 h-px w-4 shrink-0 transition-colors sm:mx-2 sm:w-8',
                   done ? 'bg-emerald-600' : 'bg-neutral-300',
                 )}
               />
