@@ -1,13 +1,21 @@
 'use client';
 
 import { useState, useSyncExternalStore, useTransition } from 'react';
-import { ArrowRight, CalendarClock, CalendarPlus, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import {
+  ArrowRight,
+  CalendarClock,
+  CalendarPlus,
+  ChevronsLeft,
+  ChevronsRight,
+  Send,
+} from 'lucide-react';
 import { IconeWhatsApp } from '@/components/ui/icone-whatsapp';
 import { mudarStatusLead } from './actions';
 import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
 import { DialogRetorno } from './dialog-retorno';
+import { DialogDisparo } from './dialog-disparo';
 import {
   escolherModelo,
   linkWhatsAppComTexto,
@@ -178,6 +186,7 @@ export function Kanban({
   const [erro, setErro] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<StatusLead | null>(null);
   const [leadRetorno, setLeadRetorno] = useState<{ id: string; nome: string } | null>(null);
+  const [leadDisparo, setLeadDisparo] = useState<{ id: string; nome: string } | null>(null);
   const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
   const [editandoLead, setEditandoLead] = useState<LeadEdit | null>(null);
@@ -533,6 +542,18 @@ export function Kanban({
                                 <IconeWhatsApp className="size-[18px]" />
                               </a>
                             )}
+                            {/* Envia pelo número da RGT, com modelo aprovado. */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLeadDisparo({ id: lead.id, nome: lead.nome });
+                              }}
+                              title="Abordar pelo WhatsApp da RGT"
+                              className="rounded-md p-1.5 text-emerald-700 transition-colors hover:bg-emerald-50"
+                            >
+                              <Send className="size-4" />
+                            </button>
                             {/* CalendarPlus, não o mesmo relógio da linha de
                                 retorno: eram dois ícones iguais com funções
                                 diferentes. */}
@@ -653,6 +674,7 @@ export function Kanban({
       </Dialog>
 
       <DialogRetorno lead={leadRetorno} onFechar={() => setLeadRetorno(null)} />
+      <DialogDisparo lead={leadDisparo} onFechar={() => setLeadDisparo(null)} />
     </div>
   );
 }
