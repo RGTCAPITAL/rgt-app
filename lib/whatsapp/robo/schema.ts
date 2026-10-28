@@ -1,0 +1,66 @@
+import { z } from 'zod';
+
+/**
+ * O que o roteiro manda coletar. Tudo nulo até a pessoa dizer — o robô nunca
+ * preenche por dedução, porque o broker vai agir em cima disso.
+ *
+ * O que NÃO está aqui é decisão de projeto: CPF, RG, dado bancário, valor,
+ * ente devedor e idade. Os três últimos a RGT já tem; os primeiros, pedir por
+ * WhatsApp é o comportamento do golpista.
+ */
+export const dadosColetadosSchema = z.object({
+  titularidade_confirmada: z
+    .boolean()
+    .nullable()
+    .describe('A pessoa confirmou que o processo apresentado é dela.'),
+  interesse_em_vender: z
+    .enum(['sim', 'nao', 'talvez'])
+    .nullable()
+    .describe(
+      'Interesse em vender agora. "talvez" inclui "vou pensar" e "vou falar com a família".',
+    ),
+  estado_civil: z.enum(['solteiro', 'casado', 'uniao_estavel', 'divorciado', 'viuvo']).nullable(),
+  cessao_anterior: z
+    .boolean()
+    .nullable()
+    .describe('Já assinou algum papel ou fez negócio com outra empresa sobre esse crédito.'),
+  tem_advogado_no_processo: z.boolean().nullable(),
+  acompanhante_familiar: z
+    .boolean()
+    .nullable()
+    .describe('Quer um familiar acompanhando a negociação.'),
+  motivo_da_venda: z
+    .string()
+    .nullable()
+    .describe('Só se a pessoa contou espontaneamente. Nunca perguntar.'),
+});
+
+export type DadosColetados = z.infer<typeof dadosColetadosSchema>;
+
+export const decisaoRoboSchema = z.object({
+  resposta: z.string().describe('A próxima mensagem do robô no WhatsApp.'),
+  entendeu: z.boolean().describe('false quando não deu pra entender o que a pessoa quis dizer.'),
+  passar_para_humano: z.boolean(),
+  motivo_passagem: z
+    .string()
+    .nullable()
+    .describe('Uma frase pro broker: por que a conversa está vindo pra ele.'),
+  dados: dadosColetadosSchema.describe(
+    'Estado completo do que já foi confirmado na conversa inteira, não só nesta mensagem.',
+  ),
+});
+
+export type DecisaoRobo = z.infer<typeof decisaoRoboSchema>;
+
+/** Os que o roteiro marca como obrigatórios. Completos, o robô sai de cena. */
+export const CAMPOS_OBRIGATORIOS = [
+  'titularidade_confirmada',
+  'interesse_em_vender',
+  'estado_civil',
+  'cessao_anterior',
+  'tem_advogado_no_processo',
+] as const satisfies readonly (keyof DadosColetados)[];
+
+export function coletaCompleta(d: DadosColetados): boolean {
+  return CAMPOS_OBRIGATORIOS.every((campo) => d[campo] !== null);
+}

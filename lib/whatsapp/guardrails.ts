@@ -117,7 +117,7 @@ export const RESPOSTA_RECUSA_PRECO = [
  * entrega verificação que não depende dele.
  */
 export const RESPOSTA_SUSPEITA_GOLPE = [
-  'O senhor está certo em desconfiar. Eu também desconfiaria.',
+  'Faz todo sentido desconfiar. Eu também desconfiaria.',
   'Não precisa acreditar em mim: confira o CNPJ da RGT Capital no site da Receita Federal, e pergunte ao advogado do seu processo. Ele consegue confirmar tudo que eu disse.',
   'E uma coisa importante: ninguém precisa pagar nada pra vender um precatório. Se alguém te cobrar taxa, é golpe — inclusive se usarem o nome da RGT.',
 ].join('\n\n');
@@ -131,7 +131,7 @@ export const RESPOSTA_SUSPEITA_GOLPE = [
  * propósito ("filh" pra filho/filha, "advogad" pra advogado/advogada), e `\b`
  * depois do radical nunca casa. Os dois bugs passaram despercebidos até o teste.
  */
-function palavra(re: RegExp): RegExp {
+export function palavra(re: RegExp): RegExp {
   return new RegExp(`(?<![\\p{L}\\p{N}])(?:${re.source})`, 'iu');
 }
 

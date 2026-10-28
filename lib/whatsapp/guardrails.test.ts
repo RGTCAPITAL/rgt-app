@@ -106,7 +106,7 @@ describe('guardrails · dever legal e risco à pessoa', () => {
     expect(g?.acao).toBe('responder_e_seguir');
     // Nunca negar: quem diz "não somos golpe" é golpista.
     expect(g?.resposta).not.toMatch(/não somos golpe/i);
-    expect(g?.resposta).toMatch(/certo em desconfiar/);
+    expect(g?.resposta).toMatch(/faz todo sentido desconfiar/i);
     expect(g?.resposta).toMatch(/ninguém precisa pagar nada/);
   });
 

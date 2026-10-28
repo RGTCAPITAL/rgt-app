@@ -14,6 +14,7 @@ import {
   MessageSquare,
   MessagesSquare,
   Percent,
+  Bot,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -35,6 +36,7 @@ export const NAV_BASE: NavItem[] = [
 export const NAV_ADMIN: NavItem[] = [
   { label: 'Usuários', href: '/admin/usuarios', icon: Shield },
   { label: 'Mensagens', href: '/admin/mensagens', icon: MessageSquare },
+  { label: 'Robô', href: '/admin/robo', icon: Bot },
   { label: 'Índices', href: '/admin/indices', icon: TrendingUp },
   { label: 'Percentual', href: '/admin/desagio', icon: Percent },
 ];
