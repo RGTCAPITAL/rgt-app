@@ -125,8 +125,10 @@ export default async function RegrasPage() {
         <div className="mb-2 font-medium text-neutral-900">Como isto é usado</div>
         <ul className="list-disc space-y-1 pl-4">
           <li>
-            As regras rodam uma vez por dia, de manhã (entre 9h e 10h), e começam desligadas. Ligar
-            ou mudar um número vale a partir da rodada seguinte.
+            As regras começam desligadas. Follow-up e Lead parado rodam de segunda a sexta, de manhã
+            (entre 9h e 10h). Processo andou roda junto com a leitura diária do Diário, todo dia; a
+            tarefa que nasce no fim de semana vence na segunda. Ligar ou mudar um número vale a
+            partir da rodada seguinte.
           </li>
           <li>A tarefa aparece em Tarefas, no card do lead e no sino de quem recebe.</li>
           <li>

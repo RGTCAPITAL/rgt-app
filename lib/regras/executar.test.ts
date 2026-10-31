@@ -138,8 +138,9 @@ describe('rodarRegrasDeLead', () => {
       p_prazo: '2026-11-10',
       p_titulo: 'Follow-up 1 de 2: sem resposta há 2 dias',
     });
-    // O modelo saiu há 51h: a tarefa diz que pelo número da RGT ainda não dá.
-    expect(rpcs[0]!.p_descricao).toContain('ainda não dá');
+    // O modelo enviado há 51h não conta como resposta, e a tarefa nunca manda
+    // reenviar a mensagem fria pelo número da RGT.
+    expect(rpcs[0]!.p_descricao).not.toMatch(/modelo|reenviad/i);
   });
 
   it('dono inativo: a tarefa vai pra gestão', async () => {
@@ -187,6 +188,18 @@ describe('rodarRegrasDeLead', () => {
     expect(leads.filtros).toContainEqual(['eq', 'is_exemplo', false]);
   });
 
+  it('lead parado ligado: busca as 4 etapas e a origem (importação é descartada na decisão)', async () => {
+    const { sb, consultas } = sbFake(BASE);
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    const leads = consultas.find((c) => c.tabela === 'leads')!;
+    expect(leads.filtros).toContainEqual([
+      'in',
+      'status',
+      ['novo', 'em_contato', 'qualificado', 'proposta_enviada'],
+    ]);
+    expect(String(leads.filtros.find((f) => f[0] === 'select')?.[1])).toContain('origem');
+  });
+
   it('só o lead parado ligado: nem olha o WhatsApp', async () => {
     const { sb, consultas } = sbFake(BASE);
     await rodarRegrasDeLead(sb, {
@@ -215,7 +228,10 @@ describe('rodarRegrasDeLead', () => {
       ],
     });
     await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
-    expect(consultas.filter((c) => c.tabela === 'whatsapp_mensagens')).toHaveLength(2);
+    const msgs = consultas.filter((c) => c.tabela === 'whatsapp_mensagens');
+    expect(msgs).toHaveLength(2);
+    // Só as recebidas: enviada nunca conta como resposta.
+    expect(msgs[0]!.filtros).toContainEqual(['eq', 'direcao', 'entrada']);
     // A Ana respondeu (página 2) e fica de fora. A Bia, que aqui só recebeu
     // modelos, é quem ganha a tarefa.
     expect(rpcs.map((a) => a.p_lead_id)).toEqual(['l2']);

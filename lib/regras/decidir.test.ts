@@ -5,7 +5,7 @@ import {
   decidirRegrasDeLead,
   decidirTarefaDoProcesso,
   lerConfig,
-  linhaDoModelo,
+  MAX_PARADOS_POR_PESSOA_DIA,
   type AlvoDaRegraProcesso,
   type ConfigRegras,
   type LeadNoCiclo,
@@ -38,10 +38,10 @@ function lead(p: Partial<LeadNoCiclo> = {}): LeadNoCiclo {
     nome: 'José da Silva',
     status: 'em_contato',
     donoId: 'broker-1',
+    origem: 'site',
     statusDesde: ha(49),
     temTarefaAberta: false,
     ultimaEntradaWhatsapp: null,
-    ultimoModeloEm: null,
     disparos: [],
     ...p,
   };
@@ -90,10 +90,17 @@ describe('regra (a): follow-up', () => {
     expect(t.titulo).toBe('Follow-up 1 de 2: sem resposta há 2 dias');
     expect(t.destinatarioId).toBe('broker-1');
     expect(t.destinatarioPerfil).toBeNull();
-    expect(t.descricao).toContain('José da Silva está em Em contato desde 08/11');
-    expect(t.descricao).toContain('não há resposta registrada no WhatsApp da RGT');
-    expect(t.descricao).toContain('ícone verde no card do lead');
+    expect(t.descricao).toContain(
+      'José da Silva está na etapa Em contato e, desde 08/11, não chegou resposta no WhatsApp da RGT',
+    );
+    expect(t.descricao).toContain('balão do WhatsApp no card (não pelo aviãozinho');
     expect(t.descricao).not.toContain('última tentativa');
+    // O follow-up é de gente: nunca manda reenviar a mensagem fria pelo número da RGT.
+    expect(t.descricao).not.toMatch(/modelo|reenviad/i);
+    // Respondeu por outro canal: mexer no card é o que para os lembretes
+    // (só anotar fazia a 2ª tentativa dizer "sem resposta").
+    expect(t.descricao).toContain('mova o card para Qualificado');
+    expect(t.descricao).toContain('agende um retorno');
     expect(t.motivo).toBe(
       'Em contato há 2 dias, sem resposta no WhatsApp da RGT (tentativa 1 de 2)',
     );
@@ -120,6 +127,15 @@ describe('regra (a): follow-up', () => {
     });
 
     expect(umaSo(lead({ statusDesde: desde, disparos: [primeira(24)] }), SO_FOLLOW_UP)).toBeNull();
+    // O disparo anterior é gravado segundos depois do início da rodada: a
+    // rodada de 2 dias depois não pode escorregar pro dia seguinte.
+    const quaseDoisDias = {
+      ...primeira(0),
+      criadoEm: new Date(AGORA.getTime() - 48 * HORA + 5_000).toISOString(),
+    };
+    expect(
+      umaSo(lead({ statusDesde: desde, disparos: [quaseDoisDias] }), SO_FOLLOW_UP)?.tentativa,
+    ).toBe(2);
 
     const t = umaSo(lead({ statusDesde: desde, disparos: [primeira(48)] }), SO_FOLLOW_UP)!;
     expect(t.tentativa).toBe(2);
@@ -161,34 +177,13 @@ describe('regra (a): follow-up', () => {
   });
 });
 
-describe('regra (a): o que a tarefa diz sobre o modelo da RGT', () => {
-  it('modelo há 3 dias: ainda não dá, com a data de liberação', () => {
-    expect(linhaDoModelo(ha(24 * 3), AGORA)).toBe(
-      'Pelo número da RGT ainda não dá: o modelo saiu em 07/11 e só pode ser reenviado a partir de 14/11.',
-    );
-  });
-
-  it('modelo há 8 dias: já pode reenviar', () => {
-    expect(linhaDoModelo(ha(24 * 8), AGORA)).toContain('o modelo já pode ser reenviado');
-  });
-
-  it('nenhum modelo: aponta o botão do card', () => {
-    expect(linhaDoModelo(null, AGORA)).toContain('Você também pode mandar o modelo');
-    expect(linhaDoModelo(null, AGORA)).toContain('no card');
-  });
-
-  it('a linha entra na descrição da tarefa', () => {
-    const t = umaSo(lead({ ultimoModeloEm: ha(50) }))!;
-    expect(t.descricao).toContain('ainda não dá');
-  });
-});
-
 describe('regra (b): lead parado', () => {
   it('6d23h não gera nada; 7d gera, com a dica da etapa', () => {
     expect(umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7 - 1) }))).toBeNull();
     const t = umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7) }))!;
     expect(t.regra).toBe('lead_parado');
-    expect(t.titulo).toBe('Lead parado há 7 dias em Qualificado');
+    expect(t.titulo).toBe('Lead parado há 7 dias na etapa Qualificado');
+    expect(t.descricao).toContain('há pelo menos 7 dias');
     expect(t.descricao).toContain('Monte a proposta e envie.');
     expect(t.descricao).toContain('Este aviso sai uma vez por etapa.');
     expect(t.motivo).toBe('Parado há 7 dias em Qualificado');
@@ -228,13 +223,86 @@ describe('regra (b): lead parado', () => {
 
   it('com o follow-up desligado, o Em contato parado recebe o aviso de parado', () => {
     const t = umaSo(lead({ statusDesde: ha(24 * 8) }), SO_PARADO)!;
-    expect(t.titulo).toBe('Lead parado há 8 dias em Em contato');
+    expect(t.titulo).toBe('Lead parado há 8 dias na etapa Em contato');
   });
 
-  it('lead novo sem dono recebe a dica de definir quem cuida', () => {
-    const t = umaSo(lead({ status: 'novo', donoId: null, statusDesde: ha(24 * 7) }))!;
+  it('Em contato com o follow-up ainda cuidando (sem resposta, tentativas sobrando): sem parado', () => {
+    const desde = ha(24 * 8);
+    const uma = [
+      {
+        regra: 'follow_up' as const,
+        chaveCiclo: chaveFollowUp('lead-1', desde, 1),
+        criadoEm: ha(24),
+      },
+    ];
+    // A 2ª tentativa ainda vai sair: o parado não fala junto.
+    expect(umaSo(lead({ statusDesde: desde, disparos: uma }))).toBeNull();
+  });
+
+  it('Em contato depois das tentativas esgotadas: volta o parado', () => {
+    const desde = ha(24 * 8);
+    const disparos = [1, 2].map((k) => ({
+      regra: 'follow_up' as const,
+      chaveCiclo: chaveFollowUp('lead-1', desde, k),
+      criadoEm: ha(24 * (8 - 2 * k)),
+    }));
+    expect(umaSo(lead({ statusDesde: desde, disparos }))?.regra).toBe('lead_parado');
+  });
+
+  it('Em contato que RESPONDEU e travou: volta o parado (o lead mais quente não pode sumir)', () => {
+    const t = umaSo(lead({ statusDesde: ha(24 * 8), ultimaEntradaWhatsapp: ha(24 * 7) }))!;
+    expect(t.regra).toBe('lead_parado');
+    expect(t.titulo).toBe('Lead parado há 8 dias na etapa Em contato');
+  });
+
+  it('Novo de importação em massa: nunca (sem enxurrada)', () => {
+    for (const origem of ['importacao_planilha', 'lista_processual']) {
+      expect(umaSo(lead({ status: 'novo', origem, statusDesde: ha(24 * 30) }))).toBeNull();
+    }
+  });
+
+  it('Novo que chegou sozinho (site, WhatsApp) e ninguém pegou: avisa a gestão', () => {
+    const t = umaSo(
+      lead({ status: 'novo', origem: 'whatsapp', donoId: null, statusDesde: ha(24 * 7) }),
+    )!;
+    expect(t.regra).toBe('lead_parado');
     expect(t.destinatarioPerfil).toBe('gestao');
-    expect(t.descricao).toContain('Defina quem cuida dele');
+    expect(t.descricao).toContain('foi a pessoa que procurou a RGT');
+  });
+
+  it('o texto não afirma a data de entrada na etapa (lead anterior à 048 conta da migration)', () => {
+    const t = umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 9) }))!;
+    expect(t.descricao).toContain('não avança da etapa Qualificado há pelo menos 9 dias');
+  });
+
+  it(`no máximo ${MAX_PARADOS_POR_PESSOA_DIA} por pessoa por rodada, os mais antigos primeiro`, () => {
+    const muitos = Array.from({ length: 15 }, (_, i) =>
+      lead({ id: `l-${i}`, status: 'qualificado', statusDesde: ha(24 * (8 + i)) }),
+    );
+    const outroDono = lead({
+      id: 'outro',
+      donoId: 'broker-2',
+      status: 'qualificado',
+      statusDesde: ha(24 * 8),
+    });
+    const r = decidirRegrasDeLead([...muitos, outroDono], SO_PARADO, AGORA);
+    const doBroker1 = r.filter((t) => t.destinatarioId === 'broker-1');
+    expect(doBroker1).toHaveLength(MAX_PARADOS_POR_PESSOA_DIA);
+    // Ficam os 10 parados há mais tempo (l-14 … l-5); os outros voltam amanhã.
+    expect(doBroker1.map((t) => t.leadId)).toContain('l-14');
+    expect(doBroker1.map((t) => t.leadId)).not.toContain('l-0');
+    // O teto é por pessoa: o broker-2 não perde a vez.
+    expect(r.some((t) => t.leadId === 'outro')).toBe(true);
+  });
+
+  it('o teto não corta follow-up', () => {
+    const r = decidirRegrasDeLead(
+      Array.from({ length: 12 }, (_, i) => lead({ id: `f-${i}` })),
+      LIGADAS,
+      AGORA,
+    );
+    expect(r).toHaveLength(12);
+    expect(r.every((t) => t.regra === 'follow_up')).toBe(true);
   });
 });
 
@@ -273,6 +341,7 @@ describe('regra (c): processo andou', () => {
     id,
     dataDisponibilizacao: data,
     redFlags: codigos.map((codigo) => ({ codigo }) as PublicacaoDaRegra['redFlags'][number]),
+    link: `https://comunica.pje.jus.br/consulta/${id}`,
   });
   const ativo: AlvoDaRegraProcesso = {
     tipo: 'lead',
@@ -297,10 +366,50 @@ describe('regra (c): processo andou', () => {
     const t = decidirTarefaDoProcesso(ativo, ctx(), resumo, HOJE)!;
     expect(t.titulo).toBe('Ler publicação nova no Diário');
     expect(t.chaveCiclo).toBe('processo_andou:lead:lead-1:501');
-    expect(t.descricao.startsWith(resumo.descricao)).toBe(true);
+    expect(t.descricao.startsWith('Processo 0001107-33.2017.5.19.0001.')).toBe(true);
+    expect(t.descricao).toContain(resumo.descricao);
+    expect(t.descricao).toContain(
+      'Publicação de 09/11/2026: https://comunica.pje.jus.br/consulta/501',
+    );
     expect(t.descricao).toContain('anote no lead');
     expect(t.motivo).toBe('Publicação nova no Diário (09/11/2026)');
     expect(t).toMatchObject({ leadId: 'lead-1', operacaoId: null, prazo: HOJE });
+  });
+
+  it('publicação "nova" só pelo id, mas antiga pela data: nada', () => {
+    // O DJEN devolveu uma de 12/11/2025 que ainda não estava salva.
+    const antiga = [pub(900, '2025-11-12')];
+    expect(
+      decidirTarefaDoProcesso(ativo, ctx({ novas: antiga, corteData: '2026-11-06' }), resumo, HOJE),
+    ).toBeNull();
+  });
+
+  it('com o corte, a chave e o motivo usam só as que passaram', () => {
+    const novas = [pub(900, '2025-11-12'), pub(501, '2026-11-09')];
+    const t = decidirTarefaDoProcesso(
+      ativo,
+      ctx({ novas, corteData: '2026-11-06' }),
+      resumo,
+      HOJE,
+    )!;
+    expect(t.chaveCiclo).toBe('processo_andou:lead:lead-1:501');
+    expect(t.descricao).not.toContain('/900');
+  });
+
+  it('tarefa que nasce no fim de semana vence na segunda', () => {
+    const sabado = decidirTarefaDoProcesso(ativo, ctx(), resumo, '2026-11-14')!;
+    expect(sabado.prazo).toBe('2026-11-16');
+    const domingo = decidirTarefaDoProcesso(ativo, ctx(), resumo, '2026-11-15')!;
+    expect(domingo.prazo).toBe('2026-11-16');
+  });
+
+  it('link repetido do DJEN aparece uma vez só', () => {
+    const repetidas = [
+      pub(501, '2026-11-09'),
+      { ...pub(502, '2026-11-09'), link: pub(501, '').link },
+    ];
+    const t = decidirTarefaDoProcesso(ativo, ctx({ novas: repetidas }), resumo, HOJE)!;
+    expect(t.descricao.match(/consulta\/501/g)).toHaveLength(1);
   });
 
   it('resumo urgente: o título começa com URGENTE', () => {
@@ -341,12 +450,40 @@ describe('regra (c): processo andou', () => {
         resumo,
         HOJE,
       )!;
-      expect(t.titulo).toBe('Reavaliar lead perdido: saiu o ofício');
-      expect(t.chaveCiclo).toBe('reavaliar_perdido:lead-1:2026-10-21T01:00:00.000Z');
-      expect(t.descricao).toContain('O Diário de 05/11/2026 mostra ofício expedido');
+      expect(t.titulo).toBe('Reavaliar lead perdido: o Diário cita ofício requisitório');
+      expect(t.chaveCiclo).toBe('reavaliar_perdido:lead-1:2026-10-21T01:00:00.000Z:700');
+      expect(t.descricao).toContain(
+        'o sistema avisa de novo quando o Diário citar o ofício outra vez',
+      );
+      expect(t.descricao).toContain('O Diário de 05/11/2026 cita ofício requisitório');
+      expect(t.descricao).toContain('Confira no PJe');
+      // Citar não é expedir: o texto não afirma que saiu.
+      expect(t.descricao).not.toMatch(/ofício expedido|saiu o ofício/);
       expect(t.descricao).toContain('0001107-33.2017.5.19.0001');
+      expect(t.descricao).toContain('Publicação de 05/11/2026: https://');
       expect(t.descricao).toContain('O lead continua em Perdido');
-      expect(t.motivo).toBe('Perdido sem ofício; ofício expedido no Diário de 05/11/2026');
+      expect(t.motivo).toBe('Perdido sem ofício; o Diário de 05/11/2026 cita ofício requisitório');
+    });
+
+    it('nova citação de ofício (outro id) gera outra tarefa; a mesma citação não', () => {
+      const primeira = [pub(700, '2026-11-05', ['X1'])];
+      const depois = [pub(812, '2026-12-03', ['X1']), ...primeira];
+      const a = decidirTarefaDoProcesso(perdido, ctx({ todas: primeira }), resumo, HOJE)!;
+      const b = decidirTarefaDoProcesso(perdido, ctx({ todas: depois }), resumo, HOJE)!;
+      expect(a.chaveCiclo).not.toBe(b.chaveCiclo);
+      expect(b.chaveCiclo.endsWith(':812')).toBe(true);
+    });
+
+    it('com a tarefa de reavaliar ainda aberta: não empilha outra', () => {
+      const todas = [pub(700, '2026-11-05', ['X1'])];
+      expect(
+        decidirTarefaDoProcesso(
+          perdido,
+          ctx({ todas, temTarefaAbertaDaRegra: true }),
+          resumo,
+          HOJE,
+        ),
+      ).toBeNull();
     });
 
     it('X1 no próprio dia da perda (em São Paulo) conta', () => {

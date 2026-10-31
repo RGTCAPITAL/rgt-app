@@ -6,6 +6,7 @@ import { fmtDataBR } from '@/lib/formatters';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { hojeEmSaoPaulo } from '@/lib/datas';
 import { NOME_REGRA, type ChaveRegra } from '@/lib/regras/decidir';
+import { separarLinks } from '@/lib/tarefas/links';
 import { ConcluirRetorno } from './concluir-retorno';
 
 type SearchParams = { status?: string };
@@ -169,6 +170,7 @@ export default async function TarefasPage({
             const aberta = t.status === 'pendente' || t.status === 'em_andamento';
             const temBotao = Boolean(t.lead && aberta);
             const regra = regraDaTarefa.get(t.id);
+            const { texto: descricao, links } = separarLinks(t.descricao);
             return (
               <div key={t.id} className="relative">
                 <Link
@@ -207,11 +209,11 @@ export default async function TarefasPage({
                           só diz o quê, a descrição diz como. A da regra sai
                           inteira (a última linha pode ser "esta é a última
                           tentativa"); a escrita à mão corta em 4 linhas. */}
-                      {t.descricao && (
+                      {descricao && (
                         <p
                           className={`mt-1 text-xs break-words whitespace-pre-line text-neutral-600 ${regra ? '' : 'line-clamp-4'}`}
                         >
-                          {t.descricao}
+                          {descricao}
                         </p>
                       )}
                       <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-neutral-500">
@@ -234,6 +236,23 @@ export default async function TarefasPage({
                     </div>
                   </div>
                 </Link>
+                {/* Os links da publicação ficam fora do cartão: dentro do <Link>
+                    o clique ia pro lead, e âncora dentro de âncora é inválido. */}
+                {links.length > 0 && (
+                  <div className="flex flex-wrap gap-x-3 px-3 pt-1 text-xs">
+                    {links.map((l) => (
+                      <a
+                        key={l.url}
+                        href={l.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-neutral-700 underline hover:text-neutral-900"
+                      >
+                        {l.rotulo}
+                      </a>
+                    ))}
+                  </div>
+                )}
                 {/* Fora do <Link>: botão dentro de âncora é HTML inválido e o clique navegaria. */}
                 {temBotao && (
                   <div className="absolute top-3 right-3">

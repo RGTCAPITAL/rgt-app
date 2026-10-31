@@ -1,10 +1,7 @@
-import { hojeEmSaoPaulo } from '@/lib/datas';
+import { hojeEmSaoPaulo, proximoDiaUtil } from '@/lib/datas';
 import { labelStatus } from '@/lib/leads';
 import { maskCNJ } from '@/lib/masks';
 import type { Publicacao } from '@/lib/djen/types';
-// A mesma trava do disparo (disparo-actions.ts): a tarefa diz a verdade sobre
-// quando o botão do número da RGT volta a aceitar o modelo.
-import { INTERVALO_MINIMO_DIAS_MODELO } from '@/lib/whatsapp/modelos';
 
 /**
  * As três regras automáticas do CRM, só a decisão: quem recebe tarefa hoje,
@@ -28,6 +25,26 @@ export const NOME_REGRA: Record<ChaveRegra, string> = {
 
 /** Etapas em que o lead ainda está sendo trabalhado. Ganho e perdido nunca entram. */
 export const ETAPAS_ATIVAS = ['novo', 'em_contato', 'qualificado', 'proposta_enviada'] as const;
+
+/**
+ * Onde o "lead parado" vale. Em Novo, só pra quem chegou sozinho (site,
+ * WhatsApp, indicação…): é quem pediu contato e não pode esquecer. Quem veio
+ * de importação em massa fica de fora — os 378 contatos do Renato entrariam
+ * todos em Novo no mesmo dia, e no 7º dia seriam 378 tarefas de uma vez.
+ */
+export const ETAPAS_LEAD_PARADO = [
+  'novo',
+  'em_contato',
+  'qualificado',
+  'proposta_enviada',
+] as const;
+export const ORIGENS_EM_MASSA: readonly string[] = ['importacao_planilha', 'lista_processual'];
+
+/**
+ * Teto de tarefas de "lead parado" por pessoa numa rodada, as mais antigas
+ * primeiro. O resto não é perdido: sem registro, volta na rodada seguinte.
+ */
+export const MAX_PARADOS_POR_PESSOA_DIA = 10;
 
 /**
  * Faixas aceitas. As mesmas do CHECK da 048: o formulário, a action e o banco
@@ -162,8 +179,13 @@ export function chaveParado(leadId: string, status: string, statusDesde: string)
 export function chaveProcesso(tipo: 'lead' | 'operacao', id: string, maiorIdDjen: number): string {
   return `processo_andou:${tipo}:${id}:${maiorIdDjen}`;
 }
-export function chaveReavaliar(leadId: string, perdidoDesde: string): string {
-  return `reavaliar_perdido:${leadId}:${instante(perdidoDesde)}`;
+/**
+ * Uma tarefa por CITAÇÃO de ofício (o maior id de publicação com X1), não
+ * por perda: o primeiro "expeça-se" não pode gastar o aviso do ofício que sai
+ * de verdade semanas depois.
+ */
+export function chaveReavaliar(leadId: string, perdidoDesde: string, maiorIdX1: number): string {
+  return `reavaliar_perdido:${leadId}:${instante(perdidoDesde)}:${maiorIdX1}`;
 }
 
 // Fuso fixo: o cron roda em UTC, e às 22h de Maceió já seria o dia seguinte.
@@ -198,53 +220,70 @@ export interface LeadNoCiclo {
   status: string;
   /** null se o lead não tem dono ou se o dono está inativo. */
   donoId: string | null;
+  /** De onde o lead veio (ORIGEM_LEAD); importação em massa não conta em Novo. */
+  origem: string;
   statusDesde: string;
   /** Tarefa pendente ou em andamento, de qualquer origem. */
   temTarefaAberta: boolean;
   /** Última mensagem RECEBIDA no WhatsApp da RGT, em qualquer conversa do lead. */
   ultimaEntradaWhatsapp: string | null;
-  /** Último modelo que saiu pelo número da RGT pra este lead. */
-  ultimoModeloEm: string | null;
   disparos: DisparoAnterior[];
 }
 
-/** O que dizer sobre o botão do número da RGT, respeitando a trava de 7 dias. */
-export function linhaDoModelo(ultimoModeloEm: string | null, agora: Date): string {
-  const botao = 'botão “Abordar pelo WhatsApp da RGT”, no card';
-  if (!ultimoModeloEm) {
-    return `Você também pode mandar o modelo pelo número da RGT (${botao}).`;
-  }
-  const saiu = Date.parse(ultimoModeloEm);
-  const libera = saiu + INTERVALO_MINIMO_DIAS_MODELO * DIA;
-  if (agora.getTime() < libera) {
-    return `Pelo número da RGT ainda não dá: o modelo saiu em ${fmtDiaMes(saiu)} e só pode ser reenviado a partir de ${fmtDiaMes(libera)}.`;
-  }
-  return `Pelo número da RGT, o modelo já pode ser reenviado (${botao}).`;
+/** Tentativas de follow-up já feitas nesta entrada em "Em contato". */
+function followUpsDoCiclo(lead: LeadNoCiclo): DisparoAnterior[] {
+  const prefixo = prefixoFollowUp(lead.id, lead.statusDesde);
+  return lead.disparos.filter((d) => d.regra === 'follow_up' && d.chaveCiclo.startsWith(prefixo));
 }
+
+/** Respondeu no WhatsApp da RGT depois de entrar em "Em contato". */
+function respondeuNoCiclo(lead: LeadNoCiclo): boolean {
+  // Resposta de ANTES da entrada na etapa não conta: quem escreveu antes e
+  // depois foi abordado continua sem responder à abordagem.
+  return (
+    !!lead.ultimaEntradaWhatsapp &&
+    Date.parse(lead.ultimaEntradaWhatsapp) > Date.parse(lead.statusDesde)
+  );
+}
+
+/**
+ * O follow-up ainda cuida deste lead: está ligado, ninguém respondeu e as
+ * tentativas não acabaram. Só nesse caso o "lead parado" fica quieto em Em
+ * contato — quem respondeu e travou, ou esgotou as tentativas, volta pro
+ * parado (sem isso o lead mais quente, o que respondeu, nunca mais avisava).
+ */
+function followUpAindaCuida(lead: LeadNoCiclo, cfg: ConfigRegras['followUp']): boolean {
+  return (
+    cfg.ativa &&
+    lead.status === 'em_contato' &&
+    !respondeuNoCiclo(lead) &&
+    followUpsDoCiclo(lead).length < cfg.maxTentativas
+  );
+}
+
+/** Folga na comparação com o disparo anterior: ele é gravado segundos depois
+ * de a rodada começar, e sem folga a 2ª tentativa escorregava um dia. */
+const FOLGA_ENTRE_TENTATIVAS = 6 * HORA;
 
 function decidirFollowUp(
   lead: LeadNoCiclo,
   cfg: ConfigRegras['followUp'],
   agora: Date,
 ): TarefaDeRegra | null {
-  if (!cfg.ativa || lead.status !== 'em_contato' || lead.temTarefaAberta) return null;
+  if (!followUpAindaCuida(lead, cfg) || lead.temTarefaAberta) return null;
 
   const desde = Date.parse(lead.statusDesde);
-  // Só conta resposta que veio DEPOIS de o lead entrar em "Em contato": quem
-  // escreveu antes e depois foi abordado continua sem responder à abordagem.
-  if (lead.ultimaEntradaWhatsapp && Date.parse(lead.ultimaEntradaWhatsapp) > desde) return null;
-
-  const prefixo = prefixoFollowUp(lead.id, lead.statusDesde);
-  const anteriores = lead.disparos.filter(
-    (d) => d.regra === 'follow_up' && d.chaveCiclo.startsWith(prefixo),
-  );
+  const anteriores = followUpsDoCiclo(lead);
   const n = anteriores.length;
-  if (n >= cfg.maxTentativas) return null;
 
   // A 2ª tentativa conta a partir da 1ª, não da entrada na etapa: sem isso
   // ela sairia no dia seguinte ao fechamento da primeira.
-  const referencia = n ? Math.max(...anteriores.map((d) => Date.parse(d.criadoEm))) : desde;
-  if (agora.getTime() - referencia < cfg.dias * DIA) return null;
+  if (n) {
+    const ultimaVez = Math.max(...anteriores.map((d) => Date.parse(d.criadoEm)));
+    if (agora.getTime() - ultimaVez < cfg.dias * DIA - FOLGA_ENTRE_TENTATIVAS) return null;
+  } else if (agora.getTime() - desde < cfg.dias * DIA) {
+    return null;
+  }
 
   const k = n + 1;
   const M = cfg.maxTentativas;
@@ -252,11 +291,17 @@ function decidirFollowUp(
   const dias = Math.floor((agora.getTime() - desde) / DIA);
   const ha = plural(dias, 'dia', 'dias');
 
+  // Nunca sugere reenviar a mensagem de primeiro contato pelo número da RGT:
+  // seria a mesma abordagem fria de novo. O follow-up é de uma pessoa —
+  // ligação ou mensagem do próprio WhatsApp do broker.
+  //
+  // "Se respondeu" manda mexer no card (mover ou agendar retorno) porque é o
+  // que para o follow-up: só anotar e concluir fazia a próxima tentativa sair
+  // dizendo "sem resposta" pra quem respondeu.
   const descricao = [
-    `${lead.nome} está em Em contato desde ${fmtDiaMes(desde)} e não há resposta registrada no WhatsApp da RGT.`,
-    'O que fazer: ligue, ou mande do seu WhatsApp a mensagem de retomada (ícone verde no card do lead).',
-    linhaDoModelo(lead.ultimoModeloEm, agora),
-    'Se a pessoa já respondeu por outro canal, mude a etapa do lead e conclua esta tarefa.',
+    `${lead.nome} está na etapa Em contato e, desde ${fmtDiaMes(desde)}, não chegou resposta no WhatsApp da RGT.`,
+    'O que fazer: ligue, ou mande uma mensagem do seu WhatsApp pelo balão do WhatsApp no card (não pelo aviãozinho, que manda a mensagem da RGT). Ele abre um texto pronto pra você editar.',
+    'Se a pessoa respondeu por ligação ou pelo seu WhatsApp: mova o card para Qualificado, se ela tem interesse, ou agende um retorno pelo calendário do card. Isso para os lembretes. Se você tentou e não conseguiu falar, só conclua esta tarefa.',
     ...(ultima
       ? [
           'Esta é a última tentativa automática: depois dela o sistema não cria mais follow-up para este lead. Se continuar sem resposta, marque como perdido ou agende um retorno.',
@@ -281,23 +326,24 @@ function decidirFollowUp(
   };
 }
 
-const DICA_POR_ETAPA: Record<(typeof ETAPAS_ATIVAS)[number], string> = {
-  novo: 'Defina quem cuida dele e faça o primeiro contato.',
+const DICA_POR_ETAPA: Record<(typeof ETAPAS_LEAD_PARADO)[number], string> = {
+  novo: 'Defina quem cuida dele e faça o primeiro contato: foi a pessoa que procurou a RGT.',
   em_contato: 'Tente outro canal (ligação, advogado) ou decida se ainda vale insistir.',
   qualificado: 'Monte a proposta e envie.',
   proposta_enviada: 'Pergunte se a pessoa decidiu e tire as dúvidas sobre a proposta.',
 };
 
-function ehEtapaAtiva(status: string): status is (typeof ETAPAS_ATIVAS)[number] {
-  return (ETAPAS_ATIVAS as readonly string[]).includes(status);
+function valeLeadParado(status: string): status is (typeof ETAPAS_LEAD_PARADO)[number] {
+  return (ETAPAS_LEAD_PARADO as readonly string[]).includes(status);
 }
 
-function decidirParado(
-  lead: LeadNoCiclo,
-  cfg: ConfigRegras['leadParado'],
-  agora: Date,
-): TarefaDeRegra | null {
-  if (!cfg.ativa || !ehEtapaAtiva(lead.status) || lead.temTarefaAberta) return null;
+function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): TarefaDeRegra | null {
+  const cfg = regras.leadParado;
+  if (!cfg.ativa || !valeLeadParado(lead.status) || lead.temTarefaAberta) return null;
+  if (lead.status === 'novo' && ORIGENS_EM_MASSA.includes(lead.origem)) return null;
+  // Enquanto o follow-up cuida do lead, o parado não fala junto: as duas
+  // regras dariam três tarefas que se contradizem (dia 2, dia 4, dia 7).
+  if (followUpAindaCuida(lead, regras.followUp)) return null;
 
   const desde = Date.parse(lead.statusDesde);
   if (agora.getTime() - desde < cfg.dias * DIA) return null;
@@ -320,8 +366,10 @@ function decidirParado(
     destinatarioId: lead.donoId,
     destinatarioPerfil: lead.donoId ? null : 'gestao',
     // É o que aparece no card e no sino: tem de se explicar sozinho.
-    titulo: `Lead parado há ${ha} em ${etapa}`,
-    descricao: `${lead.nome} está em ${etapa} desde ${fmtDiaMes(desde)} sem mudar de etapa. ${DICA_POR_ETAPA[lead.status]} Se não houver mais chance, marque como perdido. Este aviso sai uma vez por etapa.`,
+    titulo: `Lead parado há ${ha} na etapa ${etapa}`,
+    // "Há pelo menos": pra lead anterior à 048 o relógio começa na migration,
+    // então a data de entrada real é desconhecida e mais antiga.
+    descricao: `${lead.nome} não avança da etapa ${etapa} há pelo menos ${ha}. ${DICA_POR_ETAPA[lead.status]} Se não houver mais chance, marque como perdido. Este aviso sai uma vez por etapa.`,
     prazo: hojeEmSaoPaulo(agora),
   };
 }
@@ -330,6 +378,9 @@ function decidirParado(
  * Uma rodada das regras (a) e (b). No máximo UMA tarefa por lead por rodada,
  * com o follow-up na frente: duas tarefas de uma vez pro mesmo lead seriam
  * duas formas de dizer a mesma coisa. O parado espera a do follow-up fechar.
+ *
+ * O "lead parado" tem teto por pessoa (MAX_PARADOS_POR_PESSOA_DIA), os mais
+ * antigos primeiro: o resto volta amanhã, sem enxurrada no sino.
  */
 export function decidirRegrasDeLead(
   leads: readonly LeadNoCiclo[],
@@ -337,10 +388,24 @@ export function decidirRegrasDeLead(
   agora: Date,
 ): TarefaDeRegra[] {
   const acoes: TarefaDeRegra[] = [];
+  const parados: { acao: TarefaDeRegra; desde: number }[] = [];
   for (const lead of leads) {
-    const acao =
-      decidirFollowUp(lead, cfg.followUp, agora) ?? decidirParado(lead, cfg.leadParado, agora);
-    if (acao) acoes.push(acao);
+    const followUp = decidirFollowUp(lead, cfg.followUp, agora);
+    if (followUp) {
+      acoes.push(followUp);
+      continue;
+    }
+    const parado = decidirParado(lead, cfg, agora);
+    if (parado) parados.push({ acao: parado, desde: Date.parse(lead.statusDesde) });
+  }
+
+  const porPessoa = new Map<string, number>();
+  for (const { acao } of parados.sort((a, b) => a.desde - b.desde)) {
+    const quem = acao.destinatarioId ?? 'gestao';
+    const n = porPessoa.get(quem) ?? 0;
+    if (n >= MAX_PARADOS_POR_PESSOA_DIA) continue;
+    porPessoa.set(quem, n + 1);
+    acoes.push(acao);
   }
   return acoes;
 }
@@ -349,7 +414,10 @@ export function decidirRegrasDeLead(
 // Regra (c): o processo andou no Diário
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PublicacaoDaRegra = Pick<Publicacao, 'id' | 'dataDisponibilizacao' | 'redFlags'>;
+export type PublicacaoDaRegra = Pick<
+  Publicacao,
+  'id' | 'dataDisponibilizacao' | 'redFlags' | 'link'
+>;
 
 export interface AlvoDaRegraProcesso {
   tipo: 'lead' | 'operacao';
@@ -367,10 +435,15 @@ export interface AlvoDaRegraProcesso {
  * A tarefa que a rotina do DJEN cria pra um alvo, ou null.
  *
  *  - Alvo ativo com publicação nova (fora da linha de base) → "ler publicação".
- *    Se a regra já tem tarefa aberta pra esse alvo, não empilha outra: em
- *    processo movimentado sairia uma por dia.
+ *    "Nova" é pela DATA, a partir de `corteData`: o DJEN às vezes devolve uma
+ *    publicação antiga que ainda não estava salva (entrou como nova uma de
+ *    12/11/2025), e ela não é novidade nenhuma. Se a regra já tem tarefa
+ *    aberta pra esse alvo, não empilha outra: em processo movimentado sairia
+ *    uma por dia.
  *  - Lead perdido "sem ofício" → só a tarefa de reavaliar, e só quando o
- *    Diário mostra ofício expedido (X1) depois da perda. Olha também a linha
+ *    Diário CITA ofício requisitório (X1) depois da perda. Citar não é
+ *    expedir — em ~15 de 25 casos amostrados era "expeça-se" ou pendência —,
+ *    então o texto pede pra conferir, não afirma que saiu. Olha também a linha
  *    de base: o ofício pode ter saído antes de o processo entrar no rodízio.
  *    O lead NUNCA é reaberto aqui.
  */
@@ -381,6 +454,8 @@ export function decidirTarefaDoProcesso(
     todas: readonly PublicacaoDaRegra[];
     jaVisto: boolean;
     temTarefaAbertaDaRegra: boolean;
+    /** YYYY-MM-DD: publicação disponibilizada antes disso não conta como nova. */
+    corteData?: string;
   },
   resumo: { descricao: string; urgente: boolean },
   hoje: string,
@@ -392,7 +467,9 @@ export function decidirTarefaDoProcesso(
     operacaoId: alvo.tipo === 'operacao' ? alvo.id : null,
     destinatarioId: alvo.destinatarioId,
     destinatarioPerfil: alvo.destinatarioId ? null : ('gestao' as const),
-    prazo: hoje,
+    // Esta regra roda no cron do DJEN, todo dia: tarefa que nasce no fim de
+    // semana vence na segunda, e não amanhece "atrasada".
+    prazo: proximoDiaUtil(hoje),
   };
 
   if (alvo.perdidoDesde) {
@@ -401,24 +478,38 @@ export function decidirTarefaDoProcesso(
     const comOficio = ctx.todas.filter(
       (p) => p.dataDisponibilizacao >= corte && p.redFlags.some((f) => f.codigo === 'X1'),
     );
-    if (!comOficio.length) return null;
+    // Uma tarefa aberta por vez: a próxima citação espera esta fechar.
+    if (!comOficio.length || ctx.temTarefaAbertaDaRegra) return null;
     const data = comOficio.reduce(
       (a, p) => (p.dataDisponibilizacao > a ? p.dataDisponibilizacao : a),
       '',
     );
+    const links = linksDasPublicacoes(comOficio);
     return {
       ...base,
-      chaveCiclo: chaveReavaliar(alvo.id, alvo.perdidoDesde),
-      motivo: `Perdido sem ofício; ofício expedido no Diário de ${fmtDataIso(data)}`,
-      titulo: 'Reavaliar lead perdido: saiu o ofício',
-      descricao: `${alvo.nome} foi marcado como perdido porque ainda não tinha ofício requisitório. O Diário de ${fmtDataIso(data)} mostra ofício expedido no processo ${maskCNJ(alvo.cnj)}. O lead continua em Perdido. Se valer a pena, arraste o card de volta para uma etapa ativa e retome o contato.`,
+      chaveCiclo: chaveReavaliar(
+        alvo.id,
+        alvo.perdidoDesde,
+        Math.max(...comOficio.map((p) => p.id)),
+      ),
+      motivo: `Perdido sem ofício; o Diário de ${fmtDataIso(data)} cita ofício requisitório`,
+      titulo: 'Reavaliar lead perdido: o Diário cita ofício requisitório',
+      descricao: [
+        `${alvo.nome} foi marcado como perdido porque ainda não tinha ofício requisitório.`,
+        `O Diário de ${fmtDataIso(data)} cita ofício requisitório no processo ${maskCNJ(alvo.cnj)}. Citar não quer dizer que foi expedido: pode ser só "expeça-se". Confira no PJe.`,
+        ...links,
+        'O lead continua em Perdido. Se o ofício saiu mesmo e ainda valer a pena, arraste o card de volta para uma etapa ativa e retome o contato. Se ainda não saiu, só conclua esta tarefa: o sistema avisa de novo quando o Diário citar o ofício outra vez.',
+      ].join('\n'),
     };
   }
 
-  if (!ctx.jaVisto || !ctx.novas.length || ctx.temTarefaAbertaDaRegra) return null;
+  const novas = ctx.corteData
+    ? ctx.novas.filter((p) => p.dataDisponibilizacao >= ctx.corteData!)
+    : ctx.novas;
+  if (!ctx.jaVisto || !novas.length || ctx.temTarefaAbertaDaRegra) return null;
 
-  const maiorId = Math.max(...ctx.novas.map((p) => p.id));
-  const maisRecente = ctx.novas.reduce(
+  const maiorId = Math.max(...novas.map((p) => p.id));
+  const maisRecente = novas.reduce(
     (a, p) => (p.dataDisponibilizacao > a ? p.dataDisponibilizacao : a),
     '',
   );
@@ -430,6 +521,23 @@ export function decidirTarefaDoProcesso(
     titulo: resumo.urgente
       ? 'URGENTE: ler publicação grave no Diário'
       : 'Ler publicação nova no Diário',
-    descricao: `${resumo.descricao}\nLeia a publicação, veja se muda a negociação e anote ${onde}. Se for pagamento, cessão ou penhora, avise a gestão hoje.`,
+    descricao: [
+      `Processo ${maskCNJ(alvo.cnj)}.`,
+      resumo.descricao,
+      ...linksDasPublicacoes(novas),
+      `Leia a publicação, veja se muda a negociação e anote ${onde}. Se for pagamento, cessão ou penhora, avise a gestão hoje.`,
+    ].join('\n'),
   };
+}
+
+/** Até 3 links, das mais recentes: "Publicação de 27/10/2026: https://…". */
+function linksDasPublicacoes(pubs: readonly PublicacaoDaRegra[]): string[] {
+  // O DJEN repete o mesmo link em publicações do mesmo dia (1913
+  // publicações, 1597 links distintos no banco em 31/10): um por URL.
+  const vistos = new Set<string>();
+  return [...pubs]
+    .filter((p) => p.link && !vistos.has(p.link) && vistos.add(p.link))
+    .sort((a, b) => b.dataDisponibilizacao.localeCompare(a.dataDisponibilizacao))
+    .slice(0, 3)
+    .map((p) => `Publicação de ${fmtDataIso(p.dataDisponibilizacao)}: ${p.link}`);
 }

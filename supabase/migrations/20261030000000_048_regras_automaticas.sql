@@ -367,3 +367,13 @@ COMMENT ON COLUMN public.modelos_mensagem.uso IS
 
 -- Nome da 039, sem edição em produção (conferido em 30/10).
 UPDATE public.modelos_mensagem SET uso = 'retomada' WHERE nome = 'Retomada de contato';
+
+-- O texto da 039 pergunta "se você chegou a pensar sobre a proposta", mas o
+-- follow-up manda usá-lo com quem ainda NÃO recebeu proposta nenhuma (está em
+-- Em contato). Texto neutro, que serve pros dois casos. Só troca se ninguém
+-- editou em /admin/mensagens: o WHERE confere o texto exato que estava no banco
+-- em 31/10.
+UPDATE public.modelos_mensagem
+SET texto = E'Olá {nome}, tudo bem? Aqui é da RGT Capital de novo.\n\nTe escrevi sobre o seu crédito judicial e queria saber se ficou alguma dúvida. Posso te explicar como funciona, sem compromisso.\n\nSe preferir que eu não escreva mais, é só avisar.'
+WHERE nome = 'Retomada de contato'
+  AND texto = E'Olá {nome}, tudo bem? Aqui é da RGT Capital de novo.\n\nPassando pra saber se você chegou a pensar sobre a proposta. Qualquer dúvida estou à disposição.\n\nSe preferir que eu não escreva mais, é só avisar.';

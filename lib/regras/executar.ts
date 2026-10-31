@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   decidirRegrasDeLead,
-  ETAPAS_ATIVAS,
+  ETAPAS_LEAD_PARADO,
   lerConfig,
   TUDO_DESLIGADO,
   type ChaveRegra,
@@ -11,7 +11,6 @@ import {
   type LinhaRegra,
   type TarefaDeRegra,
 } from './decidir';
-import { INTERVALO_MINIMO_DIAS_MODELO } from '@/lib/whatsapp/modelos';
 
 /**
  * A parte das regras automáticas que fala com o banco. Roda com service role
@@ -70,7 +69,6 @@ export interface ResultadoRegras {
   falhas: number;
 }
 
-const DIA = 86_400_000;
 /** O max-rows padrão do PostgREST no Supabase. */
 const PAGINA = 1000;
 
@@ -85,6 +83,7 @@ type LinhaLead = {
   nome: string;
   status: string;
   dono_id: string | null;
+  origem: string;
   status_desde: string;
   dono: { ativo: boolean } | null;
 };
@@ -114,13 +113,16 @@ export async function rodarRegrasDeLead(
   // Nada ligado: nem consulta. É o estado normal até alguém ligar.
   if (!r.regrasLigadas.length) return r;
 
-  // Só o follow-up ligado: só "Em contato" interessa.
-  const etapas = cfg.leadParado.ativa ? [...ETAPAS_ATIVAS] : ['em_contato'];
+  // Só o follow-up ligado: só "Em contato" interessa. Em Novo, o que veio de
+  // importação em massa é descartado na decisão (ver ETAPAS_LEAD_PARADO).
+  const etapas = cfg.leadParado.ativa ? [...ETAPAS_LEAD_PARADO] : ['em_contato'];
   const leads = exigir<LinhaLead[]>(
     'leads',
     await sb
       .from('leads')
-      .select('id, nome, status, dono_id, status_desde, dono:usuarios!leads_dono_id_fkey(ativo)')
+      .select(
+        'id, nome, status, dono_id, origem, status_desde, dono:usuarios!leads_dono_id_fkey(ativo)',
+      )
       .eq('is_exemplo', false)
       .in('status', etapas),
   );
@@ -129,8 +131,8 @@ export async function rodarRegrasDeLead(
 
   const ids = leads.map((l) => l.id);
   // Só o follow-up olha o WhatsApp, e só de quem está em "Em contato". Com o
-  // lead parado ligado entram também os leads em Novo há meses, e a janela de
-  // mensagens iria junto até lá atrás sem mudar decisão nenhuma.
+  // lead parado ligado entram também leads parados há meses em outras etapas,
+  // e a janela de mensagens iria junto até lá atrás sem mudar decisão nenhuma.
   const emContato = cfg.followUp.ativa ? leads.filter((l) => l.status === 'em_contato') : [];
   const [tarefas, conversas, disparos] = await Promise.all([
     sb
@@ -172,33 +174,27 @@ export async function rodarRegrasDeLead(
     disparosPorLead.set(d.lead_id, lista);
   }
 
-  // Mensagens: só as recebidas e os modelos que saíram, a partir da entrada
-  // mais antiga na etapa menos a trava de 7 dias (pra saber se o botão do
-  // número da RGT já libera). O resto da conversa não muda decisão nenhuma.
+  // Mensagens: só as RECEBIDAS, a partir da entrada mais antiga na etapa. O
+  // resto da conversa não muda decisão nenhuma.
   const ultimaEntrada = new Map<string, string>();
-  const ultimoModelo = new Map<string, string>();
   if (leadDaConversa.size) {
-    const maisAntigo = Math.min(...emContato.map((l) => Date.parse(l.status_desde)));
-    const desde = new Date(maisAntigo - INTERVALO_MINIMO_DIAS_MODELO * DIA).toISOString();
+    const desde = new Date(
+      Math.min(...emContato.map((l) => Date.parse(l.status_desde))),
+    ).toISOString();
     // O PostgREST corta a resposta em 1000 linhas sem dar erro. Com o robô
     // conversando, uma resposta perdida no corte viraria follow-up pra quem
     // respondeu: pagina até o fim. Ordem total (data + id) pra página não
     // repetir nem pular linha.
-    type LinhaMsg = {
-      conversa_id: string;
-      direcao: string;
-      template_nome: string | null;
-      created_at: string;
-    };
+    type LinhaMsg = { conversa_id: string; direcao: string; created_at: string };
     const msgs: LinhaMsg[] = [];
     for (let de = 0; ; de += PAGINA) {
       const pagina = exigir<LinhaMsg[]>(
         'whatsapp_mensagens',
         await sb
           .from('whatsapp_mensagens')
-          .select('conversa_id, direcao, template_nome, created_at')
+          .select('conversa_id, direcao, created_at')
           .in('conversa_id', [...leadDaConversa.keys()])
-          .or('direcao.eq.entrada,template_nome.not.is.null')
+          .eq('direcao', 'entrada')
           .gte('created_at', desde)
           .order('created_at', { ascending: false })
           .order('id')
@@ -207,15 +203,14 @@ export async function rodarRegrasDeLead(
       msgs.push(...pagina);
       if (pagina.length < PAGINA) break;
     }
-    const guardarMaior = (m: Map<string, string>, k: string, v: string) => {
-      const atual = m.get(k);
-      if (!atual || Date.parse(v) > Date.parse(atual)) m.set(k, v);
-    };
     for (const m of msgs) {
       const leadId = leadDaConversa.get(m.conversa_id);
-      if (!leadId) continue;
-      if (m.direcao === 'entrada') guardarMaior(ultimaEntrada, leadId, m.created_at);
-      else if (m.template_nome) guardarMaior(ultimoModelo, leadId, m.created_at);
+      // O filtro já veio do banco; conferir de novo custa nada e impede que
+      // uma mensagem ENVIADA conte como resposta.
+      if (!leadId || m.direcao !== 'entrada') continue;
+      const atual = ultimaEntrada.get(leadId);
+      if (!atual || Date.parse(m.created_at) > Date.parse(atual))
+        ultimaEntrada.set(leadId, m.created_at);
     }
   }
 
@@ -225,10 +220,10 @@ export async function rodarRegrasDeLead(
     status: l.status,
     // Dono inativo não lê tarefa: tratar como sem dono manda pra gestão.
     donoId: l.dono_id && l.dono?.ativo ? l.dono_id : null,
+    origem: l.origem,
     statusDesde: l.status_desde,
     temTarefaAberta: comTarefaAberta.has(l.id),
     ultimaEntradaWhatsapp: ultimaEntrada.get(l.id) ?? null,
-    ultimoModeloEm: ultimoModelo.get(l.id) ?? null,
     disparos: disparosPorLead.get(l.id) ?? [],
   }));
 

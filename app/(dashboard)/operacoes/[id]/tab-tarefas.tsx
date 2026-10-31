@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { criarTarefa, atualizarStatusTarefa } from './tarefas-actions';
 import { fmtDataBR } from '@/lib/formatters';
 import { hojeEmSaoPaulo } from '@/lib/datas';
+import { separarLinks } from '@/lib/tarefas/links';
 
 const LABEL_STATUS: Record<string, string> = {
   pendente: 'reaberta',
@@ -171,11 +172,35 @@ export function TabTarefas({ operacaoId, tarefas, usuarios, meuId }: Props) {
                       )}
                       <span className="font-medium text-neutral-900">{t.titulo}</span>
                     </div>
-                    {t.descricao && (
-                      <p className="mt-1 text-xs whitespace-pre-wrap text-neutral-700">
-                        {t.descricao}
-                      </p>
-                    )}
+                    {(() => {
+                      // Aqui o cartão não é link: a URL da publicação vira um
+                      // link de verdade em vez de texto pra copiar.
+                      const { texto, links } = separarLinks(t.descricao);
+                      return (
+                        <>
+                          {texto && (
+                            <p className="mt-1 text-xs whitespace-pre-wrap text-neutral-700">
+                              {texto}
+                            </p>
+                          )}
+                          {links.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-x-3 text-xs">
+                              {links.map((l) => (
+                                <a
+                                  key={l.url}
+                                  href={l.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-neutral-700 underline hover:text-neutral-900"
+                                >
+                                  {l.rotulo}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-neutral-500">
                       {t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>}
                       <span>

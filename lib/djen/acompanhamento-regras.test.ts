@@ -144,6 +144,19 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
     expect(iRpc).toBeLessThan(iUpsert);
   });
 
+  it('publicação antiga que o DJEN trouxe só agora não vira tarefa (corte pela data)', async () => {
+    // Verificado em 01/11; o DJEN devolve uma de 12/11/2025 que ainda não
+    // estava salva. Pelo id ela é "nova"; pela data, não.
+    vi.mocked(buscarPorCnj).mockResolvedValue([pub(900, '2025-11-12'), pub(400, '2026-09-01')]);
+    const { sb, log } = sbFake({ leads: [LEAD_ATIVO], ...JA_VISTO, ativos: ['broker-1'] });
+    const r = await rodar(sb);
+    expect(r.tarefas).toBe(0);
+    expect(rpcs(log)).toEqual([]);
+    // Nem aviso no sino: a antiga é gravada (vira conhecida) e fica quieta.
+    expect(r.avisos).toBe(0);
+    expect(log.some((l) => l.tabela === 'notificacoes')).toBe(false);
+  });
+
   it('dono inativo: a tarefa vai pra gestão', async () => {
     const { sb, log } = sbFake({ leads: [LEAD_ATIVO], ...JA_VISTO, ativos: [] });
     await rodar(sb);
@@ -205,8 +218,8 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
 
     expect(r).toMatchObject({ linhaDeBase: 1, tarefas: 1, avisos: 0 });
     expect(rpcs(log)[0]).toMatchObject({
-      p_titulo: 'Reavaliar lead perdido: saiu o ofício',
-      p_chave_ciclo: 'reavaliar_perdido:lead-9:2026-10-21T01:00:00.000Z',
+      p_titulo: 'Reavaliar lead perdido: o Diário cita ofício requisitório',
+      p_chave_ciclo: 'reavaliar_perdido:lead-9:2026-10-21T01:00:00.000Z:700',
     });
     expect(log.some((l) => l.tabela === 'notificacoes')).toBe(false);
   });

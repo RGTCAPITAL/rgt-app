@@ -187,7 +187,13 @@ export function Kanban({
   const [dragOverCol, setDragOverCol] = useState<StatusLead | null>(null);
   const [leadRetorno, setLeadRetorno] = useState<{ id: string; nome: string } | null>(null);
   const [leadDisparo, setLeadDisparo] = useState<{ id: string; nome: string } | null>(null);
-  const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
+  // temProcesso: sem número de processo não há Diário pra acompanhar, então o
+  // "ainda não saiu o ofício" nem aparece.
+  const [modalPerdido, setModalPerdido] = useState<{
+    leadId: string;
+    nome: string;
+    temProcesso: boolean;
+  } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
   // "Perdido porque o ofício ainda não saiu": grava o código sem_oficio, que a
   // regra "processo andou" lê pra avisar quando o ofício sair (migration 048).
@@ -240,7 +246,14 @@ export function Kanban({
     if (!lead || lead.status === novoStatus) return;
 
     if (novoStatus === 'perdido') {
-      setModalPerdido({ leadId, nome: lead.nome });
+      // Mesmo critério do acompanhamento do Diário (cnj20): só número com os
+      // 20 dígitos do CNJ entra na fila. "123/2019" mostraria a opção e nunca
+      // seria olhado.
+      setModalPerdido({
+        leadId,
+        nome: lead.nome,
+        temProcesso: (lead.numero_processo ?? '').replace(/\D/g, '').length === 20,
+      });
       setMotivoPerda('');
       setSemOficio(false);
       return;
@@ -292,7 +305,7 @@ export function Kanban({
       'perdido',
       motivoPerda,
       modalPerdido.nome,
-      semOficio ? 'sem_oficio' : null,
+      semOficio && modalPerdido.temProcesso ? 'sem_oficio' : null,
     );
     setModalPerdido(null);
   }
@@ -676,26 +689,28 @@ export function Kanban({
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="flex items-start gap-2 text-sm text-neutral-800">
-              <input
-                type="checkbox"
-                checked={semOficio}
-                onChange={(e) => {
-                  setSemOficio(e.target.checked);
-                  if (e.target.checked && !motivoPerda.trim()) {
-                    setMotivoPerda('Ainda não saiu o ofício requisitório.');
-                  }
-                }}
-                className="mt-0.5 size-4 shrink-0 accent-neutral-900"
-              />
-              <span>Ainda não saiu o ofício requisitório</span>
-            </label>
-            <p className="pl-6 text-xs text-neutral-500">
-              Com a regra Processo andou ligada, a RGT continua olhando o Diário e cria uma tarefa
-              de reavaliar quando o ofício sair.
-            </p>
-          </div>
+          {modalPerdido?.temProcesso && (
+            <div className="flex flex-col gap-1">
+              <label className="flex items-start gap-2 text-sm text-neutral-800">
+                <input
+                  type="checkbox"
+                  checked={semOficio}
+                  onChange={(e) => {
+                    setSemOficio(e.target.checked);
+                    if (e.target.checked && !motivoPerda.trim()) {
+                      setMotivoPerda('Ainda não saiu o ofício requisitório.');
+                    }
+                  }}
+                  className="mt-0.5 size-4 shrink-0 accent-neutral-900"
+                />
+                <span>Ainda não saiu o ofício requisitório</span>
+              </label>
+              <p className="pl-6 text-xs text-neutral-500">
+                Com a regra Processo andou ligada, a RGT continua olhando o Diário e cria uma tarefa
+                para conferir quando ele citar ofício requisitório.
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setModalPerdido(null)}>

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { hojeEmSaoPaulo } from '@/lib/datas';
+import { hojeEmSaoPaulo, somarDias } from '@/lib/datas';
 import { decidirTarefaDoProcesso, type ConfigRegras } from '@/lib/regras/decidir';
 import { carregarConfig, criarTarefaDeRegra } from '@/lib/regras/executar';
 import { buscarPorCnj } from './client';
@@ -293,23 +293,37 @@ export async function acompanharProcessos(
       const idsConhecidos = new Set((conhecidas ?? []).map((p) => Number(p.id)));
       const novas = pubs.filter((p) => !idsConhecidos.has(p.id));
 
+      // "Nova" de verdade é pela DATA, não pelo id: o DJEN às vezes devolve
+      // uma publicação antiga que ainda não estava salva (entrou como nova uma
+      // de 12/11/2025), e ela não é novidade nenhuma. Corte: a última
+      // verificação menos 3 dias de folga (fim de semana, DJEN atrasado).
+      // Processo sem verificação mas com publicações salvas (veio da
+      // Prospecção) olha só os últimos 7 dias: o resto ficou pra trás.
+      // Vale pra tarefa E pro aviso no sino.
+      const hoje = hojeEmSaoPaulo(new Date(agora()));
+      const ultimaVez = vistoEm.get(cnj);
+      const corteData = ultimaVez
+        ? somarDias(hojeEmSaoPaulo(new Date(ultimaVez)), -3)
+        : somarDias(hoje, -7);
+      const recentes = novas.filter((p) => p.dataDisponibilizacao >= corteData);
+
       // Tarefas ANTES de gravar as publicações: se algo falhar daqui pra
       // frente, amanhã elas continuam "novas" e a tarefa sai; a chave da 048
       // impede que saia em dobro.
       if (comTarefaAberta) {
         const abertas = comTarefaAberta;
-        const hoje = hojeEmSaoPaulo(new Date(agora()));
         for (const alvo of alvos.get(cnj)!) {
           const decidir = (destinatarioId: string | null) =>
             decidirTarefaDoProcesso(
               { ...alvo, cnj, destinatarioId },
               {
-                novas,
+                novas: recentes,
                 todas: pubs,
                 jaVisto,
                 temTarefaAbertaDaRegra: abertas.has(`${alvo.tipo}:${alvo.id}`),
+                corteData,
               },
-              resumirNovidades(alvo.nome, novas),
+              resumirNovidades(alvo.nome, recentes),
               hoje,
             );
           // Quase todo dia a resposta é "nada": só então vale ler quem está
@@ -343,14 +357,15 @@ export async function acompanharProcessos(
         r.linhaDeBase++;
         continue;
       }
-      if (!novas.length) continue;
+      // As antigas foram gravadas acima (viram conhecidas), mas não avisam.
+      if (!recentes.length) continue;
       r.comNovidade++;
 
       const notifs = [];
       // Lead perdido não recebe o aviso genérico: pra ele só importa o ofício,
       // e isso vira tarefa de reavaliar (acima).
       for (const alvo of alvos.get(cnj)!.filter((a) => !a.perdidoDesde)) {
-        const resumo = resumirNovidades(alvo.nome, novas);
+        const resumo = resumirNovidades(alvo.nome, recentes);
         let para = alvo.donos;
         if (!para.length) para = equipe ??= await idsDaEquipe(sb, ['admin', 'gestao']);
         if (resumo.urgente)

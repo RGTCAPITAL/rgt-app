@@ -27,11 +27,11 @@ export type RegraVista = {
 
 const O_QUE_FAZ: Record<ChaveRegra, string> = {
   follow_up:
-    'Lead em Em contato, sem resposta no WhatsApp da RGT e sem tarefa aberta, ganha uma tarefa de follow-up para o dono. Depois do número máximo de tentativas, para.',
+    'Lead na etapa Em contato, sem resposta no WhatsApp da RGT e sem tarefa aberta, ganha uma tarefa de follow-up para o dono: ligar ou mandar mensagem do próprio WhatsApp. Para quando a pessoa responde, quando o card muda de etapa ou depois do número máximo de tentativas.',
   lead_parado:
-    'Lead que não muda de etapa (Novo, Em contato, Qualificado ou Proposta enviada) ganha uma tarefa e um aviso no sino para o dono. Uma vez por etapa.',
+    'Lead que não avança ganha uma tarefa e um aviso no sino para o dono. Uma vez por etapa, no máximo 10 por pessoa por dia. Em Novo, só quem chegou sozinho (site, WhatsApp, indicação): importação em massa fica de fora, pra não virar enxurrada. Em Em contato, só depois que o follow-up termina ou a pessoa responde.',
   processo_andou:
-    'Publicação nova no Diário de um processo acompanhado vira tarefa de leitura para o dono. Lead perdido por falta de ofício ganha a tarefa de reavaliar quando o ofício sair; ele nunca é reaberto sozinho.',
+    'Publicação nova no Diário de um processo acompanhado vira tarefa de leitura para o dono, com o número do processo e o link. Lead perdido por falta de ofício ganha a tarefa de conferir a cada nova citação de ofício requisitório no Diário; ele nunca é reaberto sozinho.',
 };
 
 const diaMesSP = new Intl.DateTimeFormat('pt-BR', {

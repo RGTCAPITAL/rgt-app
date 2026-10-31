@@ -28,3 +28,15 @@ export function hojeEmSaoPaulo(agora: Date = new Date()): string {
     day: '2-digit',
   }).format(agora);
 }
+
+/**
+ * O próprio dia, se for de segunda a sexta; senão a segunda seguinte.
+ * Prazo de tarefa criada no fim de semana: com prazo no sábado ela já
+ * amanhecia "atrasada" na segunda.
+ */
+export function proximoDiaUtil(iso: string): string {
+  const dia = new Date(`${iso}T00:00:00Z`).getUTCDay(); // 0 = domingo, 6 = sábado
+  if (dia === 6) return somarDias(iso, 2);
+  if (dia === 0) return somarDias(iso, 1);
+  return iso;
+}

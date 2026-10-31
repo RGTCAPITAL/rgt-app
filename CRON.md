@@ -88,10 +88,13 @@ deixaria as regras sem tempo. Separado, cada um falha sozinho, tem o próprio
 log na Vercel e pode ser chamado à mão. Este custa ~1 s: cinco consultas em
 lote e uma RPC por tarefa criada (`maxDuration = 60` sobra).
 
-## `0 12 * * *` — 9h a 10h em Maceió
+## `0 12 * * 1-5` — 9h a 10h em Maceió, de segunda a sexta
 
 - Roda **depois** do DJEN (`0 11 * * *`), e as tarefas já estão lá quando o
   expediente começa.
+- Só em dia útil: tarefa criada no sábado, com prazo no sábado, já amanhecia
+  "atrasada" na segunda. Os dias da regra continuam corridos — quem venceria
+  no fim de semana sai na segunda.
 - Fora da faixa 0–2 UTC, onde o dia em UTC e o dia em São Paulo divergem. O
   prazo da tarefa usa `hojeEmSaoPaulo`, mas não custa ficar longe da virada.
 
