@@ -29,7 +29,7 @@ export default async function MensagensPage() {
 
   const { data: modelos } = await supabase
     .from('modelos_mensagem')
-    .select('id, nome, texto, requer_valor, requer_ente, ordem, ativo, updated_at')
+    .select('id, nome, texto, requer_valor, requer_ente, uso, ordem, ativo, updated_at')
     .order('ordem')
     .returns<ModeloRow[]>();
 

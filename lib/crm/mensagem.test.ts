@@ -26,6 +26,7 @@ const MODELOS: ModeloMensagem[] = [
     texto: 'Olá {nome}, aqui é da RGT sobre seu precatório de {valor} contra {ente}.',
     requerValor: true,
     requerEnte: true,
+    uso: 'primeiro_contato',
   },
   {
     id: 'com-valor',
@@ -33,6 +34,7 @@ const MODELOS: ModeloMensagem[] = [
     texto: 'Olá {nome}, aqui é da RGT sobre seu precatório de {valor}.',
     requerValor: true,
     requerEnte: false,
+    uso: 'primeiro_contato',
   },
   {
     id: 'simples',
@@ -40,6 +42,15 @@ const MODELOS: ModeloMensagem[] = [
     texto: 'Olá {nome}, aqui é da RGT Capital.',
     requerValor: false,
     requerEnte: false,
+    uso: 'primeiro_contato',
+  },
+  {
+    id: 'retomada',
+    nome: 'Retomada de contato',
+    texto: 'Olá {nome}, aqui é da RGT de novo.',
+    requerValor: false,
+    requerEnte: false,
+    uso: 'retomada',
   },
 ];
 
@@ -142,6 +153,27 @@ describe('escolherModelo', () => {
     const m = escolherModelo(MODELOS, semNada)!;
     const texto = montarMensagem(m.texto, semNada);
     expect(texto).toBe('Olá Fulano, aqui é da RGT Capital.');
+  });
+
+  it('lead novo nunca recebe a retomada, mesmo sem dado nenhum', () => {
+    const semNada: DadosLead = {
+      nome: 'Fulano',
+      valorProposta: null,
+      valorProcesso: null,
+      numeroProcesso: null,
+      enteDevedor: null,
+    };
+    expect(escolherModelo(MODELOS, semNada)?.id).toBe('simples');
+    expect(escolherModelo(MODELOS, semNada, 'primeiro_contato')?.id).toBe('simples');
+  });
+
+  it('lead já contatado recebe a retomada, mesmo tendo valor e ente', () => {
+    expect(escolherModelo(MODELOS, LEAD_COMPLETO, 'retomada')?.id).toBe('retomada');
+  });
+
+  it('sem retomada ativa, o lead contatado recebe o primeiro contato', () => {
+    const semRetomada = MODELOS.filter((m) => m.uso !== 'retomada');
+    expect(escolherModelo(semRetomada, LEAD_COMPLETO, 'retomada')?.id).toBe('completo');
   });
 
   it('devolve null quando nenhum modelo serve', () => {

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { STATUS_LEAD, type StatusLead } from '@/lib/leads';
 import { leadFormSchema, valorParaNumero } from './lead-schemas';
 import { titleCase } from '@/lib/formatters';
+import { repassarTarefasDeRegra } from '@/lib/tarefas/repassar';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -94,6 +95,15 @@ export async function atualizarLead(
     ...dadosPrecatorio(parsed.data),
   };
 
+  // O formulário manda o dono sempre, mudado ou não. Comparar com o de antes
+  // evita repassar tarefa de regra num lead que só teve a nota editada (a de
+  // um dono inativo foi pra gestão de propósito e deve ficar lá).
+  const { data: antes } = await supabase
+    .from('leads')
+    .select('dono_id')
+    .eq('id', leadId)
+    .maybeSingle<{ dono_id: string | null }>();
+
   const { data, error } = await supabase
     .from('leads')
     .update(update)
@@ -103,17 +113,39 @@ export async function atualizarLead(
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: 'Lead não encontrado ou sem permissão.' };
 
+  // Broker não troca dono (a RLS de leads exige dono = ele antes e depois), então
+  // quem chega aqui com dono novo é admin ou gestão, que podem mudar qualquer
+  // tarefa: o mesmo cliente basta.
+  if (antes && antes.dono_id !== update.dono_id) {
+    await repassarTarefasDeRegra(supabase, leadId, update.dono_id);
+    revalidatePath('/tarefas');
+  }
+
   revalidatePath('/crm');
   return { ok: true };
 }
+
+/**
+ * Motivos de perda que o sistema entende (migration 048). O texto do motivo
+ * continua livre; o código é o que uma regra consegue ler sem adivinhar.
+ * `sem_oficio`: a regra "processo andou" continua olhando o Diário e cria
+ * tarefa de reavaliar quando o ofício sair.
+ */
+const CODIGOS_PERDA = ['sem_oficio'] as const;
+export type CodigoPerda = (typeof CODIGOS_PERDA)[number];
 
 export async function mudarStatusLead(
   leadId: string,
   novoStatus: StatusLead,
   motivoPerda?: string,
+  motivoCodigo?: CodigoPerda | null,
 ): Promise<Result> {
   if (!STATUS_VALIDOS.includes(novoStatus)) {
     return { ok: false, error: 'Status inválido.' };
+  }
+  // Vem do navegador: só passa o que o CHECK da 048 aceita.
+  if (motivoCodigo != null && !CODIGOS_PERDA.includes(motivoCodigo)) {
+    return { ok: false, error: 'Motivo de perda inválido.' };
   }
 
   const supabase = await createClient();
@@ -136,7 +168,13 @@ export async function mudarStatusLead(
   }
 
   const update: Record<string, unknown> = { status: novoStatus };
-  if (novoStatus === 'perdido') update.motivo_perda = motivoPerda!.trim();
+  if (novoStatus === 'perdido') {
+    update.motivo_perda = motivoPerda!.trim();
+    // Só manda a coluna quando há código. Lead que chega em Perdido vindo de
+    // outra etapa já está com ela vazia (a trigger da 048 limpa ao sair de
+    // Perdido), e assim o kanban não depende da coluna pra mover card.
+    if (motivoCodigo) update.motivo_perda_codigo = motivoCodigo;
+  }
   if (novoStatus !== 'perdido') update.motivo_perda = null; // limpa se saiu de perdido
 
   const { data: updated, error } = await supabase

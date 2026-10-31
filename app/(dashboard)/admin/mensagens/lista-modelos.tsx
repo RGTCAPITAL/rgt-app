@@ -19,6 +19,7 @@ export type ModeloRow = {
   texto: string;
   requer_valor: boolean;
   requer_ente: boolean;
+  uso: 'primeiro_contato' | 'retomada';
   ordem: number;
   ativo: boolean;
   updated_at: string;
@@ -82,6 +83,11 @@ export function ListaModelos({ modelos }: { modelos: ModeloRow[] }) {
           lead tem. Um lead sem valor cadastrado recebe a versão que não cita valor — assim a
           mensagem nunca sai com buraco.
         </p>
+        <p className="mt-2">
+          Lead que já saiu de Novo recebe o texto marcado “para lead já contatado”: é a retomada que
+          o follow-up automático manda usar. Sem nenhum desses ativo, ele recebe o de primeiro
+          contato.
+        </p>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
           {VARIAVEIS_DISPONIVEIS.map((v) => (
             <span key={v.chave}>
@@ -127,6 +133,11 @@ export function ListaModelos({ modelos }: { modelos: ModeloRow[] }) {
                         {m.requer_ente && (
                           <span className="rounded bg-neutral-100 px-1.5 py-0.5">
                             só para lead com devedor
+                          </span>
+                        )}
+                        {m.uso === 'retomada' && (
+                          <span className="rounded bg-neutral-100 px-1.5 py-0.5">
+                            para lead já contatado
                           </span>
                         )}
                         {!m.ativo && (

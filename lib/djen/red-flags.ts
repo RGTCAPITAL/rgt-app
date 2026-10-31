@@ -462,7 +462,9 @@ const DESCRICOES_HUMANAS: Record<string, string> = {
   '8a': 'Bloqueio contra o ente devedor. Sinal POSITIVO — pressão pra pagar.',
   '9': 'Trânsito em julgado — pode virar precatório definitivo.',
   '10': 'Recurso pendente. Ainda não é definitivo.',
-  X1: 'Ofício requisitório expedido — precatório em formação.',
+  // "Cita", não "expedido": em ~15 de 25 casos amostrados (30/10) era
+  // "expeça-se" ou pendência, e o broker repassava ao credor que já tinha saído.
+  X1: 'O Diário cita ofício requisitório — confira no PJe se já foi expedido.',
   X2: 'Deságio ou acordo formal citado no texto.',
   X3: 'Compensação tributária discutida no processo.',
   X4: 'RPV (mini-precatório): paga rápido, mas o teto de valor é baixo.',

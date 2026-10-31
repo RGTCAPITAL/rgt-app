@@ -1,0 +1,516 @@
+import { describe, expect, it } from 'vitest';
+import { lerConfig, TUDO_DESLIGADO, type ConfigRegras } from './decidir';
+import { rodarRegrasDeLead } from './executar';
+
+/**
+ * A rodada das regras (a) e (b) com um Supabase falso: confere que as
+ * consultas viram as decisões certas e que "já feito" não conta como falha.
+ * Nenhum teste toca banco. Dados fictícios.
+ */
+
+const AGORA = new Date('2026-11-10T12:30:00Z');
+const ha = (horas: number) => new Date(AGORA.getTime() - horas * 3_600_000).toISOString();
+
+const LIGADAS = lerConfig([
+  { chave: 'follow_up', ativa: true, parametros: { dias: 2, max_tentativas: 2 } },
+  { chave: 'lead_parado', ativa: true, parametros: { dias: 7 } },
+  { chave: 'processo_andou', ativa: false, parametros: {} },
+]);
+const SO_FOLLOW_UP: ConfigRegras = {
+  ...LIGADAS,
+  leadParado: { ...LIGADAS.leadParado, ativa: false },
+};
+
+type Tabelas = Partial<Record<string, Record<string, unknown>[]>>;
+
+/** Cada from() devolve as linhas da tabela; filtros ficam registrados pra conferir. */
+function sbFake(
+  tabelas: Tabelas,
+  rpc: (args: Record<string, unknown>) => {
+    data: unknown;
+    error: { message: string } | null;
+  } = () => ({
+    data: 'tarefa-nova',
+    error: null,
+  }),
+) {
+  const consultas: { tabela: string; filtros: unknown[][] }[] = [];
+  const updates: { tabela: string; dados: unknown; filtros: unknown[][] }[] = [];
+  const rpcs: Record<string, unknown>[] = [];
+  const from = (tabela: string) => {
+    const filtros: unknown[][] = [];
+    consultas.push({ tabela, filtros });
+    const b: Record<string, unknown> = {};
+    const encadear =
+      (op: string) =>
+      (...args: unknown[]) => {
+        filtros.push([op, ...args]);
+        return b;
+      };
+    for (const op of ['select', 'eq', 'in', 'not', 'or', 'gte', 'order', 'range', 'is'])
+      b[op] = encadear(op);
+    b.update = (dados: unknown) => {
+      updates.push({ tabela, dados, filtros });
+      return b;
+    };
+    // range(de, ate) corta as linhas como o PostgREST, pra exercitar a paginação.
+    b.then = (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) => {
+      const linhas = tabelas[tabela] ?? [];
+      const range = filtros.find((f) => f[0] === 'range') as [string, number, number] | undefined;
+      const data = range ? linhas.slice(range[1], range[2] + 1) : linhas;
+      return Promise.resolve({ data, error: null }).then(ok, erro);
+    };
+    return b;
+  };
+  const client = {
+    from,
+    rpc: (_nome: string, args: Record<string, unknown>) => {
+      rpcs.push(args);
+      return Promise.resolve(rpc(args));
+    },
+  };
+  // O tipo real é SupabaseClient; aqui só from()/rpc() são exercidos.
+  return { sb: client as never, consultas, rpcs, updates };
+}
+
+const BASE: Tabelas = {
+  leads: [
+    // Em contato há 50h, o modelo saiu há 51h e ninguém respondeu.
+    {
+      id: 'l1',
+      nome: 'Ana Souza',
+      telefone: '(82) 90000-0001',
+      status: 'em_contato',
+      dono_id: 'b1',
+      status_desde: ha(50),
+      dono: { ativo: true },
+    },
+    // Respondeu pelo WhatsApp da RGT depois de entrar em Em contato.
+    {
+      id: 'l2',
+      nome: 'Bia Lima',
+      telefone: '(82) 90000-0002',
+      status: 'em_contato',
+      dono_id: 'b2',
+      status_desde: ha(50),
+      dono: { ativo: true },
+    },
+    // Parado há 8 dias, mas já tem tarefa aberta.
+    {
+      id: 'l3',
+      nome: 'Caio Melo',
+      telefone: '(82) 90000-0003',
+      status: 'qualificado',
+      dono_id: 'b1',
+      status_desde: ha(24 * 8),
+      dono: { ativo: true },
+    },
+  ],
+  tarefas: [
+    {
+      id: 't3',
+      lead_id: 'l3',
+      status: 'pendente',
+      created_at: ha(30),
+      concluida_em: null,
+      destinatario_id: 'b1',
+    },
+  ],
+  whatsapp_conversas: [
+    { id: 'c1', lead_id: 'l1' },
+    { id: 'c2', lead_id: 'l2' },
+  ],
+  whatsapp_mensagens: [
+    {
+      conversa_id: 'c1',
+      direcao: 'saida',
+      template_nome: 'rgt_proposta_credor',
+      created_at: ha(51),
+    },
+    { conversa_id: 'c2', direcao: 'entrada', template_nome: null, created_at: ha(10) },
+  ],
+  regras_disparos: [],
+};
+
+describe('rodarRegrasDeLead', () => {
+  it('cria só a tarefa de quem não respondeu e não tem tarefa aberta', async () => {
+    const { sb, rpcs } = sbFake(BASE);
+    const r = await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+
+    expect(r).toEqual({
+      regrasLigadas: ['follow_up', 'lead_parado'],
+      leadsAnalisados: 3,
+      tarefasCriadas: 1,
+      jaExistiam: 0,
+      falhas: 0,
+    });
+    expect(rpcs).toHaveLength(1);
+    expect(rpcs[0]).toMatchObject({
+      p_regra: 'follow_up',
+      p_lead_id: 'l1',
+      p_operacao_id: null,
+      p_destinatario_id: 'b1',
+      p_destinatario_perfil: null,
+      p_tentativa: 1,
+      p_prazo: '2026-11-10',
+      p_titulo: 'Follow-up 1 de 2: sem resposta há 2 dias',
+    });
+    // O modelo enviado há 51h não conta como resposta, e a tarefa nunca manda
+    // reenviar a mensagem fria pelo número da RGT.
+    expect(rpcs[0]!.p_descricao).not.toMatch(/modelo|reenviad/i);
+  });
+
+  it('retorno agendado por uma pessoa depois da entrada na etapa: sem follow-up', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      tarefas: [
+        ...BASE.tarefas!,
+        { id: 't9', lead_id: 'l1', status: 'concluida', created_at: ha(20) },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs.map((a) => a.p_lead_id)).not.toContain('l1');
+  });
+
+  it('tarefa criada por regra não conta como contato', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      tarefas: [
+        ...BASE.tarefas!,
+        { id: 'tr', lead_id: 'l1', status: 'concluida', created_at: ha(20) },
+      ],
+      regras_disparos: [
+        {
+          regra: 'processo_andou',
+          lead_id: 'l1',
+          chave_ciclo: 'processo_andou:lead:l1:1',
+          created_at: ha(20),
+          tarefa_id: 'tr',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs.map((a) => a.p_lead_id)).toContain('l1');
+  });
+
+  it('dono inativo: a tarefa vai pra gestão', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![0]!, dono: { ativo: false } }],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs[0]).toMatchObject({ p_destinatario_id: null, p_destinatario_perfil: 'gestao' });
+  });
+
+  it('RPC devolvendo null (já feito) conta como "já existia", não como falha', async () => {
+    const { sb } = sbFake(BASE, () => ({ data: null, error: null }));
+    const r = await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(r).toMatchObject({ tarefasCriadas: 0, jaExistiam: 1, falhas: 0 });
+  });
+
+  it('erro numa tarefa não para as outras', async () => {
+    const leads = [
+      BASE.leads![0]!,
+      { ...BASE.leads![0]!, id: 'l4', nome: 'Davi Reis', dono_id: 'b2' },
+    ];
+    const { sb, rpcs } = sbFake({ ...BASE, leads }, (args) =>
+      args.p_lead_id === 'l1'
+        ? { data: null, error: { message: 'deadlock' } }
+        : { data: 'tarefa-nova', error: null },
+    );
+    const r = await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs).toHaveLength(2);
+    expect(r).toMatchObject({ tarefasCriadas: 1, falhas: 1 });
+  });
+
+  it('tudo desligado: nem consulta o banco', async () => {
+    const { sb, consultas } = sbFake(BASE);
+    const r = await rodarRegrasDeLead(sb, { agora: AGORA, config: TUDO_DESLIGADO });
+    expect(r.regrasLigadas).toEqual([]);
+    expect(consultas).toEqual([]);
+  });
+
+  it('só o follow-up ligado: só busca leads em Em contato, sem os de exemplo', async () => {
+    const { sb, consultas } = sbFake(BASE);
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    const leads = consultas.find((c) => c.tabela === 'leads')!;
+    expect(leads.filtros).toContainEqual(['in', 'status', ['em_contato']]);
+    expect(leads.filtros).toContainEqual(['eq', 'is_exemplo', false]);
+  });
+
+  it('lead parado ligado: busca as 4 etapas e a origem (importação é descartada na decisão)', async () => {
+    const { sb, consultas } = sbFake(BASE);
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    const leads = consultas.find((c) => c.tabela === 'leads')!;
+    expect(leads.filtros).toContainEqual([
+      'in',
+      'status',
+      ['novo', 'em_contato', 'qualificado', 'proposta_enviada'],
+    ]);
+    expect(String(leads.filtros.find((f) => f[0] === 'select')?.[1])).toContain('origem');
+  });
+
+  it('ninguém em Em contato: nem olha o WhatsApp', async () => {
+    const { sb, consultas } = sbFake({ ...BASE, leads: [BASE.leads![2]!] });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    const tabelas = consultas.map((c) => c.tabela);
+    expect(tabelas).not.toContain('whatsapp_conversas');
+    expect(tabelas).not.toContain('whatsapp_mensagens');
+  });
+
+  it('só o lead parado ligado: ainda lê o WhatsApp de quem está em Em contato (pro texto)', async () => {
+    const { sb, consultas } = sbFake(BASE);
+    await rodarRegrasDeLead(sb, {
+      agora: AGORA,
+      config: { ...LIGADAS, followUp: { ...LIGADAS.followUp, ativa: false } },
+    });
+    expect(consultas.map((c) => c.tabela)).toContain('whatsapp_mensagens');
+  });
+
+  it('com o lead parado ligado, os importados em Novo já saem na consulta', async () => {
+    const { sb, consultas } = sbFake(BASE);
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    const filtro = consultas.find((c) => c.tabela === 'leads')!.filtros.find((f) => f[0] === 'or');
+    expect(filtro?.[1]).toBe(
+      'status.neq.novo,and(vinculo.is.null,origem.not.in.(importacao_planilha,lista_processual))',
+    );
+    const soFu = sbFake(BASE);
+    await rodarRegrasDeLead(soFu.sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(
+      soFu.consultas.find((c) => c.tabela === 'leads')!.filtros.some((f) => f[0] === 'or'),
+    ).toBe(false);
+  });
+
+  it('muitos leads: os ids vão em lotes de até 200 (o gateway recusa URL longa)', async () => {
+    const leads = Array.from({ length: 450 }, (_, i) => ({
+      ...BASE.leads![2]!,
+      id: `q-${i}`,
+    }));
+    const { sb, consultas } = sbFake({ ...BASE, leads, tarefas: [] });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    for (const tabela of ['tarefas', 'regras_disparos']) {
+      const lotes = consultas
+        .filter((c) => c.tabela === tabela)
+        .map((c) => c.filtros.find((f) => f[0] === 'in')?.[2] as string[] | undefined)
+        .filter(Boolean) as string[][];
+      expect(lotes.map((l) => l.length)).toEqual([200, 200, 50]);
+    }
+  });
+
+  it('a página de leads é lida até o fim (o PostgREST corta em 1000)', async () => {
+    const leads = Array.from({ length: 1001 }, (_, i) => ({ ...BASE.leads![2]!, id: `p-${i}` }));
+    const { sb, consultas } = sbFake({ ...BASE, leads, tarefas: [] });
+    const r = await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(consultas.filter((c) => c.tabela === 'leads')).toHaveLength(2);
+    expect(r.leadsAnalisados).toBe(1001);
+  });
+
+  it('resposta numa conversa de OUTRO lead com o mesmo telefone conta (advogado de dois credores)', async () => {
+    const duda = {
+      id: 'l5',
+      nome: 'Duda Reis',
+      telefone: '+55 (82) 99000-0005',
+      status: 'em_contato',
+      dono_id: 'b1',
+      status_desde: ha(50),
+      dono: { ativo: true },
+    };
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [duda],
+      // A conversa ficou presa ao primeiro credor; o wa_id veio sem o nono dígito.
+      whatsapp_conversas: [{ id: 'c9', lead_id: 'outro', telefone: '558290000005' }],
+      whatsapp_mensagens: [
+        { conversa_id: 'c9', direcao: 'entrada', template_nome: null, created_at: ha(10) },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs).toEqual([]);
+  });
+
+  it('tarefa de regra esquecida com o dono antigo vai pro dono atual (e segura o lead)', async () => {
+    const { sb, rpcs, updates } = sbFake({
+      ...BASE,
+      leads: [BASE.leads![2]!], // Caio, qualificado há 8 dias, dono b1
+      tarefas: [
+        {
+          id: 'velha',
+          lead_id: 'l3',
+          status: 'pendente',
+          created_at: ha(24 * 9),
+          concluida_em: null,
+          destinatario_id: 'b-antigo',
+        },
+      ],
+      regras_disparos: [
+        {
+          regra: 'processo_andou',
+          lead_id: 'l3',
+          chave_ciclo: 'processo_andou:lead:l3:1',
+          created_at: ha(24 * 9),
+          tarefa_id: 'velha',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.dados).toEqual({ destinatario_id: 'b1', destinatario_perfil: null });
+    expect(updates[0]!.filtros).toContainEqual(['in', 'id', ['velha']]);
+    expect(updates[0]!.filtros).toContainEqual(['is', 'criado_por_id', null]);
+    // Agora com o dono certo, a tarefa aberta segura: não sai parado em cima.
+    expect(rpcs).toEqual([]);
+  });
+
+  it('dono desativado: a tarefa de regra dele vai pra gestão', async () => {
+    const { sb, updates } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![2]!, dono: { ativo: false } }],
+      tarefas: [
+        {
+          id: 'tp',
+          lead_id: 'l3',
+          status: 'pendente',
+          created_at: ha(24),
+          concluida_em: null,
+          destinatario_id: 'b1',
+          destinatario: { ativo: false },
+        },
+      ],
+      regras_disparos: [
+        {
+          regra: 'lead_parado',
+          lead_id: 'l3',
+          chave_ciclo: 'lead_parado:l3:qualificado:x',
+          created_at: ha(24),
+          tarefa_id: 'tp',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(updates[0]!.dados).toEqual({ destinatario_id: null, destinatario_perfil: 'gestao' });
+  });
+
+  it('retorno pendente com quem saiu da empresa não trava o lead: a gestão recebe o parado', async () => {
+    const { sb, rpcs, updates } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![2]!, status_desde: ha(24 * 20), dono: { ativo: false } }],
+      tarefas: [
+        {
+          id: 'ret',
+          lead_id: 'l3',
+          status: 'pendente',
+          created_at: ha(24 * 15),
+          concluida_em: null,
+          destinatario_id: 'b1',
+          destinatario: { ativo: false },
+        },
+      ],
+      regras_disparos: [],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(updates).toEqual([]); // tarefa de pessoa não é repassada
+    expect(rpcs[0]).toMatchObject({ p_lead_id: 'l3', p_destinatario_perfil: 'gestao' });
+  });
+
+  it('concluir "Ler publicação" não zera o relógio do lead parado', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [BASE.leads![2]!], // qualificado há 8 dias
+      tarefas: [
+        {
+          id: 'ler',
+          lead_id: 'l3',
+          status: 'concluida',
+          created_at: ha(30),
+          concluida_em: ha(5),
+          destinatario_id: 'b1',
+        },
+      ],
+      regras_disparos: [
+        {
+          regra: 'processo_andou',
+          lead_id: 'l3',
+          chave_ciclo: 'processo_andou:lead:l3:9',
+          created_at: ha(30),
+          tarefa_id: 'ler',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs.map((a) => a.p_regra)).toEqual(['lead_parado']);
+  });
+
+  it('lead sem telefone com conversa da RGT (advogado): ganha follow-up', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![0]!, telefone: null }],
+      tarefas: [],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs[0]).toMatchObject({ p_regra: 'follow_up', p_lead_id: 'l1' });
+  });
+
+  it('teto diário: os parados que a pessoa já recebeu hoje descontam', async () => {
+    const leads = Array.from({ length: 12 }, (_, i) => ({
+      ...BASE.leads![2]!,
+      id: `z-${i}`,
+      status_desde: ha(24 * (8 + i)),
+    }));
+    const hoje = Array.from({ length: 8 }, (_, i) => ({
+      regra: 'lead_parado',
+      lead_id: `ja-${i}`,
+      chave_ciclo: `lead_parado:ja-${i}:qualificado:x`,
+      created_at: ha(2),
+      tarefa_id: `tj-${i}`,
+      tarefa: { destinatario_id: 'b1' },
+    }));
+    const { sb, rpcs } = sbFake({ ...BASE, leads, tarefas: [], regras_disparos: hoje });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs).toHaveLength(2);
+  });
+
+  it('resposta depois da linha 1000 ainda conta: pagina as mensagens até o fim', async () => {
+    // 1000 modelos de outra conversa enchem a primeira página; a resposta da
+    // Ana só aparece na segunda. Sem paginar, ela ganharia follow-up.
+    const modelos = Array.from({ length: 1000 }, () => ({
+      conversa_id: 'c2',
+      direcao: 'saida',
+      template_nome: 'rgt_proposta_credor',
+      created_at: ha(20),
+    }));
+    const { sb, rpcs, consultas } = sbFake({
+      ...BASE,
+      whatsapp_mensagens: [
+        ...modelos,
+        { conversa_id: 'c1', direcao: 'entrada', template_nome: null, created_at: ha(5) },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    const msgs = consultas.filter((c) => c.tabela === 'whatsapp_mensagens');
+    expect(msgs).toHaveLength(2);
+    // Só as recebidas: enviada nunca conta como resposta.
+    expect(msgs[0]!.filtros).toContainEqual(['eq', 'direcao', 'entrada']);
+    // A Ana respondeu (página 2) e fica de fora. A Bia, que aqui só recebeu
+    // modelos, é quem ganha a tarefa.
+    expect(rpcs.map((a) => a.p_lead_id)).toEqual(['l2']);
+  });
+
+  it('o follow-up anterior do mesmo ciclo vira a tentativa 2', async () => {
+    const desde = ha(24 * 4);
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![0]!, status_desde: desde }],
+      regras_disparos: [
+        {
+          regra: 'follow_up',
+          lead_id: 'l1',
+          chave_ciclo: `follow_up:l1:${new Date(desde).toISOString()}:1`,
+          created_at: ha(48),
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs[0]).toMatchObject({ p_tentativa: 2 });
+    expect(rpcs[0]!.p_titulo).toBe('Último follow-up (2 de 2): sem resposta há 4 dias');
+  });
+});

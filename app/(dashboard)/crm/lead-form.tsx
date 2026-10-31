@@ -81,7 +81,10 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
   const [email, setEmail] = useState(editando?.email ?? '');
   const [cpfCnpj, setCpfCnpj] = useState(fmtCpfCnpj(editando?.cpf_cnpj ?? ''));
   const [origem, setOrigem] = useState<string>(editando?.origem ?? '');
-  const [donoId, setDonoId] = useState(editando?.dono_id ?? (isAdmin ? '' : meuId));
+  // Na edição o dono de partida é o do lead, mesmo vazio. Com `??` um lead sem
+  // dono editado pela gestão (que não vê o seletor) virava dela sem ninguém
+  // escolher, e a troca de dono ainda levava junto as tarefas de regra.
+  const [donoId, setDonoId] = useState(editando ? (editando.dono_id ?? '') : isAdmin ? '' : meuId);
   const [notas, setNotas] = useState(editando?.notas ?? '');
   const [enteDevedor, setEnteDevedor] = useState(editando?.ente_devedor ?? '');
   const [numeroProcesso, setNumeroProcesso] = useState(editando?.numero_processo ?? '');

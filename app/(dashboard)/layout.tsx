@@ -34,7 +34,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       .limit(10)
       .returns<Notif[]>(),
   ]);
-  const isAdmin = meuPerfil?.perfil?.slug === 'admin';
+  // O menu decide item a item pelo perfil: gestão vê Regras, Robô etc., que as
+  // páginas aceitam, mas não Usuários, que é só de admin.
+  const perfil = meuPerfil?.perfil?.slug ?? null;
 
   return (
     <div className="flex min-h-screen">
@@ -55,7 +57,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               className="h-10 w-auto"
             />
           </Link>
-          <SidebarNav isAdmin={isAdmin} />
+          <SidebarNav perfil={perfil} />
         </div>
         <div className="border-t border-neutral-200 pt-3">
           <UserMenu email={user.email ?? ''} />
@@ -67,7 +69,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white px-4 py-2 sm:px-6 sm:py-3">
           <div className="flex min-w-0 items-center gap-1">
-            <MenuMovel isAdmin={isAdmin} email={user.email ?? ''} />
+            <MenuMovel perfil={perfil} email={user.email ?? ''} />
             <Breadcrumbs />
           </div>
           <NotifSino notifs={notifs ?? []} />

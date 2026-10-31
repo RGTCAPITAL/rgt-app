@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useSyncExternalStore, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
   CalendarClock,
   CalendarPlus,
+  CheckSquare,
   ChevronsLeft,
   ChevronsRight,
   Send,
 } from 'lucide-react';
 import { IconeWhatsApp } from '@/components/ui/icone-whatsapp';
-import { mudarStatusLead } from './actions';
+import { mudarStatusLead, type CodigoPerda } from './actions';
 import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
@@ -56,8 +58,19 @@ export type LeadCard = {
   valor_proposta_indicativa: number | null;
   ente_devedor: string | null;
   numero_processo: string | null;
-  retornos: { id: string; titulo: string; prazo: string | null }[];
+  retornos: RetornoCard[];
   dono: { nome: string | null } | null;
+};
+
+/**
+ * Tarefa pendente do lead. criado_por_id nulo = criada por regra automática
+ * (migration 048); preenchido = retorno que uma pessoa agendou.
+ */
+type RetornoCard = {
+  id: string;
+  titulo: string;
+  prazo: string | null;
+  criado_por_id: string | null;
 };
 
 // Fuso fixo: o servidor da Vercel roda em UTC, e sem isso a data de um lead
@@ -98,12 +111,19 @@ function fmtBRLCompacto(v: number | null): string {
   return 'R$ ' + v.toFixed(0);
 }
 
-/** O retorno pendente mais próximo, e se já passou do prazo. */
+/**
+ * O retorno pendente mais próximo, e se já passou do prazo.
+ *
+ * O retorno que uma pessoa agendou vem antes de qualquer tarefa de regra: a
+ * de regra também é tarefa pendente do lead, e pelo prazo ela tomava o lugar
+ * do retorno combinado com o cliente. Sem retorno agendado, a de regra
+ * aparece, marcada `deRegra` pro card não chamá-la de "Retorno".
+ */
 function proximoRetornoDe(
-  retornos: { id: string; titulo: string; prazo: string | null }[],
-): { titulo: string; quando: string; atrasado: boolean } | null {
+  retornos: RetornoCard[],
+): { titulo: string; quando: string; atrasado: boolean; deRegra: boolean } | null {
   const comPrazo = retornos.filter((r) => r.prazo).sort((a, b) => a.prazo!.localeCompare(b.prazo!));
-  const r = comPrazo[0];
+  const r = comPrazo.find((t) => t.criado_por_id !== null) ?? comPrazo[0];
   if (!r) return null;
   const hoje = hojeEmSaoPaulo();
   const [, mes, dia] = r.prazo!.split('-');
@@ -111,6 +131,27 @@ function proximoRetornoDe(
     titulo: r.titulo,
     quando: r.prazo === hoje ? 'hoje' : dia + '/' + mes,
     atrasado: r.prazo! < hoje,
+    deRegra: r.criado_por_id === null,
+  };
+}
+
+/** O que o formulário de edição recebe: o clique no card e o ?lead= abrem igual. */
+function paraEdicao(lead: LeadCard): LeadEdit {
+  return {
+    id: lead.id,
+    nome: lead.nome,
+    telefone: lead.telefone,
+    email: lead.email,
+    cpf_cnpj: lead.cpf_cnpj,
+    origem: lead.origem,
+    dono_id: lead.dono_id,
+    notas: lead.notas,
+    status: lead.status,
+    operacao_id: lead.operacao_id,
+    motivo_perda: lead.motivo_perda,
+    ente_devedor: lead.ente_devedor,
+    numero_processo: lead.numero_processo,
+    valor_processo: lead.valor_processo,
   };
 }
 
@@ -174,6 +215,7 @@ export function Kanban({
   isAdmin,
   abrirNovo,
   onNovoFechado,
+  leadParaAbrir,
 }: {
   leads: LeadCard[];
   modelos: ModeloMensagem[];
@@ -182,24 +224,70 @@ export function Kanban({
   isAdmin: boolean;
   abrirNovo: boolean;
   onNovoFechado: () => void;
+  /** ?lead=<id>: o sino e os "Últimos atingidos" de /admin/regras mandam pra cá. */
+  leadParaAbrir: string | null;
 }) {
+  const router = useRouter();
   const [erro, setErro] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<StatusLead | null>(null);
   const [leadRetorno, setLeadRetorno] = useState<{ id: string; nome: string } | null>(null);
   const [leadDisparo, setLeadDisparo] = useState<{ id: string; nome: string } | null>(null);
-  const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
+  // temProcesso: sem número de processo não há Diário pra acompanhar, então o
+  // "ainda não saiu o ofício" nem aparece.
+  const [modalPerdido, setModalPerdido] = useState<{
+    leadId: string;
+    nome: string;
+    temProcesso: boolean;
+  } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
+  // "Perdido porque o ofício ainda não saiu": grava o código sem_oficio, que a
+  // regra "processo andou" lê pra avisar quando o ofício sair (migration 048).
+  const [semOficio, setSemOficio] = useState(false);
   const [editandoLead, setEditandoLead] = useState<LeadEdit | null>(null);
   // Card fica em estado de carregando enquanto o servidor não confirma: sem isso
   // ele permanecia visualmente na coluna antiga por ~500ms, sem sinal nenhum.
   const [movendoId, setMovendoId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  // Lead pedido pela URL abre como o clique no card. Guardar o último id
+  // tratado faz ele abrir uma vez por link, e não de novo a cada revalidação
+  // da página (salvar o lead revalida /crm com a mesma URL). Lead fora da
+  // lista (filtro, lead de outro dono) só não abre.
+  const [leadDaUrl, setLeadDaUrl] = useState<string | null>(null);
+  // Ganho/Perdido aberta por causa do link, sem gravar na escolha do navegador.
+  const [colunaDaUrl, setColunaDaUrl] = useState<StatusLead | null>(null);
+  if (leadParaAbrir !== leadDaUrl) {
+    setLeadDaUrl(leadParaAbrir);
+    const alvo = leadParaAbrir ? leads.find((l) => l.id === leadParaAbrir) : undefined;
+    if (alvo) {
+      setEditandoLead(paraEdicao(alvo));
+      if (RECOLHIVEIS.includes(alvo.status)) setColunaDaUrl(alvo.status);
+    }
+  }
+
+  function fecharEdicao() {
+    setEditandoLead(null);
+    // Tira o ?lead= (os filtros ficam): sem isso, clicar de novo no mesmo
+    // aviso do sino levava à mesma URL e o card não abria outra vez.
+    if (leadParaAbrir) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('lead');
+      router.replace(url.pathname + url.search, { scroll: false });
+    }
+  }
+
   const abertas = useSyncExternalStore(assinarColunasAbertas, lerColunasAbertas, () => '')
     .split(',')
     .filter(Boolean);
-  const recolhida = (v: StatusLead) => RECOLHIVEIS.includes(v) && !abertas.includes(v);
+  const recolhida = (v: StatusLead) =>
+    RECOLHIVEIS.includes(v) && !abertas.includes(v) && v !== colunaDaUrl;
   function alternarColuna(v: StatusLead) {
+    // Aberta pelo link: recolher desfaz só isso. Se também estava salva como
+    // aberta, segue e recolhe de vez, pra não exigir dois cliques.
+    if (v === colunaDaUrl) {
+      setColunaDaUrl(null);
+      if (!abertas.includes(v)) return;
+    }
     const novas = abertas.includes(v) ? abertas.filter((x) => x !== v) : [...abertas, v];
     gravarColunasAbertas(novas.join(','));
   }
@@ -237,8 +325,16 @@ export function Kanban({
     if (!lead || lead.status === novoStatus) return;
 
     if (novoStatus === 'perdido') {
-      setModalPerdido({ leadId, nome: lead.nome });
+      // Mesmo critério do acompanhamento do Diário (cnj20): só número com os
+      // 20 dígitos do CNJ entra na fila. "123/2019" mostraria a opção e nunca
+      // seria olhado.
+      setModalPerdido({
+        leadId,
+        nome: lead.nome,
+        temProcesso: (lead.numero_processo ?? '').replace(/\D/g, '').length === 20,
+      });
       setMotivoPerda('');
+      setSemOficio(false);
       return;
     }
 
@@ -260,12 +356,13 @@ export function Kanban({
     novoStatus: StatusLead,
     motivo?: string,
     nomeLead?: string,
+    codigoPerda?: CodigoPerda | null,
   ) {
     setErro(null);
     setMovendoId(leadId);
     const destino = STATUS_LEAD.find((s) => s.value === novoStatus)?.label ?? novoStatus;
     startTransition(async () => {
-      const res = await mudarStatusLead(leadId, novoStatus, motivo);
+      const res = await mudarStatusLead(leadId, novoStatus, motivo, codigoPerda);
       setMovendoId(null);
       if (!res.ok) {
         setErro(res.error);
@@ -282,7 +379,13 @@ export function Kanban({
       setErro('Informe o motivo da perda.');
       return;
     }
-    aplicarStatus(modalPerdido.leadId, 'perdido', motivoPerda, modalPerdido.nome);
+    aplicarStatus(
+      modalPerdido.leadId,
+      'perdido',
+      motivoPerda,
+      modalPerdido.nome,
+      semOficio && modalPerdido.temProcesso ? 'sem_oficio' : null,
+    );
     setModalPerdido(null);
   }
 
@@ -398,7 +501,14 @@ export function Kanban({
                       numeroProcesso: lead.numero_processo,
                       enteDevedor: lead.ente_devedor,
                     };
-                    const modelo = escolherModelo(modelos, dadosMsg);
+                    // Lead que já saiu de "Novo" foi abordado: abrir com a
+                    // apresentação de novo soaria como robô. Recebe a retomada
+                    // (que é o texto que o follow-up automático manda usar).
+                    const modelo = escolherModelo(
+                      modelos,
+                      dadosMsg,
+                      lead.status === 'novo' ? 'primeiro_contato' : 'retomada',
+                    );
                     const linkZap = lead.telefone
                       ? linkWhatsAppComTexto(
                           lead.telefone,
@@ -410,24 +520,7 @@ export function Kanban({
                         key={lead.id}
                         draggable
                         onDragStart={(e) => onDragStart(e, lead.id)}
-                        onClick={() =>
-                          setEditandoLead({
-                            id: lead.id,
-                            nome: lead.nome,
-                            telefone: lead.telefone,
-                            email: lead.email,
-                            cpf_cnpj: lead.cpf_cnpj,
-                            origem: lead.origem,
-                            dono_id: lead.dono_id,
-                            notas: lead.notas,
-                            status: lead.status,
-                            operacao_id: lead.operacao_id,
-                            motivo_perda: lead.motivo_perda,
-                            ente_devedor: lead.ente_devedor,
-                            numero_processo: lead.numero_processo,
-                            valor_processo: lead.valor_processo,
-                          })
-                        }
+                        onClick={() => setEditandoLead(paraEdicao(lead))}
                         className={cn(
                           'group cursor-grab rounded-lg bg-white p-3 text-sm shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md active:cursor-grabbing',
                           movendoId === lead.id && 'pointer-events-none animate-pulse opacity-50',
@@ -494,14 +587,24 @@ export function Kanban({
                               proximoRetorno.atrasado ? 'text-red-600' : 'text-neutral-600',
                             )}
                           >
-                            <CalendarClock className="mt-px size-3.5 shrink-0" />
+                            {/* Ícone de Tarefas pra tarefa de regra: o relógio é
+                                do retorno que alguém marcou com o cliente. */}
+                            {proximoRetorno.deRegra ? (
+                              <CheckSquare className="mt-px size-3.5 shrink-0" />
+                            ) : (
+                              <CalendarClock className="mt-px size-3.5 shrink-0" />
+                            )}
                             <span className="line-clamp-2">
                               {/* "Atrasado" depende da hora atual — mesma
                                   divergência de hidratação do "há 3 h". */}
                               <span className="font-medium" suppressHydrationWarning>
-                                {proximoRetorno.atrasado
-                                  ? `Atrasado desde ${proximoRetorno.quando}`
-                                  : `Retorno ${proximoRetorno.quando}`}
+                                {proximoRetorno.deRegra
+                                  ? proximoRetorno.atrasado
+                                    ? `Tarefa atrasada desde ${proximoRetorno.quando}`
+                                    : `Tarefa ${proximoRetorno.quando}`
+                                  : proximoRetorno.atrasado
+                                    ? `Atrasado desde ${proximoRetorno.quando}`
+                                    : `Retorno ${proximoRetorno.quando}`}
                               </span>{' '}
                               · {proximoRetorno.titulo}
                             </span>
@@ -628,7 +731,7 @@ export function Kanban({
       {editandoLead && (
         <LeadForm
           aberto={true}
-          onClose={() => setEditandoLead(null)}
+          onClose={fecharEdicao}
           donos={donos}
           meuId={meuId}
           isAdmin={isAdmin}
@@ -657,6 +760,29 @@ export function Kanban({
               autoFocus
             />
           </div>
+
+          {modalPerdido?.temProcesso && (
+            <div className="flex flex-col gap-1">
+              <label className="flex items-start gap-2 text-sm text-neutral-800">
+                <input
+                  type="checkbox"
+                  checked={semOficio}
+                  onChange={(e) => {
+                    setSemOficio(e.target.checked);
+                    if (e.target.checked && !motivoPerda.trim()) {
+                      setMotivoPerda('Ainda não saiu o ofício requisitório.');
+                    }
+                  }}
+                  className="mt-0.5 size-4 shrink-0 accent-neutral-900"
+                />
+                <span>Ainda não saiu o ofício requisitório</span>
+              </label>
+              <p className="pl-6 text-xs text-neutral-500">
+                Com a regra Processo andou ligada, a RGT continua olhando o Diário e cria uma tarefa
+                para conferir quando ele citar ofício requisitório.
+              </p>
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setModalPerdido(null)}>

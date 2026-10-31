@@ -18,6 +18,13 @@ export type DadosLead = {
   enteDevedor: string | null;
 };
 
+/**
+ * Pra que momento do lead o texto serve (migration 048). Antes disto o card
+ * só oferecia primeiro contato: a "Retomada de contato" existia desde a 039,
+ * mas o "simples" não exige dado nenhum e vinha antes — ninguém chegava nela.
+ */
+export type UsoModelo = 'primeiro_contato' | 'retomada';
+
 export type ModeloMensagem = {
   id: string;
   nome: string;
@@ -25,6 +32,7 @@ export type ModeloMensagem = {
   /** Modelos que citam valor só servem pra lead que tem valor. */
   requerValor: boolean;
   requerEnte: boolean;
+  uso: UsoModelo;
 };
 
 /**
@@ -225,13 +233,24 @@ export function montarMensagem(texto: string, lead: DadosLead): string {
  * Os modelos vêm ordenados do mais específico ao mais genérico; o primeiro
  * cujos requisitos o lead atende vence. Assim um lead sem valor recebe a
  * versão curta em vez de uma frase com buraco.
+ *
+ * `uso` separa a primeira abordagem da retomada: lead que já foi contatado
+ * não deve receber "Aqui é da RGT, empresa de Maceió..." de novo. Sem nenhum
+ * texto de retomada ativo, cai no de primeiro contato — melhor um texto de
+ * apresentação do que abrir o WhatsApp vazio.
  */
-export function escolherModelo(modelos: ModeloMensagem[], lead: DadosLead): ModeloMensagem | null {
+export function escolherModelo(
+  modelos: ModeloMensagem[],
+  lead: DadosLead,
+  uso: UsoModelo = 'primeiro_contato',
+): ModeloMensagem | null {
   const temValor = (lead.valorProposta ?? lead.valorProcesso) !== null;
   const temEnte = Boolean(lead.enteDevedor?.trim());
 
   const servem = modelos.filter((m) => (!m.requerValor || temValor) && (!m.requerEnte || temEnte));
-  return servem[0] ?? null;
+  const doUso = servem.filter((m) => m.uso === uso);
+  if (doUso.length) return doUso[0]!;
+  return uso === 'retomada' ? (servem.find((m) => m.uso === 'primeiro_contato') ?? null) : null;
 }
 
 /**

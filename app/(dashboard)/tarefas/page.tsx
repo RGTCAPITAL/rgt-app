@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server';
 import { fmtDataBR } from '@/lib/formatters';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { hojeEmSaoPaulo } from '@/lib/datas';
+import { NOME_REGRA, type ChaveRegra } from '@/lib/regras/decidir';
+import { separarLinks } from '@/lib/tarefas/links';
 import { ConcluirRetorno } from './concluir-retorno';
 
 type SearchParams = { status?: string };
@@ -23,6 +25,8 @@ type TarefaLinha = {
   lead: { id: string; nome: string } | null;
   criado_por: { nome: string | null } | null;
   destinatario: { nome: string | null } | null;
+  /** Qual regra automática criou a tarefa (migration 048). Vazio = feita à mão. */
+  regras_disparos: { regra: ChaveRegra }[] | null;
 };
 
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
@@ -66,10 +70,15 @@ export default async function TarefasPage({
   // Puxa tarefas visíveis pelo user (RLS filtra por operação) e filtra:
   //   pra ele diretamente (destinatario_id = self OU destinatario_perfil = meu_slug)
   //   OU criadas por ele
+  // A regra que criou a tarefa vem embarcada (regras_disparos.tarefa_id é a
+  // única FK entre as duas tabelas, então o embed não é ambíguo). Antes era
+  // uma segunda consulta com `.in('tarefa_id', [...])`: acima de ~640 ids a
+  // URL passava do limite do gateway, voltava 400 e o "Criada pela regra"
+  // sumia sem aviso.
   let query = supabase
     .from('tarefas')
     .select(
-      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, operacao:operacoes(id, numero_processo, cedente_nome), lead:leads(id, nome), criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome)',
+      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, operacao:operacoes(id, numero_processo, cedente_nome), lead:leads(id, nome), criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome), regras_disparos(regra)',
     )
     .order('prazo', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false });
@@ -148,9 +157,16 @@ export default async function TarefasPage({
             const stat = STATUS_LABEL[t.status] ?? STATUS_LABEL.pendente;
             const atrasada = estaAtrasada(t.prazo, t.status);
             // Retorno de lead não tem operação: o link ia pra "/operacoes/" (quebrado).
-            const href = t.operacao ? `/operacoes/${t.operacao.id}` : '/crm';
+            const href = t.operacao
+              ? `/operacoes/${t.operacao.id}`
+              : t.lead
+                ? `/crm?lead=${t.lead.id}`
+                : '/crm';
             const aberta = t.status === 'pendente' || t.status === 'em_andamento';
             const temBotao = Boolean(t.lead && aberta);
+            // Uma tarefa nasce de um disparo só (a RPC da 048 grava os dois juntos).
+            const regra = t.regras_disparos?.[0]?.regra;
+            const { texto: descricao, links } = separarLinks(t.descricao);
             return (
               <div key={t.id} className="relative">
                 <Link
@@ -182,11 +198,26 @@ export default async function TarefasPage({
                         {t.operacao
                           ? `${t.operacao.numero_processo} · ${t.operacao.cedente_nome}`
                           : t.lead
-                            ? `Retorno de lead · ${t.lead.nome}`
+                            ? `${regra ? 'Lead' : 'Retorno de lead'} · ${t.lead.nome}`
                             : '—'}
                       </p>
+                      {/* A instrução da tarefa automática mora aqui: o título
+                          só diz o quê, a descrição diz como. A da regra sai
+                          inteira (a última linha pode ser "esta é a última
+                          tentativa"); a escrita à mão corta em 4 linhas. */}
+                      {descricao && (
+                        <p
+                          className={`mt-1 text-xs break-words whitespace-pre-line text-neutral-600 ${regra ? '' : 'line-clamp-4'}`}
+                        >
+                          {descricao}
+                        </p>
+                      )}
                       <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-neutral-500">
-                        {t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>}
+                        {regra ? (
+                          <span>Criada pela regra {NOME_REGRA[regra]}</span>
+                        ) : (
+                          t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>
+                        )}
                         <span>
                           Para:{' '}
                           {t.destinatario?.nome ??
@@ -201,6 +232,23 @@ export default async function TarefasPage({
                     </div>
                   </div>
                 </Link>
+                {/* Os links da publicação ficam fora do cartão: dentro do <Link>
+                    o clique ia pro lead, e âncora dentro de âncora é inválido. */}
+                {links.length > 0 && (
+                  <div className="flex flex-wrap gap-x-3 px-3 pt-1 text-xs">
+                    {links.map((l) => (
+                      <a
+                        key={l.url}
+                        href={l.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-neutral-700 underline hover:text-neutral-900"
+                      >
+                        {l.rotulo}
+                      </a>
+                    ))}
+                  </div>
+                )}
                 {/* Fora do <Link>: botão dentro de âncora é HTML inválido e o clique navegaria. */}
                 {temBotao && (
                   <div className="absolute top-3 right-3">

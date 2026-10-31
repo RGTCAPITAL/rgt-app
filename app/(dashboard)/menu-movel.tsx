@@ -17,7 +17,7 @@ import { UserMenu } from './user-menu';
  * Mesma navegação (`SidebarNav`) e mesmo menu de usuário da barra lateral,
  * pra não existirem dois menus que divergem com o tempo.
  */
-export function MenuMovel({ isAdmin, email }: { isAdmin: boolean; email: string }) {
+export function MenuMovel({ perfil, email }: { perfil: string | null; email: string }) {
   const [aberto, setAberto] = useState(false);
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function MenuMovel({ isAdmin, email }: { isAdmin: boolean; email: string 
                   <X className="size-5" />
                 </button>
               </div>
-              <SidebarNav isAdmin={isAdmin} />
+              <SidebarNav perfil={perfil} />
             </div>
             <div className="mt-6 border-t border-neutral-200 pt-3">
               <UserMenu email={email} />

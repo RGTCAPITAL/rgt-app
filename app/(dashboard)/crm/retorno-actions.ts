@@ -98,7 +98,7 @@ export async function concluirRetorno(tarefaId: string): Promise<Result> {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: 'Sessão expirada.' };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('tarefas')
     // concluida_por_id é exigido pelo CHECK tarefas_concluida_coerencia: sem ele
     // o update falhava, e por isso nenhuma tela chegou a usar esta ação.
@@ -107,9 +107,16 @@ export async function concluirRetorno(tarefaId: string): Promise<Result> {
       concluida_em: new Date().toISOString(),
       concluida_por_id: user.id,
     })
-    .eq('id', tarefaId);
+    .eq('id', tarefaId)
+    // `.select` pra saber se a linha mudou: a RLS de UPDATE (quem criou, quem
+    // recebe, admin ou gestão) não dá erro quando barra, só não afeta nada, e
+    // a tela dizia "Retorno concluído" com a tarefa ainda aberta.
+    .select('id');
 
   if (error) return { ok: false, error: error.message };
+  if (!data?.length) {
+    return { ok: false, error: 'Você não tem permissão para concluir esta tarefa.' };
+  }
 
   revalidatePath('/crm');
   revalidatePath('/tarefas');

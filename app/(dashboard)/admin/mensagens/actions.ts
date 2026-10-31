@@ -80,18 +80,29 @@ export async function alternarAtivo(id: string, ativo: boolean): Promise<Result>
   if (!auth.ok) return auth;
 
   // Desativar todos deixaria o botão de WhatsApp abrir conversa vazia, sem
-  // que ninguém entenda por quê.
+  // que ninguém entenda por quê. Conta só os de PRIMEIRO CONTATO: lead novo
+  // nunca recebe a retomada (048), então uma retomada sozinha não salva o
+  // botão. A retomada pode ser desligada à vontade — sem ela, o lead já
+  // contatado volta a receber o de primeiro contato.
   if (!ativo) {
-    const { count } = await auth.supabase
+    const { data: alvo } = await auth.supabase
       .from('modelos_mensagem')
-      .select('id', { count: 'exact', head: true })
-      .eq('ativo', true);
-    if ((count ?? 0) <= 1) {
-      return {
-        ok: false,
-        error:
-          'Pelo menos um modelo precisa ficar ativo, senão o botão do WhatsApp abre sem mensagem.',
-      };
+      .select('uso')
+      .eq('id', id)
+      .maybeSingle<{ uso: string }>();
+    if (alvo?.uso !== 'retomada') {
+      const { count } = await auth.supabase
+        .from('modelos_mensagem')
+        .select('id', { count: 'exact', head: true })
+        .eq('ativo', true)
+        .eq('uso', 'primeiro_contato');
+      if ((count ?? 0) <= 1) {
+        return {
+          ok: false,
+          error:
+            'Pelo menos um modelo de primeiro contato precisa ficar ativo, senão o botão do WhatsApp abre sem mensagem.',
+        };
+      }
     }
   }
 

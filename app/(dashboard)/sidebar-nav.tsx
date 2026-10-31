@@ -15,8 +15,10 @@ import {
   MessagesSquare,
   Percent,
   Bot,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
+import type { Role } from '@/lib/auth/roles';
 
 export type NavItem = {
   label: string;
@@ -33,12 +35,23 @@ export const NAV_BASE: NavItem[] = [
   { label: 'Tarefas', href: '/tarefas', icon: CheckSquare },
 ];
 
-export const NAV_ADMIN: NavItem[] = [
-  { label: 'Usuários', href: '/admin/usuarios', icon: Shield },
-  { label: 'Mensagens', href: '/admin/mensagens', icon: MessageSquare },
-  { label: 'Robô', href: '/admin/robo', icon: Bot },
-  { label: 'Índices', href: '/admin/indices', icon: TrendingUp },
-  { label: 'Percentual', href: '/admin/desagio', icon: Percent },
+/**
+ * `perfis` copia quem a página aceita (o gate dela): item que a pessoa não
+ * pode abrir não aparece, e página que aceita gestão não fica escondida dela.
+ * Mudou o gate da página, muda aqui.
+ */
+export const NAV_ADMIN: (NavItem & { perfis: readonly Role[] })[] = [
+  { label: 'Usuários', href: '/admin/usuarios', icon: Shield, perfis: ['admin'] },
+  {
+    label: 'Mensagens',
+    href: '/admin/mensagens',
+    icon: MessageSquare,
+    perfis: ['admin', 'gestao'],
+  },
+  { label: 'Robô', href: '/admin/robo', icon: Bot, perfis: ['admin', 'gestao'] },
+  { label: 'Regras', href: '/admin/regras', icon: Workflow, perfis: ['admin', 'gestao'] },
+  { label: 'Índices', href: '/admin/indices', icon: TrendingUp, perfis: ['admin', 'gestao'] },
+  { label: 'Percentual', href: '/admin/desagio', icon: Percent, perfis: ['admin', 'gestao'] },
 ];
 
 function itemAtivo(pathname: string, href: string): boolean {
@@ -46,19 +59,19 @@ function itemAtivo(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function SidebarNav({ isAdmin }: { isAdmin: boolean }) {
+export function SidebarNav({ perfil }: { perfil: string | null }) {
   const pathname = usePathname();
-  const items = isAdmin ? [...NAV_BASE, ...NAV_ADMIN] : NAV_BASE;
+  const admin = NAV_ADMIN.filter((item) => item.perfis.some((p) => p === perfil));
 
   return (
     <nav className="flex flex-col gap-1">
       {NAV_BASE.map((item) => (
         <NavLink key={item.href} item={item} active={itemAtivo(pathname, item.href)} />
       ))}
-      {isAdmin && (
+      {admin.length > 0 && (
         <>
           <div className="my-2 border-t border-neutral-200" />
-          {NAV_ADMIN.map((item) => (
+          {admin.map((item) => (
             <NavLink key={item.href} item={item} active={itemAtivo(pathname, item.href)} />
           ))}
         </>
