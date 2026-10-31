@@ -603,15 +603,35 @@ describe('rodarRegrasDeLead', () => {
     });
 
     it('modelo que falhou não chegou ao advogado: não liga a conversa a ela', async () => {
+      // Sem resposta de propósito: com resposta, ligar ou não ligar dava o
+      // mesmo resultado e o teste não separava os dois. Aqui, se o modelo
+      // falhado ligasse a conversa, sairia follow-up (o teste de cima).
       const { sb, rpcs } = sbFake({
         ...BASE,
         leads: [{ ...eva, telefone: null }],
         tarefas: [],
         whatsapp_conversas: [conversaDoAdvogado],
-        whatsapp_mensagens: [modeloSobreEva({ status_entrega: 'falhou' }), respostaDoAdvogado(10)],
+        whatsapp_mensagens: [modeloSobreEva({ status_entrega: 'falhou' })],
       });
       await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
       // Sem telefone e sem conversa: quem cuida é o parado, não o follow-up.
+      expect(rpcs).toEqual([]);
+    });
+
+    it('dois modelos sobre ela na mesma conversa: conta a partir do primeiro', async () => {
+      const { sb, rpcs } = sbFake({
+        ...BASE,
+        leads: [eva],
+        tarefas: [],
+        whatsapp_conversas: [conversaDoAdvogado],
+        // O segundo vem antes na lista (a leitura é por id, não por data).
+        whatsapp_mensagens: [
+          modeloSobreEva({ created_at: ha(20) }),
+          modeloSobreEva(),
+          respostaDoAdvogado(30),
+        ],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
       expect(rpcs).toEqual([]);
     });
 

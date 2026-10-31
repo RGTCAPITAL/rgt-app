@@ -28,8 +28,9 @@ CREATE INDEX whatsapp_mensagens_lead_idx
   ON public.whatsapp_mensagens(lead_id) WHERE lead_id IS NOT NULL;
 
 -- O lead entra na lista do que não muda. Trocar o lead de uma mensagem já
--- enviada reescreveria de quem se falou; preencher depois, também. Só o
--- ON DELETE SET NULL passa (ele é um UPDATE e dispara este trigger).
+-- enviada reescreveria de quem se falou; preencher depois, também. Só a volta
+-- para NULL passa, que é o que o ON DELETE SET NULL faz (ele é um UPDATE e
+-- dispara este trigger). Ninguém além do servidor tem UPDATE nesta tabela.
 CREATE OR REPLACE FUNCTION public.whatsapp_mensagens_so_entrega_muda()
 RETURNS TRIGGER
 LANGUAGE plpgsql
