@@ -38,7 +38,10 @@ export const ETAPAS_LEAD_PARADO = [
   'qualificado',
   'proposta_enviada',
 ] as const;
+/** Origens que só existem por importação em massa (a Prospecção grava lista_processual). */
 export const ORIGENS_EM_MASSA: readonly string[] = ['importacao_planilha', 'lista_processual'];
+/** Quem chegou procurando a RGT: só pra esses o aviso diz "foi a pessoa que procurou". */
+const ORIGENS_QUE_PROCURARAM: readonly string[] = ['site', 'whatsapp'];
 
 /**
  * Teto de tarefas de "lead parado" por pessoa numa rodada, as mais antigas
@@ -180,12 +183,13 @@ export function chaveProcesso(tipo: 'lead' | 'operacao', id: string, maiorIdDjen
   return `processo_andou:${tipo}:${id}:${maiorIdDjen}`;
 }
 /**
- * Uma tarefa por CITAÇÃO de ofício (o maior id de publicação com X1), não
+ * Uma tarefa por DIA de citação de ofício (a data mais recente com X1), não
  * por perda: o primeiro "expeça-se" não pode gastar o aviso do ofício que sai
- * de verdade semanas depois.
+ * de verdade semanas depois. Pela data e não pelo id porque o DJEN publica
+ * cópias do mesmo ato no mesmo dia, às vezes chegando um dia depois.
  */
-export function chaveReavaliar(leadId: string, perdidoDesde: string, maiorIdX1: number): string {
-  return `reavaliar_perdido:${leadId}:${instante(perdidoDesde)}:${maiorIdX1}`;
+export function chaveReavaliar(leadId: string, perdidoDesde: string, dataX1: string): string {
+  return `reavaliar_perdido:${leadId}:${instante(perdidoDesde)}:${dataX1}`;
 }
 
 // Fuso fixo: o cron roda em UTC, e às 22h de Maceió já seria o dia seguinte.
@@ -220,13 +224,24 @@ export interface LeadNoCiclo {
   status: string;
   /** null se o lead não tem dono ou se o dono está inativo. */
   donoId: string | null;
-  /** De onde o lead veio (ORIGEM_LEAD); importação em massa não conta em Novo. */
+  /** De onde o lead veio (ORIGEM_LEAD). */
   origem: string;
+  /**
+   * Veio de importação de planilha (só a importação grava `vinculo`), seja
+   * qual for a origem escolhida no formulário. Não conta em Novo.
+   */
+  importado: boolean;
   statusDesde: string;
   /** Tarefa pendente ou em andamento, de qualquer origem. */
   temTarefaAberta: boolean;
   /** Última mensagem RECEBIDA no WhatsApp da RGT, em qualquer conversa do lead. */
   ultimaEntradaWhatsapp: string | null;
+  /**
+   * Quando uma PESSOA criou a última tarefa deste lead (retorno agendado,
+   * tarefa à mão) — as das regras não contam. É o registro de que houve
+   * contato por outro canal.
+   */
+  ultimaAcaoHumana: string | null;
   disparos: DisparoAnterior[];
 }
 
@@ -236,18 +251,20 @@ function followUpsDoCiclo(lead: LeadNoCiclo): DisparoAnterior[] {
   return lead.disparos.filter((d) => d.regra === 'follow_up' && d.chaveCiclo.startsWith(prefixo));
 }
 
-/** Respondeu no WhatsApp da RGT depois de entrar em "Em contato". */
-function respondeuNoCiclo(lead: LeadNoCiclo): boolean {
-  // Resposta de ANTES da entrada na etapa não conta: quem escreveu antes e
-  // depois foi abordado continua sem responder à abordagem.
-  return (
-    !!lead.ultimaEntradaWhatsapp &&
-    Date.parse(lead.ultimaEntradaWhatsapp) > Date.parse(lead.statusDesde)
-  );
+/**
+ * Houve contato depois de o lead entrar na etapa: resposta no WhatsApp da
+ * RGT, ou uma pessoa registrou algo (agendou retorno, criou tarefa). O que
+ * aconteceu ANTES da entrada não conta: quem escreveu antes e depois foi
+ * abordado continua sem responder à abordagem.
+ */
+function houveContatoNoCiclo(lead: LeadNoCiclo): boolean {
+  const desde = Date.parse(lead.statusDesde);
+  const depois = (iso: string | null) => !!iso && Date.parse(iso) > desde;
+  return depois(lead.ultimaEntradaWhatsapp) || depois(lead.ultimaAcaoHumana);
 }
 
 /**
- * O follow-up ainda cuida deste lead: está ligado, ninguém respondeu e as
+ * O follow-up ainda cuida deste lead: está ligado, não houve contato e as
  * tentativas não acabaram. Só nesse caso o "lead parado" fica quieto em Em
  * contato — quem respondeu e travou, ou esgotou as tentativas, volta pro
  * parado (sem isso o lead mais quente, o que respondeu, nunca mais avisava).
@@ -256,7 +273,7 @@ function followUpAindaCuida(lead: LeadNoCiclo, cfg: ConfigRegras['followUp']): b
   return (
     cfg.ativa &&
     lead.status === 'em_contato' &&
-    !respondeuNoCiclo(lead) &&
+    !houveContatoNoCiclo(lead) &&
     followUpsDoCiclo(lead).length < cfg.maxTentativas
   );
 }
@@ -301,7 +318,7 @@ function decidirFollowUp(
   const descricao = [
     `${lead.nome} está na etapa Em contato e, desde ${fmtDiaMes(desde)}, não chegou resposta no WhatsApp da RGT.`,
     'O que fazer: ligue, ou mande uma mensagem do seu WhatsApp pelo balão do WhatsApp no card (não pelo aviãozinho, que manda a mensagem da RGT). Ele abre um texto pronto pra você editar.',
-    'Se a pessoa respondeu por ligação ou pelo seu WhatsApp: mova o card para Qualificado, se ela tem interesse, ou agende um retorno pelo calendário do card. Isso para os lembretes. Se você tentou e não conseguiu falar, só conclua esta tarefa.',
+    'Se a pessoa respondeu por ligação ou pelo seu WhatsApp: mova o card para Qualificado, se ela tem interesse, ou agende um retorno pelo calendário do card. Qualquer um dos dois encerra os follow-ups deste lead. Se você tentou e não conseguiu falar, só conclua esta tarefa.',
     ...(ultima
       ? [
           'Esta é a última tentativa automática: depois dela o sistema não cria mais follow-up para este lead. Se continuar sem resposta, marque como perdido ou agende um retorno.',
@@ -327,11 +344,22 @@ function decidirFollowUp(
 }
 
 const DICA_POR_ETAPA: Record<(typeof ETAPAS_LEAD_PARADO)[number], string> = {
-  novo: 'Defina quem cuida dele e faça o primeiro contato: foi a pessoa que procurou a RGT.',
+  novo: 'Defina quem cuida dele e faça o primeiro contato.',
   em_contato: 'Tente outro canal (ligação, advogado) ou decida se ainda vale insistir.',
   qualificado: 'Monte a proposta e envie.',
   proposta_enviada: 'Pergunte se a pessoa decidiu e tire as dúvidas sobre a proposta.',
 };
+
+function dicaDoParado(lead: LeadNoCiclo, etapa: (typeof ETAPAS_LEAD_PARADO)[number]): string {
+  if (etapa === 'novo' && ORIGENS_QUE_PROCURARAM.includes(lead.origem)) {
+    return 'Defina quem cuida dele e faça o primeiro contato: foi a pessoa que procurou a RGT.';
+  }
+  // Quem já deu retorno não precisa de "outro canal": precisa decidir o card.
+  if (etapa === 'em_contato' && houveContatoNoCiclo(lead)) {
+    return 'A pessoa já deu retorno: mova o card para a etapa certa (Qualificado, se tem interesse) ou marque como perdido.';
+  }
+  return DICA_POR_ETAPA[etapa];
+}
 
 function valeLeadParado(status: string): status is (typeof ETAPAS_LEAD_PARADO)[number] {
   return (ETAPAS_LEAD_PARADO as readonly string[]).includes(status);
@@ -340,13 +368,23 @@ function valeLeadParado(status: string): status is (typeof ETAPAS_LEAD_PARADO)[n
 function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): TarefaDeRegra | null {
   const cfg = regras.leadParado;
   if (!cfg.ativa || !valeLeadParado(lead.status) || lead.temTarefaAberta) return null;
-  if (lead.status === 'novo' && ORIGENS_EM_MASSA.includes(lead.origem)) return null;
+  if (lead.status === 'novo' && (lead.importado || ORIGENS_EM_MASSA.includes(lead.origem))) {
+    return null;
+  }
   // Enquanto o follow-up cuida do lead, o parado não fala junto: as duas
   // regras dariam três tarefas que se contradizem (dia 2, dia 4, dia 7).
   if (followUpAindaCuida(lead, regras.followUp)) return null;
 
   const desde = Date.parse(lead.statusDesde);
-  if (agora.getTime() - desde < cfg.dias * DIA) return null;
+  // Conta a partir do último movimento: a entrada na etapa, o último
+  // follow-up ou o último registro de uma pessoa. Sem isso o "parado" saía
+  // no dia útil seguinte ao último follow-up (dia 2, dia 4, dia 7).
+  const referencia = Math.max(
+    desde,
+    ...followUpsDoCiclo(lead).map((d) => Date.parse(d.criadoEm)),
+    lead.ultimaAcaoHumana ? Date.parse(lead.ultimaAcaoHumana) : 0,
+  );
+  if (agora.getTime() - referencia < cfg.dias * DIA) return null;
 
   // "Uma vez por entrada na etapa" sai da própria chave: mudou de etapa, o
   // status_desde muda e a chave também.
@@ -369,7 +407,7 @@ function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): Ta
     titulo: `Lead parado há ${ha} na etapa ${etapa}`,
     // "Há pelo menos": pra lead anterior à 048 o relógio começa na migration,
     // então a data de entrada real é desconhecida e mais antiga.
-    descricao: `${lead.nome} não avança da etapa ${etapa} há pelo menos ${ha}. ${DICA_POR_ETAPA[lead.status]} Se não houver mais chance, marque como perdido. Este aviso sai uma vez por etapa.`,
+    descricao: `${lead.nome} não avança da etapa ${etapa} há pelo menos ${ha}. ${dicaDoParado(lead, lead.status)} Se não houver mais chance, marque como perdido. Este aviso sai uma vez por etapa.`,
     prazo: hojeEmSaoPaulo(agora),
   };
 }
@@ -487,18 +525,14 @@ export function decidirTarefaDoProcesso(
     const links = linksDasPublicacoes(comOficio);
     return {
       ...base,
-      chaveCiclo: chaveReavaliar(
-        alvo.id,
-        alvo.perdidoDesde,
-        Math.max(...comOficio.map((p) => p.id)),
-      ),
+      chaveCiclo: chaveReavaliar(alvo.id, alvo.perdidoDesde, data),
       motivo: `Perdido sem ofício; o Diário de ${fmtDataIso(data)} cita ofício requisitório`,
       titulo: 'Reavaliar lead perdido: o Diário cita ofício requisitório',
       descricao: [
         `${alvo.nome} foi marcado como perdido porque ainda não tinha ofício requisitório.`,
         `O Diário de ${fmtDataIso(data)} cita ofício requisitório no processo ${maskCNJ(alvo.cnj)}. Citar não quer dizer que foi expedido: pode ser só "expeça-se". Confira no PJe.`,
         ...links,
-        'O lead continua em Perdido. Se o ofício saiu mesmo e ainda valer a pena, arraste o card de volta para uma etapa ativa e retome o contato. Se ainda não saiu, só conclua esta tarefa: o sistema avisa de novo quando o Diário citar o ofício outra vez.',
+        'O lead continua em Perdido. Se o ofício saiu e vale a pena, arraste o card de volta para uma etapa ativa e retome o contato. Se ainda não saiu, só conclua esta tarefa: o sistema avisa de novo quando o Diário citar o ofício outra vez. Se saiu mas não vale a pena, arraste o card para outra etapa e marque como perdido de novo, sem a opção do ofício: os avisos param.',
       ].join('\n'),
     };
   }

@@ -164,23 +164,32 @@ export async function carregarAlvos(
 }
 
 /**
- * Alvos que já têm tarefa ABERTA da regra "processo andou". Em processo
- * movimentado sairia uma tarefa por dia; com isto, a próxima só sai depois de
- * a pessoa fechar a anterior.
+ * Alvos que já têm tarefa ABERTA da regra "processo andou", separando a de
+ * leitura da de reavaliar. Em processo movimentado sairia uma tarefa por dia;
+ * com isto, a próxima só sai depois de a pessoa fechar a anterior. Separado
+ * porque uma "Ler publicação" esquecida de quando o lead estava ativo não
+ * pode calar o aviso de reavaliar depois que ele vira perdido.
  */
 async function alvosComTarefaAberta(sb: SupabaseClient): Promise<Set<string>> {
   const { data, error } = await sb
     .from('regras_disparos')
-    .select('lead_id, operacao_id, tarefa:tarefas!inner(status)')
+    .select('lead_id, operacao_id, chave_ciclo, tarefa:tarefas!inner(status)')
     .eq('regra', 'processo_andou')
     .in('tarefa.status', ['pendente', 'em_andamento']);
   if (error) throw new Error(`tarefas abertas da regra: ${error.message}`);
   return new Set(
     (data ?? []).map((d) =>
-      d.lead_id ? `lead:${d.lead_id as string}` : `operacao:${d.operacao_id as string}`,
+      chaveAberta(
+        d.lead_id ? 'lead' : 'operacao',
+        (d.lead_id ?? d.operacao_id) as string,
+        String(d.chave_ciclo ?? '').startsWith('reavaliar_perdido') ? 'reavaliar' : 'ler',
+      ),
     ),
   );
 }
+
+const chaveAberta = (tipo: string, id: string, tipoTarefa: 'ler' | 'reavaliar') =>
+  `${tipo}:${id}:${tipoTarefa}`;
 
 async function idsDaEquipe(sb: SupabaseClient, slugs: string[]): Promise<string[]> {
   const { data: perfis } = await sb.from('perfis').select('id').in('slug', slugs);
@@ -287,7 +296,7 @@ export async function acompanharProcessos(
       const pubs = await buscarPorCnj(cnj);
       const { data: conhecidas } = await sb
         .from('djen_publicacoes')
-        .select('id')
+        .select('id, data_disponibilizacao')
         .eq('numero_processo', cnj);
       const jaVisto = vistoEm.has(cnj) || (conhecidas?.length ?? 0) > 0;
       const idsConhecidos = new Set((conhecidas ?? []).map((p) => Number(p.id)));
@@ -295,17 +304,24 @@ export async function acompanharProcessos(
 
       // "Nova" de verdade é pela DATA, não pelo id: o DJEN às vezes devolve
       // uma publicação antiga que ainda não estava salva (entrou como nova uma
-      // de 12/11/2025), e ela não é novidade nenhuma. Corte: a última
-      // verificação menos 3 dias de folga (fim de semana, DJEN atrasado).
-      // Processo sem verificação mas com publicações salvas (veio da
-      // Prospecção) olha só os últimos 7 dias: o resto ficou pra trás.
+      // de 12/11/2025), e ela não é novidade nenhuma. O corte parte do que a
+      // RGT JÁ TINHA: a publicação salva mais recente, menos 3 dias de folga
+      // (fim de semana, DJEN atrasado). Assim o processo que veio da
+      // Prospecção semanas atrás não perde o que saiu nesse meio-tempo (uma
+      // cessão, por exemplo). Sem nada salvo, vale a última verificação.
       // Vale pra tarefa E pro aviso no sino.
       const hoje = hojeEmSaoPaulo(new Date(agora()));
+      const ultimaSalva = (conhecidas ?? []).reduce((a, p) => {
+        const d = (p as { data_disponibilizacao?: string | null }).data_disponibilizacao ?? '';
+        return d > a ? d : a;
+      }, '');
       const ultimaVez = vistoEm.get(cnj);
-      const corteData = ultimaVez
-        ? somarDias(hojeEmSaoPaulo(new Date(ultimaVez)), -3)
-        : somarDias(hoje, -7);
-      const recentes = novas.filter((p) => p.dataDisponibilizacao >= corteData);
+      const corteData = ultimaSalva
+        ? somarDias(ultimaSalva.slice(0, 10), -3)
+        : ultimaVez
+          ? somarDias(hojeEmSaoPaulo(new Date(ultimaVez)), -3)
+          : undefined;
+      const recentes = corteData ? novas.filter((p) => p.dataDisponibilizacao >= corteData) : novas;
 
       // Tarefas ANTES de gravar as publicações: se algo falhar daqui pra
       // frente, amanhã elas continuam "novas" e a tarefa sai; a chave da 048
@@ -320,7 +336,9 @@ export async function acompanharProcessos(
                 novas: recentes,
                 todas: pubs,
                 jaVisto,
-                temTarefaAbertaDaRegra: abertas.has(`${alvo.tipo}:${alvo.id}`),
+                temTarefaAbertaDaRegra: abertas.has(
+                  chaveAberta(alvo.tipo, alvo.id, alvo.perdidoDesde ? 'reavaliar' : 'ler'),
+                ),
                 corteData,
               },
               resumirNovidades(alvo.nome, recentes),
@@ -334,7 +352,7 @@ export async function acompanharProcessos(
           const res = await criarTarefaDeRegra(sb, tarefa);
           if (res.resultado === 'criada') {
             r.tarefas++;
-            abertas.add(`${alvo.tipo}:${alvo.id}`);
+            abertas.add(chaveAberta(alvo.tipo, alvo.id, alvo.perdidoDesde ? 'reavaliar' : 'ler'));
           }
         }
       }

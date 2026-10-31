@@ -98,7 +98,7 @@ const BASE: Tabelas = {
       dono: { ativo: true },
     },
   ],
-  tarefas: [{ lead_id: 'l3' }],
+  tarefas: [{ id: 't3', lead_id: 'l3', status: 'pendente', created_at: ha(30) }],
   whatsapp_conversas: [
     { id: 'c1', lead_id: 'l1' },
     { id: 'c2', lead_id: 'l2' },
@@ -141,6 +141,39 @@ describe('rodarRegrasDeLead', () => {
     // O modelo enviado há 51h não conta como resposta, e a tarefa nunca manda
     // reenviar a mensagem fria pelo número da RGT.
     expect(rpcs[0]!.p_descricao).not.toMatch(/modelo|reenviad/i);
+  });
+
+  it('retorno agendado por uma pessoa depois da entrada na etapa: sem follow-up', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      tarefas: [
+        ...BASE.tarefas!,
+        { id: 't9', lead_id: 'l1', status: 'concluida', created_at: ha(20) },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs.map((a) => a.p_lead_id)).not.toContain('l1');
+  });
+
+  it('tarefa criada por regra não conta como contato', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      tarefas: [
+        ...BASE.tarefas!,
+        { id: 'tr', lead_id: 'l1', status: 'concluida', created_at: ha(20) },
+      ],
+      regras_disparos: [
+        {
+          regra: 'processo_andou',
+          lead_id: 'l1',
+          chave_ciclo: 'processo_andou:lead:l1:1',
+          created_at: ha(20),
+          tarefa_id: 'tr',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs.map((a) => a.p_lead_id)).toContain('l1');
   });
 
   it('dono inativo: a tarefa vai pra gestão', async () => {

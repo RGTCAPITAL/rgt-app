@@ -39,9 +39,11 @@ function lead(p: Partial<LeadNoCiclo> = {}): LeadNoCiclo {
     status: 'em_contato',
     donoId: 'broker-1',
     origem: 'site',
+    importado: false,
     statusDesde: ha(49),
     temTarefaAberta: false,
     ultimaEntradaWhatsapp: null,
+    ultimaAcaoHumana: null,
     disparos: [],
     ...p,
   };
@@ -101,6 +103,7 @@ describe('regra (a): follow-up', () => {
     // (só anotar fazia a 2ª tentativa dizer "sem resposta").
     expect(t.descricao).toContain('mova o card para Qualificado');
     expect(t.descricao).toContain('agende um retorno');
+    expect(t.descricao).toContain('encerra os follow-ups deste lead');
     expect(t.motivo).toBe(
       'Em contato há 2 dias, sem resposta no WhatsApp da RGT (tentativa 1 de 2)',
     );
@@ -239,26 +242,58 @@ describe('regra (b): lead parado', () => {
     expect(umaSo(lead({ statusDesde: desde, disparos: uma }))).toBeNull();
   });
 
-  it('Em contato depois das tentativas esgotadas: volta o parado', () => {
-    const desde = ha(24 * 8);
-    const disparos = [1, 2].map((k) => ({
+  it('Em contato depois das tentativas esgotadas: o parado espera 7 dias desde o último follow-up', () => {
+    const desde = ha(24 * 12);
+    const fu = (diasAtras: number, k: number) => ({
       regra: 'follow_up' as const,
       chaveCiclo: chaveFollowUp('lead-1', desde, k),
-      criadoEm: ha(24 * (8 - 2 * k)),
-    }));
-    expect(umaSo(lead({ statusDesde: desde, disparos }))?.regra).toBe('lead_parado');
+      criadoEm: ha(24 * diasAtras),
+    });
+    // Último follow-up há 2 dias: nada ainda (sem a sequência dia 2, dia 4, dia 7).
+    expect(umaSo(lead({ statusDesde: desde, disparos: [fu(4, 1), fu(2, 2)] }))).toBeNull();
+    // Há 8 dias: volta o parado.
+    expect(umaSo(lead({ statusDesde: desde, disparos: [fu(10, 1), fu(8, 2)] }))?.regra).toBe(
+      'lead_parado',
+    );
+  });
+
+  it('retorno agendado (registro de uma pessoa) encerra o follow-up', () => {
+    // Atendeu a ligação; o broker agendou um retorno ontem e o concluiu.
+    expect(umaSo(lead({ statusDesde: ha(24 * 3), ultimaAcaoHumana: ha(24) }))).toBeNull();
+  });
+
+  it('depois do retorno, o parado conta 7 dias a partir dele, com a dica de quem já respondeu', () => {
+    const desde = ha(24 * 15);
+    expect(umaSo(lead({ statusDesde: desde, ultimaAcaoHumana: ha(24 * 3) }))).toBeNull();
+    const t = umaSo(lead({ statusDesde: desde, ultimaAcaoHumana: ha(24 * 8) }))!;
+    expect(t.regra).toBe('lead_parado');
+    expect(t.descricao).toContain('A pessoa já deu retorno');
+    expect(t.descricao).not.toContain('Tente outro canal');
   });
 
   it('Em contato que RESPONDEU e travou: volta o parado (o lead mais quente não pode sumir)', () => {
     const t = umaSo(lead({ statusDesde: ha(24 * 8), ultimaEntradaWhatsapp: ha(24 * 7) }))!;
     expect(t.regra).toBe('lead_parado');
     expect(t.titulo).toBe('Lead parado há 8 dias na etapa Em contato');
+    expect(t.descricao).toContain('A pessoa já deu retorno');
   });
 
   it('Novo de importação em massa: nunca (sem enxurrada)', () => {
     for (const origem of ['importacao_planilha', 'lista_processual']) {
       expect(umaSo(lead({ status: 'novo', origem, statusDesde: ha(24 * 30) }))).toBeNull();
     }
+    // Importado com outra origem escolhida no formulário (ex.: Indicação).
+    expect(
+      umaSo(
+        lead({ status: 'novo', origem: 'indicacao', importado: true, statusDesde: ha(24 * 30) }),
+      ),
+    ).toBeNull();
+  });
+
+  it('Novo que o broker abordou (LinkedIn, evento): sem "foi a pessoa que procurou"', () => {
+    const t = umaSo(lead({ status: 'novo', origem: 'linkedin', statusDesde: ha(24 * 7) }))!;
+    expect(t.descricao).toContain('Defina quem cuida dele e faça o primeiro contato.');
+    expect(t.descricao).not.toContain('procurou a RGT');
   });
 
   it('Novo que chegou sozinho (site, WhatsApp) e ninguém pegou: avisa a gestão', () => {
@@ -451,7 +486,8 @@ describe('regra (c): processo andou', () => {
         HOJE,
       )!;
       expect(t.titulo).toBe('Reavaliar lead perdido: o Diário cita ofício requisitório');
-      expect(t.chaveCiclo).toBe('reavaliar_perdido:lead-1:2026-10-21T01:00:00.000Z:700');
+      expect(t.chaveCiclo).toBe('reavaliar_perdido:lead-1:2026-10-21T01:00:00.000Z:2026-11-05');
+      expect(t.descricao).toContain('marque como perdido de novo, sem a opção do ofício');
       expect(t.descricao).toContain(
         'o sistema avisa de novo quando o Diário citar o ofício outra vez',
       );
@@ -465,13 +501,16 @@ describe('regra (c): processo andou', () => {
       expect(t.motivo).toBe('Perdido sem ofício; o Diário de 05/11/2026 cita ofício requisitório');
     });
 
-    it('nova citação de ofício (outro id) gera outra tarefa; a mesma citação não', () => {
+    it('nova citação em outro dia gera outra tarefa; cópia do mesmo dia (outro id) não', () => {
       const primeira = [pub(700, '2026-11-05', ['X1'])];
+      const copia = [pub(950, '2026-11-05', ['X1']), ...primeira];
       const depois = [pub(812, '2026-12-03', ['X1']), ...primeira];
       const a = decidirTarefaDoProcesso(perdido, ctx({ todas: primeira }), resumo, HOJE)!;
+      const c = decidirTarefaDoProcesso(perdido, ctx({ todas: copia }), resumo, HOJE)!;
       const b = decidirTarefaDoProcesso(perdido, ctx({ todas: depois }), resumo, HOJE)!;
-      expect(a.chaveCiclo).not.toBe(b.chaveCiclo);
-      expect(b.chaveCiclo.endsWith(':812')).toBe(true);
+      expect(c.chaveCiclo).toBe(a.chaveCiclo);
+      expect(b.chaveCiclo).not.toBe(a.chaveCiclo);
+      expect(b.chaveCiclo.endsWith(':2026-12-03')).toBe(true);
     });
 
     it('com a tarefa de reavaliar ainda aberta: não empilha outra', () => {

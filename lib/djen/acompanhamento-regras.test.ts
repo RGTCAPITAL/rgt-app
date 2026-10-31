@@ -37,7 +37,8 @@ type Dados = {
   leads?: Record<string, unknown>[];
   perdidos?: Record<string, unknown>[];
   vistos?: Record<string, unknown>[];
-  conhecidas?: Record<string, number[]>;
+  /** Publicações já salvas por processo: só o id, ou o id com a data. */
+  conhecidas?: Record<string, (number | { id: number; data_disponibilizacao: string })[]>;
   abertas?: Record<string, unknown>[];
   ativos?: string[];
   rpc?: () => { data: unknown; error: { message: string } | null };
@@ -57,7 +58,9 @@ function sbFake(d: Dados) {
         case 'djen_acompanhamento':
           return d.vistos ?? [];
         case 'djen_publicacoes':
-          return (d.conhecidas?.[eq('numero_processo') as string] ?? []).map((id) => ({ id }));
+          return (d.conhecidas?.[eq('numero_processo') as string] ?? []).map((c) =>
+            typeof c === 'number' ? { id: c } : c,
+          );
         case 'regras_disparos':
           return d.abertas ?? [];
         case 'usuarios':
@@ -157,6 +160,25 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
     expect(log.some((l) => l.tabela === 'notificacoes')).toBe(false);
   });
 
+  it('processo da Prospecção: o que saiu desde a última publicação salva vira tarefa', async () => {
+    // Salvo pela Prospecção (01/10) e nunca verificado pela rotina. A cessão de
+    // 20/10 é novidade; a de 12/11/2025 que o DJEN trouxe só agora, não.
+    vi.mocked(buscarPorCnj).mockResolvedValue([
+      pub(510, '2026-10-20'),
+      pub(900, '2025-11-12'),
+      pub(400, '2026-10-01'),
+    ]);
+    const { sb, log } = sbFake({
+      leads: [LEAD_ATIVO],
+      conhecidas: { [CNJ_ATIVO]: [{ id: 400, data_disponibilizacao: '2026-10-01' }] },
+      ativos: ['broker-1'],
+    });
+    const r = await rodar(sb);
+    expect(r).toMatchObject({ tarefas: 1, avisos: 1 });
+    expect(rpcs(log)[0]).toMatchObject({ p_chave_ciclo: 'processo_andou:lead:lead-1:510' });
+    expect(String(rpcs(log)[0]!.p_descricao)).not.toContain('12/11/2025');
+  });
+
   it('dono inativo: a tarefa vai pra gestão', async () => {
     const { sb, log } = sbFake({ leads: [LEAD_ATIVO], ...JA_VISTO, ativos: [] });
     await rodar(sb);
@@ -219,9 +241,38 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
     expect(r).toMatchObject({ linhaDeBase: 1, tarefas: 1, avisos: 0 });
     expect(rpcs(log)[0]).toMatchObject({
       p_titulo: 'Reavaliar lead perdido: o Diário cita ofício requisitório',
-      p_chave_ciclo: 'reavaliar_perdido:lead-9:2026-10-21T01:00:00.000Z:700',
+      p_chave_ciclo: 'reavaliar_perdido:lead-9:2026-10-21T01:00:00.000Z:2026-11-05',
     });
     expect(log.some((l) => l.tabela === 'notificacoes')).toBe(false);
+  });
+
+  it('"Ler publicação" esquecida de quando era ativo não cala o reavaliar', async () => {
+    vi.mocked(buscarPorCnj).mockResolvedValue([pub(700, '2026-11-05', ['X1'])]);
+    const perdido = {
+      id: 'lead-9',
+      nome: 'Bia Lima',
+      numero_processo: CNJ_PERDIDO,
+      dono_id: 'broker-1',
+      status_desde: '2026-10-21T01:00:00Z',
+    };
+    const ler = {
+      lead_id: 'lead-9',
+      operacao_id: null,
+      chave_ciclo: 'processo_andou:lead:lead-9:600',
+    };
+    const { sb, log } = sbFake({ perdidos: [perdido], ativos: ['broker-1'], abertas: [ler] });
+    expect(await rodar(sb)).toMatchObject({ tarefas: 1 });
+    expect(String(rpcs(log)[0]!.p_chave_ciclo)).toMatch(/^reavaliar_perdido:/);
+
+    // Já um reavaliar aberto segura o próximo.
+    const reavaliar = {
+      lead_id: 'lead-9',
+      operacao_id: null,
+      chave_ciclo: 'reavaliar_perdido:lead-9:2026-10-21T01:00:00.000Z:2026-10-30',
+    };
+    const outro = sbFake({ perdidos: [perdido], ativos: ['broker-1'], abertas: [reavaliar] });
+    expect(await rodar(outro.sb)).toMatchObject({ tarefas: 0 });
+    expect(rpcs(outro.log)).toEqual([]);
   });
 
   it('perdido com publicação nova sem X1: nada, nem aviso', async () => {

@@ -84,6 +84,8 @@ type LinhaLead = {
   status: string;
   dono_id: string | null;
   origem: string;
+  /** Só a importação de planilha grava: marca o lead como importado. */
+  vinculo: string | null;
   status_desde: string;
   dono: { ativo: boolean } | null;
 };
@@ -121,7 +123,7 @@ export async function rodarRegrasDeLead(
     await sb
       .from('leads')
       .select(
-        'id, nome, status, dono_id, origem, status_desde, dono:usuarios!leads_dono_id_fkey(ativo)',
+        'id, nome, status, dono_id, origem, vinculo, status_desde, dono:usuarios!leads_dono_id_fkey(ativo)',
       )
       .eq('is_exemplo', false)
       .in('status', etapas),
@@ -135,11 +137,9 @@ export async function rodarRegrasDeLead(
   // e a janela de mensagens iria junto até lá atrás sem mudar decisão nenhuma.
   const emContato = cfg.followUp.ativa ? leads.filter((l) => l.status === 'em_contato') : [];
   const [tarefas, conversas, disparos] = await Promise.all([
-    sb
-      .from('tarefas')
-      .select('lead_id')
-      .in('lead_id', ids)
-      .in('status', ['pendente', 'em_andamento']),
+    // Todas as tarefas do lead, abertas ou não: as abertas seguram as regras,
+    // e as criadas por uma PESSOA (retorno, tarefa à mão) contam como contato.
+    sb.from('tarefas').select('id, lead_id, status, created_at').in('lead_id', ids),
     emContato.length
       ? sb
           .from('whatsapp_conversas')
@@ -149,16 +149,36 @@ export async function rodarRegrasDeLead(
             emContato.map((l) => l.id),
           )
       : Promise.resolve({ data: [], error: null }),
+    // Todas as regras: as tarefas que elas criaram não contam como contato.
     sb
       .from('regras_disparos')
-      .select('regra, lead_id, chave_ciclo, created_at')
-      .in('lead_id', ids)
-      .in('regra', ['follow_up', 'lead_parado']),
+      .select('regra, lead_id, chave_ciclo, created_at, tarefa_id')
+      .in('lead_id', ids),
   ]);
 
-  const comTarefaAberta = new Set(
-    exigir<{ lead_id: string }[]>('tarefas', tarefas).map((t) => t.lead_id),
-  );
+  type LinhaDisparo = {
+    regra: ChaveRegra;
+    lead_id: string;
+    chave_ciclo: string;
+    created_at: string;
+    tarefa_id: string | null;
+  };
+  const linhasDisparo = exigir<LinhaDisparo[]>('regras_disparos', disparos);
+  const tarefaDeRegra = new Set(linhasDisparo.map((d) => d.tarefa_id).filter(Boolean));
+
+  const comTarefaAberta = new Set<string>();
+  const ultimaAcaoHumana = new Map<string, string>();
+  for (const t of exigir<{ id: string; lead_id: string; status: string; created_at: string }[]>(
+    'tarefas',
+    tarefas,
+  )) {
+    if (t.status === 'pendente' || t.status === 'em_andamento') comTarefaAberta.add(t.lead_id);
+    if (tarefaDeRegra.has(t.id)) continue;
+    const atual = ultimaAcaoHumana.get(t.lead_id);
+    if (!atual || Date.parse(t.created_at) > Date.parse(atual)) {
+      ultimaAcaoHumana.set(t.lead_id, t.created_at);
+    }
+  }
   const leadDaConversa = new Map(
     exigir<{ id: string; lead_id: string }[]>('whatsapp_conversas', conversas).map((c) => [
       c.id,
@@ -166,9 +186,8 @@ export async function rodarRegrasDeLead(
     ]),
   );
   const disparosPorLead = new Map<string, DisparoAnterior[]>();
-  for (const d of exigir<
-    { regra: ChaveRegra; lead_id: string; chave_ciclo: string; created_at: string }[]
-  >('regras_disparos', disparos)) {
+  for (const d of linhasDisparo) {
+    if (d.regra !== 'follow_up' && d.regra !== 'lead_parado') continue;
     const lista = disparosPorLead.get(d.lead_id) ?? [];
     lista.push({ regra: d.regra, chaveCiclo: d.chave_ciclo, criadoEm: d.created_at });
     disparosPorLead.set(d.lead_id, lista);
@@ -221,9 +240,11 @@ export async function rodarRegrasDeLead(
     // Dono inativo não lê tarefa: tratar como sem dono manda pra gestão.
     donoId: l.dono_id && l.dono?.ativo ? l.dono_id : null,
     origem: l.origem,
+    importado: l.vinculo !== null && l.vinculo !== undefined,
     statusDesde: l.status_desde,
     temTarefaAberta: comTarefaAberta.has(l.id),
     ultimaEntradaWhatsapp: ultimaEntrada.get(l.id) ?? null,
+    ultimaAcaoHumana: ultimaAcaoHumana.get(l.id) ?? null,
     disparos: disparosPorLead.get(l.id) ?? [],
   }));
 
