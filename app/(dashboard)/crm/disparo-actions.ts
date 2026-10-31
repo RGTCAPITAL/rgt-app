@@ -8,6 +8,7 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { enviarModelo, whatsappConectado } from '@/lib/whatsapp/cloud-api';
 import { estadoJanela } from '@/lib/whatsapp/conversas';
 import {
+  INTERVALO_MINIMO_DIAS_MODELO,
   MODELOS,
   montarTextoModelo,
   telefoneParaEnvio,
@@ -23,9 +24,6 @@ import { titleCase } from '@/lib/formatters';
  * o padrão que a Meta pune e, com aposentado do outro lado, o que a OAB olha.
  * Cada envio guarda quem decidiu (`disparado_por_id`).
  */
-
-/** Um modelo por pessoa por semana. Insistir é o que vira denúncia. */
-const INTERVALO_MINIMO_DIAS = 7;
 
 export interface DadosDisparo {
   credorNome: string;
@@ -140,7 +138,7 @@ export async function dispararModelo(
         error: 'Essa pessoa escreveu nas últimas 24h: responda pela tela de Conversas, sem modelo.',
       };
     }
-    const desde = new Date(Date.now() - INTERVALO_MINIMO_DIAS * 86_400_000).toISOString();
+    const desde = new Date(Date.now() - INTERVALO_MINIMO_DIAS_MODELO * 86_400_000).toISOString();
     const { data: recente } = await sb
       .from('whatsapp_mensagens')
       .select('created_at')

@@ -23,6 +23,7 @@ beforeEach(() => {
     comNovidade: 1,
     linhaDeBase: 0,
     avisos: 2,
+    tarefas: 0,
     falhas: 0,
   });
 });
@@ -60,6 +61,7 @@ describe('cron do acompanhamento do DJEN', () => {
       comNovidade: 0,
       linhaDeBase: 0,
       avisos: 0,
+      tarefas: 0,
       falhas: 2,
     });
     expect((await GET(new Request(URL_ROTA, autorizado))).status).toBe(500);
@@ -70,6 +72,7 @@ describe('cron do acompanhamento do DJEN', () => {
       comNovidade: 0,
       linhaDeBase: 1,
       avisos: 0,
+      tarefas: 0,
       falhas: 1,
     });
     expect((await GET(new Request(URL_ROTA, autorizado))).status).toBe(200);

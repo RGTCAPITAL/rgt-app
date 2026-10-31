@@ -16,6 +16,16 @@ import { maskCNJ } from '@/lib/masks';
 
 export type Destino = 'credor' | 'advogado';
 
+/**
+ * Um modelo por pessoa por semana. Insistir é o que vira denúncia — e
+ * denúncia derruba a nota do número da RGT na Meta, até o bloqueio.
+ *
+ * Mora aqui, e não em disparo-actions.ts, porque arquivo 'use server' só pode
+ * exportar função async: o follow-up automático (lib/regras) precisa do
+ * mesmo número pra dizer ao broker quando o botão volta a funcionar.
+ */
+export const INTERVALO_MINIMO_DIAS_MODELO = 7;
+
 export interface ModeloWhatsapp {
   nome: string;
   idioma: string;

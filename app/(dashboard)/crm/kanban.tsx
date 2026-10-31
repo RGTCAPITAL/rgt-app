@@ -10,7 +10,7 @@ import {
   Send,
 } from 'lucide-react';
 import { IconeWhatsApp } from '@/components/ui/icone-whatsapp';
-import { mudarStatusLead } from './actions';
+import { mudarStatusLead, type CodigoPerda } from './actions';
 import { toast } from 'sonner';
 import { STATUS_LEAD, labelOrigem, type StatusLead } from '@/lib/leads';
 import { LeadForm, type DonoOption, type LeadEdit } from './lead-form';
@@ -189,6 +189,9 @@ export function Kanban({
   const [leadDisparo, setLeadDisparo] = useState<{ id: string; nome: string } | null>(null);
   const [modalPerdido, setModalPerdido] = useState<{ leadId: string; nome: string } | null>(null);
   const [motivoPerda, setMotivoPerda] = useState('');
+  // "Perdido porque o ofício ainda não saiu": grava o código sem_oficio, que a
+  // regra "processo andou" lê pra avisar quando o ofício sair (migration 048).
+  const [semOficio, setSemOficio] = useState(false);
   const [editandoLead, setEditandoLead] = useState<LeadEdit | null>(null);
   // Card fica em estado de carregando enquanto o servidor não confirma: sem isso
   // ele permanecia visualmente na coluna antiga por ~500ms, sem sinal nenhum.
@@ -239,6 +242,7 @@ export function Kanban({
     if (novoStatus === 'perdido') {
       setModalPerdido({ leadId, nome: lead.nome });
       setMotivoPerda('');
+      setSemOficio(false);
       return;
     }
 
@@ -260,12 +264,13 @@ export function Kanban({
     novoStatus: StatusLead,
     motivo?: string,
     nomeLead?: string,
+    codigoPerda?: CodigoPerda | null,
   ) {
     setErro(null);
     setMovendoId(leadId);
     const destino = STATUS_LEAD.find((s) => s.value === novoStatus)?.label ?? novoStatus;
     startTransition(async () => {
-      const res = await mudarStatusLead(leadId, novoStatus, motivo);
+      const res = await mudarStatusLead(leadId, novoStatus, motivo, codigoPerda);
       setMovendoId(null);
       if (!res.ok) {
         setErro(res.error);
@@ -282,7 +287,13 @@ export function Kanban({
       setErro('Informe o motivo da perda.');
       return;
     }
-    aplicarStatus(modalPerdido.leadId, 'perdido', motivoPerda, modalPerdido.nome);
+    aplicarStatus(
+      modalPerdido.leadId,
+      'perdido',
+      motivoPerda,
+      modalPerdido.nome,
+      semOficio ? 'sem_oficio' : null,
+    );
     setModalPerdido(null);
   }
 
@@ -398,7 +409,14 @@ export function Kanban({
                       numeroProcesso: lead.numero_processo,
                       enteDevedor: lead.ente_devedor,
                     };
-                    const modelo = escolherModelo(modelos, dadosMsg);
+                    // Lead que já saiu de "Novo" foi abordado: abrir com a
+                    // apresentação de novo soaria como robô. Recebe a retomada
+                    // (que é o texto que o follow-up automático manda usar).
+                    const modelo = escolherModelo(
+                      modelos,
+                      dadosMsg,
+                      lead.status === 'novo' ? 'primeiro_contato' : 'retomada',
+                    );
                     const linkZap = lead.telefone
                       ? linkWhatsAppComTexto(
                           lead.telefone,
@@ -656,6 +674,27 @@ export function Kanban({
               placeholder="Ex: cliente desistiu, valor abaixo do mínimo, fora do ICP"
               autoFocus
             />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="flex items-start gap-2 text-sm text-neutral-800">
+              <input
+                type="checkbox"
+                checked={semOficio}
+                onChange={(e) => {
+                  setSemOficio(e.target.checked);
+                  if (e.target.checked && !motivoPerda.trim()) {
+                    setMotivoPerda('Ainda não saiu o ofício requisitório.');
+                  }
+                }}
+                className="mt-0.5 size-4 shrink-0 accent-neutral-900"
+              />
+              <span>Ainda não saiu o ofício requisitório</span>
+            </label>
+            <p className="pl-6 text-xs text-neutral-500">
+              Com a regra Processo andou ligada, a RGT continua olhando o Diário e cria uma tarefa
+              de reavaliar quando o ofício sair.
+            </p>
           </div>
 
           <DialogFooter>

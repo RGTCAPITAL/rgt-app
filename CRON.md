@@ -68,3 +68,62 @@ Tem que devolver **401 com corpo `{"erro":"nao_autorizado"}`**.
 
 Depois, com o segredo correto, tem que devolver 200 e o `coletado_em` das 6
 séries tem que avançar em `/admin/indices`.
+
+---
+
+# Cron das regras automáticas — `/api/cron/regras`
+
+Roda as regras (a) **follow-up** e (b) **lead parado** (`lib/regras`). Cada uma
+só **cria tarefa para uma pessoa**; nenhuma manda mensagem pro cliente. As
+chaves liga/desliga ficam em `/admin/regras` e nascem desligadas (migration 048).
+A regra (c) **processo andou** não roda aqui: fica dentro do
+`djen-acompanhamento`, que é quem sabe o que é publicação nova.
+
+## Por que um cron separado
+
+O `djen-acompanhamento` gasta até ~250 dos 270 s de prazo com o DJEN (20
+consultas por minuto, ~75 processos) e devolve 500 quando falha inteiro. Um
+erro de CRM lá dentro ficaria misturado ao do Diário no log, e um DJEN lento
+deixaria as regras sem tempo. Separado, cada um falha sozinho, tem o próprio
+log na Vercel e pode ser chamado à mão. Este custa ~1 s: cinco consultas em
+lote e uma RPC por tarefa criada (`maxDuration = 60` sobra).
+
+## `0 12 * * *` — 9h a 10h em Maceió
+
+- Roda **depois** do DJEN (`0 11 * * *`), e as tarefas já estão lá quando o
+  expediente começa.
+- Fora da faixa 0–2 UTC, onde o dia em UTC e o dia em São Paulo divergem. O
+  prazo da tarefa usa `hojeEmSaoPaulo`, mas não custa ficar longe da virada.
+
+## Plano Hobby
+
+Doc da Vercel (cron-jobs/usage-and-pricing, atualizada em 15/07/2026): até
+**100 crons por projeto**, no máximo **uma vez por dia**, precisão **por hora**
+(±59 min). Expressão mais frequente faz o deploy falhar. Com este, são 3.
+
+## Execução perdida ou em dobro
+
+- A Vercel **não repete** execução perdida. Os limites usam `>=` (2 dias, 7
+  dias), então um dia perdido só atrasa a tarefa em um dia; ela não some.
+- A Vercel também pode rodar duas vezes. Não duplica nada: toda tarefa passa
+  por `criar_tarefa_de_regra`, que grava o disparo em `regras_disparos` com
+  chave única `(regra, chave_ciclo)` na mesma transação da tarefa.
+
+## Ordem de deploy
+
+**Aplicar a 048 antes do deploy.** O código novo lê `status_desde`,
+`motivo_perda_codigo`, `modelos_mensagem.uso` e as tabelas `regras_*`. A
+leitura das regras falha fechada (sem a tabela, tudo conta como desligado e o
+DJEN segue igual), mas o CRM passa a pedir a coluna `uso` dos modelos.
+
+## A prova de que está ligado
+
+```bash
+curl -i https://<producao>/api/cron/regras
+```
+
+Tem que devolver **401** com `{"erro":"nao_autorizado"}` (307 = proxy na
+frente; HTML = Deployment Protection, ver acima). Com `x-cron-secret`, devolve
+200 e o resumo: `regrasLigadas`, `leadsAnalisados`, `tarefasCriadas`,
+`jaExistiam`, `falhas`. Com tudo desligado, `regrasLigadas: []` e nenhuma
+consulta além da config.

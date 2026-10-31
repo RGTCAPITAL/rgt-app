@@ -21,6 +21,7 @@ const LABELS: Record<string, string> = {
   mensagens: 'Mensagens',
   indices: 'Índices',
   desagio: 'Percentual',
+  regras: 'Regras',
   precificacao: 'Precificação',
 };
 

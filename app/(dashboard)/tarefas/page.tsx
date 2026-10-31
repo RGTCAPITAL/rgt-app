@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { fmtDataBR } from '@/lib/formatters';
 import { SectionHero, KpiTile } from '@/components/ui/section-hero';
 import { hojeEmSaoPaulo } from '@/lib/datas';
+import { NOME_REGRA, type ChaveRegra } from '@/lib/regras/decidir';
 import { ConcluirRetorno } from './concluir-retorno';
 
 type SearchParams = { status?: string };
@@ -91,6 +92,22 @@ export default async function TarefasPage({
   // Fallback: se filtro server-side não encontra, mostra tudo que RLS deixa passar
   const listaFinal = tarefas.length > 0 || params.status ? tarefas : (todasTarefas ?? []);
 
+  // Qual regra automática criou cada tarefa (migration 048). Consulta à parte,
+  // e não embed: se ela falhar, a lista de tarefas aparece igual, só sem o
+  // "Criada pela regra".
+  const regraDaTarefa = new Map<string, ChaveRegra>();
+  if (listaFinal.length) {
+    const { data: disparos } = await supabase
+      .from('regras_disparos')
+      .select('tarefa_id, regra')
+      .in(
+        'tarefa_id',
+        listaFinal.map((t) => t.id),
+      )
+      .returns<{ tarefa_id: string; regra: ChaveRegra }[]>();
+    for (const d of disparos ?? []) regraDaTarefa.set(d.tarefa_id, d.regra);
+  }
+
   const abertas = listaFinal.filter((t) => t.status === 'pendente' || t.status === 'em_andamento');
   const atrasadas = abertas.filter((t) => estaAtrasada(t.prazo, t.status));
   const concluidas = listaFinal.filter((t) => t.status === 'concluida');
@@ -151,6 +168,7 @@ export default async function TarefasPage({
             const href = t.operacao ? `/operacoes/${t.operacao.id}` : '/crm';
             const aberta = t.status === 'pendente' || t.status === 'em_andamento';
             const temBotao = Boolean(t.lead && aberta);
+            const regra = regraDaTarefa.get(t.id);
             return (
               <div key={t.id} className="relative">
                 <Link
@@ -182,11 +200,26 @@ export default async function TarefasPage({
                         {t.operacao
                           ? `${t.operacao.numero_processo} · ${t.operacao.cedente_nome}`
                           : t.lead
-                            ? `Retorno de lead · ${t.lead.nome}`
+                            ? `${regra ? 'Lead' : 'Retorno de lead'} · ${t.lead.nome}`
                             : '—'}
                       </p>
+                      {/* A instrução da tarefa automática mora aqui: o título
+                          só diz o quê, a descrição diz como. A da regra sai
+                          inteira (a última linha pode ser "esta é a última
+                          tentativa"); a escrita à mão corta em 4 linhas. */}
+                      {t.descricao && (
+                        <p
+                          className={`mt-1 text-xs break-words whitespace-pre-line text-neutral-600 ${regra ? '' : 'line-clamp-4'}`}
+                        >
+                          {t.descricao}
+                        </p>
+                      )}
                       <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-neutral-500">
-                        {t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>}
+                        {regra ? (
+                          <span>Criada pela regra {NOME_REGRA[regra]}</span>
+                        ) : (
+                          t.criado_por?.nome && <span>Por {t.criado_por.nome}</span>
+                        )}
                         <span>
                           Para:{' '}
                           {t.destinatario?.nome ??

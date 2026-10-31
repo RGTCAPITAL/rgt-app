@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { type LeadCard } from './kanban';
 import { CrmShell } from './crm-shell';
 import { ORIGEM_LEAD } from '@/lib/leads';
+import type { UsoModelo } from '@/lib/crm/mensagem';
 import { buttonVariants } from '@/components/ui/button';
 import { SectionHero } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
@@ -47,14 +48,22 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     await query.returns<(LeadCard & { dono: { id: string; nome: string | null } | null })[]>();
 
   // Modelos de mensagem do botão de WhatsApp. Ordem crescente: o seletor
-  // usa o primeiro cujos requisitos o lead atende.
+  // usa o primeiro cujos requisitos o lead atende. `uso` separa o primeiro
+  // contato da retomada (lead que já saiu de "Novo").
   const { data: modelos } = await supabase
     .from('modelos_mensagem')
-    .select('id, nome, texto, requer_valor, requer_ente')
+    .select('id, nome, texto, requer_valor, requer_ente, uso')
     .eq('ativo', true)
     .order('ordem')
     .returns<
-      { id: string; nome: string; texto: string; requer_valor: boolean; requer_ente: boolean }[]
+      {
+        id: string;
+        nome: string;
+        texto: string;
+        requer_valor: boolean;
+        requer_ente: boolean;
+        uso: UsoModelo;
+      }[]
     >();
 
   const { data: donosTodos } = await supabase
@@ -140,6 +149,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           texto: m.texto,
           requerValor: m.requer_valor,
           requerEnte: m.requer_ente,
+          uso: m.uso,
         }))}
         donos={donosTodos ?? []}
         meuId={user.id}
