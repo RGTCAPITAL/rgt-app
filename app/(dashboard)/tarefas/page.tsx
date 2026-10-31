@@ -25,6 +25,8 @@ type TarefaLinha = {
   lead: { id: string; nome: string } | null;
   criado_por: { nome: string | null } | null;
   destinatario: { nome: string | null } | null;
+  /** Qual regra automática criou a tarefa (migration 048). Vazio = feita à mão. */
+  regras_disparos: { regra: ChaveRegra }[] | null;
 };
 
 const STATUS_LABEL: Record<string, { label: string; cor: string }> = {
@@ -68,10 +70,15 @@ export default async function TarefasPage({
   // Puxa tarefas visíveis pelo user (RLS filtra por operação) e filtra:
   //   pra ele diretamente (destinatario_id = self OU destinatario_perfil = meu_slug)
   //   OU criadas por ele
+  // A regra que criou a tarefa vem embarcada (regras_disparos.tarefa_id é a
+  // única FK entre as duas tabelas, então o embed não é ambíguo). Antes era
+  // uma segunda consulta com `.in('tarefa_id', [...])`: acima de ~640 ids a
+  // URL passava do limite do gateway, voltava 400 e o "Criada pela regra"
+  // sumia sem aviso.
   let query = supabase
     .from('tarefas')
     .select(
-      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, operacao:operacoes(id, numero_processo, cedente_nome), lead:leads(id, nome), criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome)',
+      'id, titulo, descricao, destinatario_perfil, destinatario_id, prazo, status, created_at, operacao:operacoes(id, numero_processo, cedente_nome), lead:leads(id, nome), criado_por:usuarios!tarefas_criado_por_id_fkey(nome), destinatario:usuarios!tarefas_destinatario_id_fkey(nome), regras_disparos(regra)',
     )
     .order('prazo', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false });
@@ -92,22 +99,6 @@ export default async function TarefasPage({
 
   // Fallback: se filtro server-side não encontra, mostra tudo que RLS deixa passar
   const listaFinal = tarefas.length > 0 || params.status ? tarefas : (todasTarefas ?? []);
-
-  // Qual regra automática criou cada tarefa (migration 048). Consulta à parte,
-  // e não embed: se ela falhar, a lista de tarefas aparece igual, só sem o
-  // "Criada pela regra".
-  const regraDaTarefa = new Map<string, ChaveRegra>();
-  if (listaFinal.length) {
-    const { data: disparos } = await supabase
-      .from('regras_disparos')
-      .select('tarefa_id, regra')
-      .in(
-        'tarefa_id',
-        listaFinal.map((t) => t.id),
-      )
-      .returns<{ tarefa_id: string; regra: ChaveRegra }[]>();
-    for (const d of disparos ?? []) regraDaTarefa.set(d.tarefa_id, d.regra);
-  }
 
   const abertas = listaFinal.filter((t) => t.status === 'pendente' || t.status === 'em_andamento');
   const atrasadas = abertas.filter((t) => estaAtrasada(t.prazo, t.status));
@@ -166,10 +157,15 @@ export default async function TarefasPage({
             const stat = STATUS_LABEL[t.status] ?? STATUS_LABEL.pendente;
             const atrasada = estaAtrasada(t.prazo, t.status);
             // Retorno de lead não tem operação: o link ia pra "/operacoes/" (quebrado).
-            const href = t.operacao ? `/operacoes/${t.operacao.id}` : '/crm';
+            const href = t.operacao
+              ? `/operacoes/${t.operacao.id}`
+              : t.lead
+                ? `/crm?lead=${t.lead.id}`
+                : '/crm';
             const aberta = t.status === 'pendente' || t.status === 'em_andamento';
             const temBotao = Boolean(t.lead && aberta);
-            const regra = regraDaTarefa.get(t.id);
+            // Uma tarefa nasce de um disparo só (a RPC da 048 grava os dois juntos).
+            const regra = t.regras_disparos?.[0]?.regra;
             const { texto: descricao, links } = separarLinks(t.descricao);
             return (
               <div key={t.id} className="relative">

@@ -50,6 +50,8 @@ const PERFIL: Record<string, string> = {
   broker: 'Broker',
 };
 
+const ERRO_CARREGAR = 'Não foi possível carregar agora. Recarregue a página.';
+
 // Fuso fixo: o servidor da Vercel roda em UTC.
 const dataHoraSP = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
@@ -64,7 +66,7 @@ export default async function RegrasPage() {
   if (!auth.ok) redirect('/');
 
   const supabase = await createClient();
-  const [{ data: regras }, { data: disparos }] = await Promise.all([
+  const [resRegras, resDisparos] = await Promise.all([
     supabase
       .from('regras_automaticas')
       .select('chave, nome, ativa, parametros, updated_at, atualizado_por:usuarios(nome)')
@@ -82,6 +84,13 @@ export default async function RegrasPage() {
       .limit(30)
       .returns<DisparoRow[]>(),
   ]);
+  const { data: regras, error: erroRegras } = resRegras;
+  const { data: disparos, error: erroDisparos } = resDisparos;
+  // Consulta que falhou não é "nenhuma regra" nem "ninguém atingido": os
+  // textos de estado vazio mandavam conferir a migration ou ligar a regra
+  // quando o problema era só a leitura.
+  if (erroRegras) console.error('[regras] falha ao ler regras_automaticas:', erroRegras.message);
+  if (erroDisparos) console.error('[regras] falha ao ler regras_disparos:', erroDisparos.message);
 
   // A tela mostra o que a rotina vai fazer de fato: parâmetro inválido no
   // banco aparece como desligado, porque é assim que a rotina o trata.
@@ -142,10 +151,16 @@ export default async function RegrasPage() {
         </ul>
       </div>
 
-      {vistas.length < ORDEM.length && (
+      {erroRegras ? (
         <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Alguma regra não foi encontrada no banco. Confira se a migration 048 foi aplicada.
+          {ERRO_CARREGAR}
         </p>
+      ) : (
+        vistas.length < ORDEM.length && (
+          <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Alguma regra não foi encontrada no banco. Confira se a migration 048 foi aplicada.
+          </p>
+        )
       )}
 
       <PainelRegras regras={vistas} />
@@ -154,8 +169,9 @@ export default async function RegrasPage() {
         <h2 className="mb-3 text-sm font-semibold text-neutral-900">Últimos atingidos</h2>
         {!disparos?.length ? (
           <div className="rounded-md border border-dashed border-neutral-300 bg-white p-6 text-center text-sm text-neutral-600">
-            Nenhuma regra atingiu ninguém ainda. Ligue uma regra acima; a primeira rodada é na manhã
-            seguinte.
+            {erroDisparos
+              ? ERRO_CARREGAR
+              : 'Nenhuma regra atingiu ninguém ainda. Ligue uma regra acima; a primeira rodada é na manhã seguinte.'}
           </div>
         ) : (
           // Lista e não tabela: no celular uma tabela de seis colunas rolaria de lado.

@@ -9,7 +9,9 @@ import { buttonVariants } from '@/components/ui/button';
 import { SectionHero } from '@/components/ui/section-hero';
 import { cn } from '@/lib/utils';
 
-type SearchParams = { origem?: string; dono?: string };
+// `lead` abre aquele card: é pra onde o sino (tarefa nova) e os "Últimos
+// atingidos" de /admin/regras mandam.
+type SearchParams = { origem?: string; dono?: string; lead?: string };
 
 export default async function CrmPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
@@ -33,11 +35,12 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
        operacao_id, dono_id, notas, is_exemplo, valor_processo, valor_proposta_indicativa, ente_devedor,
        numero_processo,
        dono:usuarios!leads_dono_id_fkey(id, nome),
-       retornos:tarefas(id, titulo, prazo)`,
+       retornos:tarefas(id, titulo, prazo, criado_por_id)`,
     )
     // Só os retornos ainda em aberto: tarefa concluída no card seria ruído.
     // O filtro é na relação embarcada, não no lead — lead sem retorno
-    // continua aparecendo, com a lista vazia.
+    // continua aparecendo, com a lista vazia. criado_por_id separa o retorno
+    // que alguém agendou da tarefa de regra (nulo), que não é "Retorno".
     .eq('retornos.status', 'pendente')
     .order('created_at', { ascending: false });
 
@@ -155,6 +158,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         meuId={user.id}
         isAdmin={isAdmin}
         podeImportar={meuPerfil?.perfil?.slug === 'admin' || meuPerfil?.perfil?.slug === 'gestao'}
+        // ?lead=a&lead=b chega como array: aí não abre nenhum.
+        leadParaAbrir={typeof params.lead === 'string' ? params.lead : null}
       />
     </div>
   );

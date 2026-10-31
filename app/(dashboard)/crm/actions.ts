@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { STATUS_LEAD, type StatusLead } from '@/lib/leads';
 import { leadFormSchema, valorParaNumero } from './lead-schemas';
 import { titleCase } from '@/lib/formatters';
+import { repassarTarefasDeRegra } from '@/lib/tarefas/repassar';
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string };
 
@@ -94,6 +95,15 @@ export async function atualizarLead(
     ...dadosPrecatorio(parsed.data),
   };
 
+  // O formulário manda o dono sempre, mudado ou não. Comparar com o de antes
+  // evita repassar tarefa de regra num lead que só teve a nota editada (a de
+  // um dono inativo foi pra gestão de propósito e deve ficar lá).
+  const { data: antes } = await supabase
+    .from('leads')
+    .select('dono_id')
+    .eq('id', leadId)
+    .maybeSingle<{ dono_id: string | null }>();
+
   const { data, error } = await supabase
     .from('leads')
     .update(update)
@@ -102,6 +112,14 @@ export async function atualizarLead(
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: 'Lead não encontrado ou sem permissão.' };
+
+  // Broker não troca dono (a RLS de leads exige dono = ele antes e depois), então
+  // quem chega aqui com dono novo é admin ou gestão, que podem mudar qualquer
+  // tarefa: o mesmo cliente basta.
+  if (antes && antes.dono_id !== update.dono_id) {
+    await repassarTarefasDeRegra(supabase, leadId, update.dono_id);
+    revalidatePath('/tarefas');
+  }
 
   revalidatePath('/crm');
   return { ok: true };

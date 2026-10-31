@@ -16,9 +16,18 @@ type Props = {
   meuId: string;
   isAdmin: boolean;
   podeImportar: boolean;
+  leadParaAbrir: string | null;
 };
 
-export function CrmShell({ leads, modelos, donos, meuId, isAdmin, podeImportar }: Props) {
+export function CrmShell({
+  leads,
+  modelos,
+  donos,
+  meuId,
+  isAdmin,
+  podeImportar,
+  leadParaAbrir,
+}: Props) {
   const [novoAberto, setNovoAberto] = useState(false);
 
   return (
@@ -48,6 +57,7 @@ export function CrmShell({ leads, modelos, donos, meuId, isAdmin, podeImportar }
         isAdmin={isAdmin}
         abrirNovo={novoAberto}
         onNovoFechado={() => setNovoAberto(false)}
+        leadParaAbrir={leadParaAbrir}
       />
     </>
   );

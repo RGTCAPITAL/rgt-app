@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { exigirPerfil } from '@/lib/auth/roles';
 import { estadoJanela, LIMITE_TEXTO_WHATSAPP } from '@/lib/whatsapp/conversas';
 import { enviarTexto, whatsappConectado } from '@/lib/whatsapp/cloud-api';
+import { repassarTarefasDeRegra } from '@/lib/tarefas/repassar';
 
 type Resultado = { ok: true } | { ok: false; error: string };
 
@@ -19,6 +20,12 @@ export async function atribuirDono(leadId: string, donoId: string): Promise<Resu
   if (!auth.ok) return { ok: false, error: auth.error };
 
   const supabase = await createClient();
+  // O dono de antes decide se as tarefas de regra precisam mudar de mão.
+  const { data: antes } = await supabase
+    .from('leads')
+    .select('dono_id')
+    .eq('id', leadId)
+    .maybeSingle<{ dono_id: string | null }>();
   const { data, error } = await supabase
     .from('leads')
     .update({ dono_id: donoId })
@@ -26,6 +33,12 @@ export async function atribuirDono(leadId: string, donoId: string): Promise<Resu
     .select('id, nome')
     .single<{ id: string; nome: string }>();
   if (error || !data) return { ok: false, error: 'Não foi possível atribuir.' };
+
+  // Só admin e gestão chegam aqui, e a RLS de tarefas deixa os dois mudarem
+  // qualquer tarefa: o mesmo cliente basta.
+  if (antes && antes.dono_id !== donoId) {
+    await repassarTarefasDeRegra(supabase, leadId, donoId);
+  }
 
   // Aviso pelo sino. Service role porque notificação não tem policy de
   // INSERT pra usuário — quem cria aviso é sempre o sistema.
@@ -48,6 +61,7 @@ export async function atribuirDono(leadId: string, donoId: string): Promise<Resu
 
   revalidatePath('/conversas');
   revalidatePath('/crm');
+  revalidatePath('/tarefas');
   return { ok: true };
 }
 
