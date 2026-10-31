@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hojeEmSaoPaulo } from '@/lib/datas';
+import { destinoDaTarefaDeRegra } from '@/lib/tarefas/repassar';
 import {
   decidirRegrasDeLead,
   ETAPAS_LEAD_PARADO,
@@ -94,7 +95,7 @@ function exigir<T>(qual: string, r: Resposta): T {
  * resposta que não conta). A consulta tem de ter ordem total, senão a página
  * seguinte repete ou pula linha.
  */
-async function lerTudo<T>(
+export async function lerTudo<T>(
   qual: string,
   pagina: (de: number, ate: number) => PromiseLike<Resposta>,
 ): Promise<T[]> {
@@ -107,7 +108,7 @@ async function lerTudo<T>(
 }
 
 /** lerTudo para um `.in()` grande: lotes de LOTE_IDS, cada um paginado. */
-async function lerEmLotes<T>(
+export async function lerEmLotes<T>(
   qual: string,
   ids: readonly string[],
   pagina: (lote: string[], de: number, ate: number) => PromiseLike<Resposta>,
@@ -154,6 +155,7 @@ type LinhaTarefa = {
   created_at: string;
   concluida_em: string | null;
   destinatario_id: string | null;
+  destinatario: { ativo: boolean } | null;
 };
 
 type LinhaDisparo = {
@@ -165,16 +167,16 @@ type LinhaDisparo = {
 };
 
 /**
- * A tarefa aberta segura as regras do lead? Só se estiver com quem receberia
- * a tarefa da regra. Tarefa pra um perfil (gestão) sempre segura. Com dono
- * ativo, só a dele: a esquecida com um dono antigo — que nem vê mais o lead —
- * travaria o lead para sempre. Sem dono, a de uma pessoa segura (alguém pegou
- * o lead), mas a de regra com o dono que saiu não: ela mandaria pra gestão.
+ * A tarefa aberta segura as regras do lead? Tarefa pra um perfil (gestão)
+ * sempre segura. Com uma pessoa que saiu da empresa, nunca: ninguém vai
+ * fechá-la, e o lead ficaria travado para sempre. Com dono ativo, só a dele:
+ * a esquecida com um dono antigo — que nem vê mais o lead — também travaria.
+ * Sem dono, a de uma pessoa ativa segura (alguém pegou o lead).
  */
-function seguraAsRegras(t: LinhaTarefa, donoAtivo: string | null, deRegra: boolean): boolean {
+function seguraAsRegras(t: LinhaTarefa, donoAtivo: string | null): boolean {
   if (t.destinatario_id === null) return true;
-  if (donoAtivo) return t.destinatario_id === donoAtivo;
-  return !deRegra;
+  if (t.destinatario?.ativo === false) return false;
+  return donoAtivo ? t.destinatario_id === donoAtivo : true;
 }
 
 /**
@@ -237,7 +239,9 @@ export async function rodarRegrasDeLead(
     lerEmLotes<LinhaTarefa>('tarefas', ids, (lote, de, ate) =>
       sb
         .from('tarefas')
-        .select('id, lead_id, status, created_at, concluida_em, destinatario_id')
+        .select(
+          'id, lead_id, status, created_at, concluida_em, destinatario_id, destinatario:usuarios!tarefas_destinatario_id_fkey(ativo)',
+        )
         .in('lead_id', lote)
         .order('id')
         .range(de, ate),
@@ -291,25 +295,68 @@ export async function rodarRegrasDeLead(
     jaHoje.set(quem, (jaHoje.get(quem) ?? 0) + 1);
   }
 
-  const tarefaDeRegra = new Set(linhasDisparo.map((d) => d.tarefa_id).filter(Boolean));
+  // Qual regra criou cada tarefa (as de pessoa não estão aqui).
+  const regraDaTarefa = new Map<string, ChaveRegra>();
+  for (const d of linhasDisparo) if (d.tarefa_id) regraDaTarefa.set(d.tarefa_id, d.regra);
   const donoAtivo = new Map(
     leads.map((l) => [l.id, l.dono_id && l.dono?.ativo ? l.dono_id : null] as const),
   );
+
+  // Tarefa ABERTA de regra que está com quem não é mais o responsável (dono
+  // trocado antes de existir o repasse, dono desativado): vai pra quem a regra
+  // escolheria hoje — o dono ativo, ou a gestão. A chave do ciclo impede a
+  // regra de criar outra, então sem isto o aviso ficava com quem não lê.
+  const repassar = new Map<string | null, string[]>();
+  for (const t of tarefas) {
+    if (!regraDaTarefa.has(t.id) || (t.status !== 'pendente' && t.status !== 'em_andamento')) {
+      continue;
+    }
+    const certo = donoAtivo.get(t.lead_id) ?? null;
+    if (t.destinatario_id === certo) continue;
+    repassar.set(certo, [...(repassar.get(certo) ?? []), t.id]);
+  }
+  for (const [destino, idsTarefa] of repassar) {
+    for (let i = 0; i < idsTarefa.length; i += LOTE_IDS) {
+      const lote = idsTarefa.slice(i, i + LOTE_IDS);
+      const { error } = await sb
+        .from('tarefas')
+        .update(destinoDaTarefaDeRegra(destino))
+        .in('id', lote)
+        .is('criado_por_id', null);
+      if (error) {
+        console.error('[regras] repasse de tarefas de regra:', error.message);
+        continue;
+      }
+      for (const t of tarefas) {
+        if (!lote.includes(t.id)) continue;
+        t.destinatario_id = destino;
+        t.destinatario = destino ? { ativo: true } : null;
+      }
+    }
+  }
+
   const concluidaEm = new Map<string, string | null>();
   const comTarefaAberta = new Set<string>();
   const ultimaAcaoHumana = new Map<string, string>();
   const ultimaAtividade = new Map<string, string>();
   for (const t of tarefas) {
     concluidaEm.set(t.id, t.concluida_em);
-    const deRegra = tarefaDeRegra.has(t.id);
+    const regra = regraDaTarefa.get(t.id);
+    const deRegra = regra !== undefined;
     if (
       (t.status === 'pendente' || t.status === 'em_andamento') &&
-      seguraAsRegras(t, donoAtivo.get(t.lead_id) ?? null, deRegra)
+      seguraAsRegras(t, donoAtivo.get(t.lead_id) ?? null)
     ) {
       comTarefaAberta.add(t.lead_id);
     }
     // Concluir é sempre gesto de uma pessoa; criar, só se não foi a regra.
-    const movimento = deRegra ? t.concluida_em : maisRecente(t.created_at, t.concluida_em);
+    // Ler uma publicação do Diário não é trabalhar o lead: a conclusão do
+    // "processo andou" não mexe no relógio do parado.
+    const movimento = !deRegra
+      ? maisRecente(t.created_at, t.concluida_em)
+      : regra === 'processo_andou'
+        ? null
+        : t.concluida_em;
     const atividade = maisRecente(ultimaAtividade.get(t.lead_id), movimento);
     if (atividade) ultimaAtividade.set(t.lead_id, atividade);
     if (deRegra) continue;
@@ -393,6 +440,7 @@ export async function rodarRegrasDeLead(
     importado: l.vinculo !== null && l.vinculo !== undefined,
     statusDesde: l.status_desde,
     temTelefone: Boolean(l.telefone?.trim()),
+    temConversaRgt: conversasDoLead.has(l.id),
     temTarefaAberta: comTarefaAberta.has(l.id),
     ultimaEntradaWhatsapp: ultimaEntrada.get(l.id) ?? null,
     ultimaAcaoHumana: ultimaAcaoHumana.get(l.id) ?? null,

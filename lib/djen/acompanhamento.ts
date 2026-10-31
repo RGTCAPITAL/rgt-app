@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hojeEmSaoPaulo, somarDias } from '@/lib/datas';
 import { decidirTarefaDoProcesso, type ConfigRegras } from '@/lib/regras/decidir';
-import { carregarConfig, criarTarefaDeRegra } from '@/lib/regras/executar';
+import { carregarConfig, criarTarefaDeRegra, lerEmLotes, lerTudo } from '@/lib/regras/executar';
 import { buscarPorCnj } from './client';
 import { paraLinhaBanco } from './mappers';
 import { infoRedFlag, ordenarFlagsParaExibir, temAlertaGrave } from './red-flags';
@@ -97,34 +97,50 @@ export async function carregarAlvos(
   sb: SupabaseClient,
   opts: { incluirPerdidosSemOficio?: boolean } = {},
 ): Promise<Map<string, AlvoAcompanhado[]>> {
-  const [{ data: leads }, { data: ops }, { data: perdidos, error: erroPerdidos }] =
-    await Promise.all([
+  // Paginadas: o PostgREST corta em 1000 sem erro, e com a Prospecção
+  // virando lead o rodízio passa disso. Erro LANÇA: seguir com a lista pela
+  // metade faria processos "sumirem" do acompanhamento sem ninguém saber.
+  type Linha = Record<string, unknown>;
+  const [leads, ops, perdidos] = await Promise.all([
+    lerTudo<Linha>('leads acompanhados', (de, ate) =>
       sb
         .from('leads')
         .select('id, nome, numero_processo, dono_id')
         .not('numero_processo', 'is', null)
         .not('status', 'in', '(ganho,perdido)')
-        .eq('is_exemplo', false),
+        .eq('is_exemplo', false)
+        .order('id')
+        .range(de, ate),
+    ),
+    lerTudo<Linha>('operações acompanhadas', (de, ate) =>
       sb
         .from('operacoes')
         .select('id, cedente_nome, numero_processo, dono_id, broker_id')
         .not('numero_processo', 'is', null)
         .not('etapa_atual', 'in', '(finalizada,cancelada)')
-        .eq('is_exemplo', false),
-      opts.incluirPerdidosSemOficio
-        ? sb
+        .eq('is_exemplo', false)
+        .order('id')
+        .range(de, ate),
+    ),
+    // Sem os perdidos a rotina segue: o que já existia não pode cair por
+    // causa do que é novo.
+    opts.incluirPerdidosSemOficio
+      ? lerTudo<Linha>('perdidos sem ofício', (de, ate) =>
+          sb
             .from('leads')
             .select('id, nome, numero_processo, dono_id, status_desde')
             .eq('status', 'perdido')
             .eq('motivo_perda_codigo', 'sem_oficio')
             .not('numero_processo', 'is', null)
             .eq('is_exemplo', false)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-  // Sem os perdidos a rotina segue: o que já existia não pode cair por causa
-  // do que é novo.
-  if (erroPerdidos)
-    console.error('[djen/acompanhamento] perdidos sem ofício:', erroPerdidos.message);
+            .order('id')
+            .range(de, ate),
+        ).catch((e: unknown) => {
+          console.error('[djen/acompanhamento]', e instanceof Error ? e.message : e);
+          return [] as Linha[];
+        })
+      : Promise.resolve([] as Linha[]),
+  ]);
 
   const porCnj = new Map<string, AlvoAcompanhado[]>();
   const add = (cnj: string | null, alvo: AlvoAcompanhado) => {
@@ -132,7 +148,7 @@ export async function carregarAlvos(
     porCnj.set(cnj, [...(porCnj.get(cnj) ?? []), alvo]);
   };
 
-  for (const l of leads ?? []) {
+  for (const l of leads) {
     add(cnj20(l.numero_processo as string), {
       tipo: 'lead',
       id: l.id as string,
@@ -141,7 +157,7 @@ export async function carregarAlvos(
       link: '/crm',
     });
   }
-  for (const o of ops ?? []) {
+  for (const o of ops) {
     add(cnj20(o.numero_processo as string), {
       tipo: 'operacao',
       id: o.id as string,
@@ -150,7 +166,7 @@ export async function carregarAlvos(
       link: `/operacoes/${o.id as string}`,
     });
   }
-  for (const l of (perdidos ?? []) as Record<string, unknown>[]) {
+  for (const l of perdidos) {
     add(cnj20(l.numero_processo as string), {
       tipo: 'lead',
       id: l.id as string,
@@ -172,14 +188,21 @@ export async function carregarAlvos(
  * pode calar o aviso de reavaliar depois que ele vira perdido.
  */
 async function alvosComTarefaAberta(sb: SupabaseClient): Promise<Set<string>> {
-  const { data, error } = await sb
-    .from('regras_disparos')
-    .select('lead_id, operacao_id, chave_ciclo, tarefa:tarefas!inner(status)')
-    .eq('regra', 'processo_andou')
-    .in('tarefa.status', ['pendente', 'em_andamento']);
-  if (error) throw new Error(`tarefas abertas da regra: ${error.message}`);
+  const data = await lerTudo<{
+    lead_id: string | null;
+    operacao_id: string | null;
+    chave_ciclo: string | null;
+  }>('tarefas abertas da regra', (de, ate) =>
+    sb
+      .from('regras_disparos')
+      .select('lead_id, operacao_id, chave_ciclo, tarefa:tarefas!inner(status)')
+      .eq('regra', 'processo_andou')
+      .in('tarefa.status', ['pendente', 'em_andamento'])
+      .order('id')
+      .range(de, ate),
+  );
   return new Set(
-    (data ?? []).map((d) =>
+    data.map((d) =>
       chaveAberta(
         d.lead_id ? 'lead' : 'operacao',
         (d.lead_id ?? d.operacao_id) as string,
@@ -269,13 +292,21 @@ export async function acompanharProcessos(
     return (ativos = new Set((data ?? []).map((u) => u.id as string)));
   };
 
-  const { data: vistos } = await sb
-    .from('djen_acompanhamento')
-    .select('numero_processo, verificado_em')
-    .in('numero_processo', [...alvos.keys()]);
-  const vistoEm = new Map(
-    (vistos ?? []).map((v) => [v.numero_processo as string, v.verificado_em as string]),
+  // Em lotes: com ~1.100 processos a lista de CNJs passa do limite de URL do
+  // gateway. E erro lança: com "vistos" vazio, todo processo pareceria nunca
+  // visto, as publicações novas virariam linha de base e o aviso se perderia.
+  const vistos = await lerEmLotes<{ numero_processo: string; verificado_em: string }>(
+    'djen_acompanhamento',
+    [...alvos.keys()],
+    (lote, de, ate) =>
+      sb
+        .from('djen_acompanhamento')
+        .select('numero_processo, verificado_em')
+        .in('numero_processo', lote)
+        .order('numero_processo')
+        .range(de, ate),
   );
+  const vistoEm = new Map(vistos.map((v) => [v.numero_processo, v.verificado_em]));
 
   // Nunca vistos primeiro, depois os mais antigos. A cota de ~75 por dia é de
   // quem está em negociação, mas os processos que só têm lead perdido ganham

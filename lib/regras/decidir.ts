@@ -1,4 +1,4 @@
-import { hojeEmSaoPaulo, proximoDiaUtil } from '@/lib/datas';
+import { hojeEmSaoPaulo, proximoDiaUtil, somarDias } from '@/lib/datas';
 import { labelStatus } from '@/lib/leads';
 import { maskCNJ } from '@/lib/masks';
 import type { Publicacao } from '@/lib/djen/types';
@@ -236,8 +236,13 @@ export interface LeadNoCiclo {
    */
   importado: boolean;
   statusDesde: string;
-  /** Tem telefone: sem ele não há WhatsApp, e o follow-up não tem o que pedir. */
+  /** Tem telefone no card: é dele que sai o balão do WhatsApp do broker. */
   temTelefone: boolean;
+  /**
+   * Tem conversa no WhatsApp da RGT (dele ou do mesmo telefone). Lead sem
+   * telefone abordado pelo número do advogado tem conversa e não tem telefone.
+   */
+  temConversaRgt: boolean;
   /**
    * Tarefa pendente ou em andamento com quem receberia a da regra (o dono, ou
    * a gestão quando não há dono). Tarefa esquecida com um dono antigo não
@@ -265,6 +270,24 @@ function ultimoMovimento(d: DisparoAnterior): number {
   return Math.max(Date.parse(d.criadoEm), d.concluidoEm ? Date.parse(d.concluidoEm) : 0);
 }
 
+/** Dia de São Paulo de um instante: 'YYYY-MM-DD'. */
+const diaSP = (ms: number) => hojeEmSaoPaulo(new Date(ms));
+
+/**
+ * Já se passaram `dias` dias de CALENDÁRIO (de São Paulo) desde `ms`? Por dia,
+ * e não por hora: o cron varia até uma hora e o broker conclui tarefa a
+ * qualquer hora. Contando horas, um movimento às 16h de quarta empurrava o
+ * "dois dias depois" pra segunda; contando dias, ele cai na sexta.
+ */
+function passaramDias(ms: number, dias: number, agora: Date): boolean {
+  return somarDias(diaSP(ms), dias) <= hojeEmSaoPaulo(agora);
+}
+
+/** Dias de calendário de São Paulo entre `ms` e hoje. */
+function diasDeCalendario(ms: number, agora: Date): number {
+  return Math.round((Date.parse(hojeEmSaoPaulo(agora)) - Date.parse(diaSP(ms))) / DIA);
+}
+
 /** Tentativas de follow-up já feitas nesta entrada em "Em contato". */
 function followUpsDoCiclo(lead: LeadNoCiclo): DisparoAnterior[] {
   const prefixo = prefixoFollowUp(lead.id, lead.statusDesde);
@@ -284,27 +307,23 @@ function houveContatoNoCiclo(lead: LeadNoCiclo): boolean {
 }
 
 /**
- * O follow-up ainda cuida deste lead: está ligado, o lead tem telefone, não
- * houve contato e as tentativas não acabaram. Só nesse caso o "lead parado"
- * fica quieto em Em contato — quem respondeu e travou, ou esgotou as
- * tentativas, volta pro parado (sem isso o lead mais quente, o que respondeu,
- * nunca mais avisava). Sem telefone o contato é por e-mail ou advogado, e
- * "sem resposta no WhatsApp" não diz nada: quem cuida é o parado.
+ * O follow-up ainda cuida deste lead: está ligado, há WhatsApp (telefone no
+ * card ou conversa com a RGT), não houve contato e as tentativas não
+ * acabaram. Só nesse caso o "lead parado" fica quieto em Em contato — quem
+ * respondeu e travou, ou esgotou as tentativas, volta pro parado (sem isso o
+ * lead mais quente, o que respondeu, nunca mais avisava). Sem telefone e sem
+ * conversa o contato é por e-mail, e "sem resposta no WhatsApp" não diz nada:
+ * quem cuida é o parado.
  */
 function followUpAindaCuida(lead: LeadNoCiclo, cfg: ConfigRegras['followUp']): boolean {
   return (
     cfg.ativa &&
     lead.status === 'em_contato' &&
-    lead.temTelefone &&
+    (lead.temTelefone || lead.temConversaRgt) &&
     !houveContatoNoCiclo(lead) &&
     followUpsDoCiclo(lead).length < cfg.maxTentativas
   );
 }
-
-/** Folga na comparação com um movimento anterior: o disparo é gravado na hora
- * da rodada, e o cron da Vercel varia até uma hora. Sem folga, a contagem que
- * parte de um disparo escorregava um dia útil (de sexta pra segunda). */
-const FOLGA_ENTRE_TENTATIVAS = 6 * HORA;
 
 function decidirFollowUp(
   lead: LeadNoCiclo,
@@ -317,12 +336,11 @@ function decidirFollowUp(
   const anteriores = followUpsDoCiclo(lead);
   const n = anteriores.length;
 
-  // A 2ª tentativa conta a partir da 1ª — de quando ela saiu ou de quando
+  // A 2ª tentativa conta a partir da 1ª — do dia em que ela saiu ou em que
   // foi concluída, o que vier depois —, não da entrada na etapa: sem isso ela
   // sairia no dia seguinte a uma tentativa feita com atraso.
   if (n) {
-    const ultimaVez = Math.max(...anteriores.map(ultimoMovimento));
-    if (agora.getTime() - ultimaVez < cfg.dias * DIA - FOLGA_ENTRE_TENTATIVAS) return null;
+    if (!passaramDias(Math.max(...anteriores.map(ultimoMovimento)), cfg.dias, agora)) return null;
   } else if (agora.getTime() - desde < cfg.dias * DIA) {
     return null;
   }
@@ -342,7 +360,11 @@ function decidirFollowUp(
   // dizendo "sem resposta" pra quem respondeu.
   const descricao = [
     `${lead.nome} está na etapa Em contato e, desde ${fmtDiaMes(desde)}, não chegou resposta no WhatsApp da RGT.`,
-    'O que fazer: ligue, ou mande uma mensagem do seu WhatsApp pelo balão do WhatsApp no card (não pelo aviãozinho, que manda a mensagem da RGT). Ele abre um texto pronto pra você editar.',
+    // Sem telefone no card não há balão: a mensagem da RGT foi pra outro
+    // número (o do advogado, em geral), que fica na tela de Conversas.
+    lead.temTelefone
+      ? 'O que fazer: ligue, ou mande uma mensagem do seu WhatsApp pelo balão do WhatsApp no card (não pelo aviãozinho, que manda a mensagem da RGT). Ele abre um texto pronto pra você editar.'
+      : 'O que fazer: ligue ou escreva do seu WhatsApp para o número que recebeu a mensagem da RGT. Ele está na tela de Conversas; se foi o advogado, fale com ele.',
     'Se a pessoa respondeu por ligação ou pelo seu WhatsApp: mova o card para Qualificado, se ela tem interesse, ou agende um retorno pelo calendário do card. Qualquer um dos dois encerra os follow-ups deste lead. Se você tentou e não conseguiu falar, só conclua esta tarefa.',
     ...(ultima
       ? [
@@ -419,14 +441,15 @@ function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): Ta
   // follow-up (saída ou conclusão) ou o último movimento de uma pessoa
   // (tarefa criada ou concluída). Sem isso o "parado" saía no dia útil
   // seguinte ao último follow-up (dia 2, dia 4, dia 7), ou no dia seguinte a
-  // um retorno de "1 semana" concluído.
+  // um retorno de "1 semana" concluído. Em dias de calendário, como o
+  // follow-up (ver passaramDias).
   const referencia = Math.max(
     desde,
     ...followUpsDoCiclo(lead).map(ultimoMovimento),
     lead.ultimaAtividade ? Date.parse(lead.ultimaAtividade) : 0,
     lead.ultimaAcaoHumana ? Date.parse(lead.ultimaAcaoHumana) : 0,
   );
-  if (agora.getTime() - referencia < cfg.dias * DIA - FOLGA_ENTRE_TENTATIVAS) return null;
+  if (!passaramDias(referencia, cfg.dias, agora)) return null;
 
   // "Uma vez por entrada na etapa" sai da própria chave: mudou de etapa, o
   // status_desde muda e a chave também.
@@ -434,8 +457,7 @@ function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): Ta
   if (lead.disparos.some((d) => d.regra === 'lead_parado' && d.chaveCiclo === chave)) return null;
 
   const etapa = labelStatus(lead.status);
-  // Arredondado: com a folga, a rodada pode cair a 6 dias e 20 horas.
-  const ha = plural(Math.round((agora.getTime() - desde) / DIA), 'dia', 'dias');
+  const ha = plural(diasDeCalendario(desde, agora), 'dia', 'dias');
 
   return {
     regra: 'lead_parado',

@@ -35,6 +35,7 @@ function sbFake(
   }),
 ) {
   const consultas: { tabela: string; filtros: unknown[][] }[] = [];
+  const updates: { tabela: string; dados: unknown; filtros: unknown[][] }[] = [];
   const rpcs: Record<string, unknown>[] = [];
   const from = (tabela: string) => {
     const filtros: unknown[][] = [];
@@ -46,8 +47,12 @@ function sbFake(
         filtros.push([op, ...args]);
         return b;
       };
-    for (const op of ['select', 'eq', 'in', 'not', 'or', 'gte', 'order', 'range'])
+    for (const op of ['select', 'eq', 'in', 'not', 'or', 'gte', 'order', 'range', 'is'])
       b[op] = encadear(op);
+    b.update = (dados: unknown) => {
+      updates.push({ tabela, dados, filtros });
+      return b;
+    };
     // range(de, ate) corta as linhas como o PostgREST, pra exercitar a paginação.
     b.then = (ok: (v: unknown) => unknown, erro: (e: unknown) => unknown) => {
       const linhas = tabelas[tabela] ?? [];
@@ -65,7 +70,7 @@ function sbFake(
     },
   };
   // O tipo real é SupabaseClient; aqui só from()/rpc() são exercidos.
-  return { sb: client as never, consultas, rpcs };
+  return { sb: client as never, consultas, rpcs, updates };
 }
 
 const BASE: Tabelas = {
@@ -323,8 +328,8 @@ describe('rodarRegrasDeLead', () => {
     expect(rpcs).toEqual([]);
   });
 
-  it('tarefa de regra esquecida com o dono antigo não trava o lead', async () => {
-    const { sb, rpcs } = sbFake({
+  it('tarefa de regra esquecida com o dono antigo vai pro dono atual (e segura o lead)', async () => {
+    const { sb, rpcs, updates } = sbFake({
       ...BASE,
       leads: [BASE.leads![2]!], // Caio, qualificado há 8 dias, dono b1
       tarefas: [
@@ -348,7 +353,101 @@ describe('rodarRegrasDeLead', () => {
       ],
     });
     await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
-    expect(rpcs.map((a) => a.p_lead_id)).toEqual(['l3']);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]!.dados).toEqual({ destinatario_id: 'b1', destinatario_perfil: null });
+    expect(updates[0]!.filtros).toContainEqual(['in', 'id', ['velha']]);
+    expect(updates[0]!.filtros).toContainEqual(['is', 'criado_por_id', null]);
+    // Agora com o dono certo, a tarefa aberta segura: não sai parado em cima.
+    expect(rpcs).toEqual([]);
+  });
+
+  it('dono desativado: a tarefa de regra dele vai pra gestão', async () => {
+    const { sb, updates } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![2]!, dono: { ativo: false } }],
+      tarefas: [
+        {
+          id: 'tp',
+          lead_id: 'l3',
+          status: 'pendente',
+          created_at: ha(24),
+          concluida_em: null,
+          destinatario_id: 'b1',
+          destinatario: { ativo: false },
+        },
+      ],
+      regras_disparos: [
+        {
+          regra: 'lead_parado',
+          lead_id: 'l3',
+          chave_ciclo: 'lead_parado:l3:qualificado:x',
+          created_at: ha(24),
+          tarefa_id: 'tp',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(updates[0]!.dados).toEqual({ destinatario_id: null, destinatario_perfil: 'gestao' });
+  });
+
+  it('retorno pendente com quem saiu da empresa não trava o lead: a gestão recebe o parado', async () => {
+    const { sb, rpcs, updates } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![2]!, status_desde: ha(24 * 20), dono: { ativo: false } }],
+      tarefas: [
+        {
+          id: 'ret',
+          lead_id: 'l3',
+          status: 'pendente',
+          created_at: ha(24 * 15),
+          concluida_em: null,
+          destinatario_id: 'b1',
+          destinatario: { ativo: false },
+        },
+      ],
+      regras_disparos: [],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(updates).toEqual([]); // tarefa de pessoa não é repassada
+    expect(rpcs[0]).toMatchObject({ p_lead_id: 'l3', p_destinatario_perfil: 'gestao' });
+  });
+
+  it('concluir "Ler publicação" não zera o relógio do lead parado', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [BASE.leads![2]!], // qualificado há 8 dias
+      tarefas: [
+        {
+          id: 'ler',
+          lead_id: 'l3',
+          status: 'concluida',
+          created_at: ha(30),
+          concluida_em: ha(5),
+          destinatario_id: 'b1',
+        },
+      ],
+      regras_disparos: [
+        {
+          regra: 'processo_andou',
+          lead_id: 'l3',
+          chave_ciclo: 'processo_andou:lead:l3:9',
+          created_at: ha(30),
+          tarefa_id: 'ler',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs.map((a) => a.p_regra)).toEqual(['lead_parado']);
+  });
+
+  it('lead sem telefone com conversa da RGT (advogado): ganha follow-up', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [{ ...BASE.leads![0]!, telefone: null }],
+      tarefas: [],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs[0]).toMatchObject({ p_regra: 'follow_up', p_lead_id: 'l1' });
   });
 
   it('teto diário: os parados que a pessoa já recebeu hoje descontam', async () => {

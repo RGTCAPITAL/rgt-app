@@ -70,7 +70,7 @@ function sbFake(d: Dados) {
       }
     };
     const b: Record<string, unknown> = {};
-    for (const op of ['select', 'eq', 'in', 'not']) {
+    for (const op of ['select', 'eq', 'in', 'not', 'order', 'range']) {
       b[op] = (...args: unknown[]) => {
         filtros.push([op, ...args]);
         return b;

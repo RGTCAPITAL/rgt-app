@@ -42,6 +42,7 @@ function lead(p: Partial<LeadNoCiclo> = {}): LeadNoCiclo {
     importado: false,
     statusDesde: ha(49),
     temTelefone: true,
+    temConversaRgt: false,
     temTarefaAberta: false,
     ultimaEntradaWhatsapp: null,
     ultimaAcaoHumana: null,
@@ -190,6 +191,31 @@ describe('regra (a): follow-up', () => {
     expect(t.tentativa).toBe(2);
   });
 
+  it('1ª tentativa concluída na mesma tarde: a 2ª sai 2 dias depois, não na segunda', () => {
+    // FU1 saiu na quarta 11/11 às 9h e foi concluída às 16h30 (Maceió).
+    const sexta = new Date('2026-11-13T12:00:00Z');
+    const desde = '2026-11-09T12:00:00Z';
+    const fu1 = {
+      regra: 'follow_up' as const,
+      chaveCiclo: chaveFollowUp('lead-1', desde, 1),
+      criadoEm: '2026-11-11T12:00:00Z',
+      concluidoEm: '2026-11-11T19:30:00Z',
+    };
+    const r = decidirRegrasDeLead(
+      [lead({ statusDesde: desde, disparos: [fu1] })],
+      SO_FOLLOW_UP,
+      sexta,
+    );
+    expect(r[0]?.tentativa).toBe(2);
+  });
+
+  it('sem telefone no card, mas com conversa da RGT (pelo advogado): follow-up sem o balão', () => {
+    const t = umaSo(lead({ temTelefone: false, temConversaRgt: true }))!;
+    expect(t.regra).toBe('follow_up');
+    expect(t.descricao).toContain('para o número que recebeu a mensagem da RGT');
+    expect(t.descricao).not.toContain('balão');
+  });
+
   it('a última tentativa não manda agendar retorno pra quem não respondeu', () => {
     const desde = ha(24 * 4);
     const t = umaSo(
@@ -217,11 +243,14 @@ describe('regra (a): follow-up', () => {
 });
 
 describe('regra (b): lead parado', () => {
-  it('antes de 6d18h nada; a partir daí (folga do cron) gera, com a dica da etapa', () => {
-    expect(umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7 - 7) }))).toBeNull();
-    // Entrou às 15h, a rodada é às 9h30 do 7º dia: 6 dias e 18h30. Sai, e o
-    // título diz 7 dias (arredondado), não 6.
-    expect(umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7 - 5.5) }))?.titulo).toBe(
+  it('conta dias de calendário de São Paulo: 6 dias nada, 7 dias gera, a qualquer hora', () => {
+    // Hoje é terça 10/11. Entrou na quarta 04/11 às 23h (Maceió): 6 dias.
+    const quarta23h = '2026-11-05T02:00:00Z';
+    expect(umaSo(lead({ status: 'qualificado', statusDesde: quarta23h }))).toBeNull();
+    // Entrou na terça 03/11 às 23h50: 7 dias de calendário, embora só 6 dias
+    // e 10 horas de relógio. Sai, e o título diz 7.
+    const terca23h50 = '2026-11-04T02:50:00Z';
+    expect(umaSo(lead({ status: 'qualificado', statusDesde: terca23h50 }))?.titulo).toBe(
       'Lead parado há 7 dias na etapa Qualificado',
     );
     const t = umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7) }))!;
