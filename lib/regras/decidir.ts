@@ -27,10 +27,10 @@ export const NOME_REGRA: Record<ChaveRegra, string> = {
 export const ETAPAS_ATIVAS = ['novo', 'em_contato', 'qualificado', 'proposta_enviada'] as const;
 
 /**
- * Onde o "lead parado" vale. Em Novo, só pra quem chegou sozinho (site,
- * WhatsApp, indicação…): é quem pediu contato e não pode esquecer. Quem veio
- * de importação em massa fica de fora — os 378 contatos do Renato entrariam
- * todos em Novo no mesmo dia, e no 7º dia seriam 378 tarefas de uma vez.
+ * Onde o "lead parado" vale. Em Novo, só pra quem foi cadastrado um a um
+ * (site, WhatsApp, indicação, broker): é quem não pode ser esquecido. Quem
+ * veio de importação em massa fica de fora — os 378 contatos do Renato
+ * entrariam todos em Novo no mesmo dia, e no 7º dia seriam 378 tarefas.
  */
 export const ETAPAS_LEAD_PARADO = [
   'novo',
@@ -44,8 +44,10 @@ export const ORIGENS_EM_MASSA: readonly string[] = ['importacao_planilha', 'list
 const ORIGENS_QUE_PROCURARAM: readonly string[] = ['site', 'whatsapp'];
 
 /**
- * Teto de tarefas de "lead parado" por pessoa numa rodada, as mais antigas
- * primeiro. O resto não é perdido: sem registro, volta na rodada seguinte.
+ * Teto de tarefas de "lead parado" por pessoa por dia (de São Paulo), as mais
+ * antigas primeiro. O resto não é perdido: sem registro, volta no dia
+ * seguinte. Por DIA e não por rodada: a Vercel às vezes roda o cron duas
+ * vezes, e a segunda rodada entregaria mais 10.
  */
 export const MAX_PARADOS_POR_PESSOA_DIA = 10;
 
@@ -216,6 +218,8 @@ export interface DisparoAnterior {
   regra: ChaveRegra;
   chaveCiclo: string;
   criadoEm: string;
+  /** Quando a tarefa deste disparo foi concluída (null se aberta ou apagada). */
+  concluidoEm?: string | null;
 }
 
 export interface LeadNoCiclo {
@@ -232,7 +236,13 @@ export interface LeadNoCiclo {
    */
   importado: boolean;
   statusDesde: string;
-  /** Tarefa pendente ou em andamento, de qualquer origem. */
+  /** Tem telefone: sem ele não há WhatsApp, e o follow-up não tem o que pedir. */
+  temTelefone: boolean;
+  /**
+   * Tarefa pendente ou em andamento com quem receberia a da regra (o dono, ou
+   * a gestão quando não há dono). Tarefa esquecida com um dono antigo não
+   * conta: travaria o lead para sempre.
+   */
   temTarefaAberta: boolean;
   /** Última mensagem RECEBIDA no WhatsApp da RGT, em qualquer conversa do lead. */
   ultimaEntradaWhatsapp: string | null;
@@ -242,7 +252,17 @@ export interface LeadNoCiclo {
    * contato por outro canal.
    */
   ultimaAcaoHumana: string | null;
+  /**
+   * Último movimento de uma pessoa no lead: tarefa criada ou concluída por
+   * alguém, ou tarefa de regra concluída. É daqui que o "lead parado" conta.
+   */
+  ultimaAtividade: string | null;
   disparos: DisparoAnterior[];
+}
+
+/** O instante mais recente entre criação e conclusão do disparo. */
+function ultimoMovimento(d: DisparoAnterior): number {
+  return Math.max(Date.parse(d.criadoEm), d.concluidoEm ? Date.parse(d.concluidoEm) : 0);
 }
 
 /** Tentativas de follow-up já feitas nesta entrada em "Em contato". */
@@ -264,22 +284,26 @@ function houveContatoNoCiclo(lead: LeadNoCiclo): boolean {
 }
 
 /**
- * O follow-up ainda cuida deste lead: está ligado, não houve contato e as
- * tentativas não acabaram. Só nesse caso o "lead parado" fica quieto em Em
- * contato — quem respondeu e travou, ou esgotou as tentativas, volta pro
- * parado (sem isso o lead mais quente, o que respondeu, nunca mais avisava).
+ * O follow-up ainda cuida deste lead: está ligado, o lead tem telefone, não
+ * houve contato e as tentativas não acabaram. Só nesse caso o "lead parado"
+ * fica quieto em Em contato — quem respondeu e travou, ou esgotou as
+ * tentativas, volta pro parado (sem isso o lead mais quente, o que respondeu,
+ * nunca mais avisava). Sem telefone o contato é por e-mail ou advogado, e
+ * "sem resposta no WhatsApp" não diz nada: quem cuida é o parado.
  */
 function followUpAindaCuida(lead: LeadNoCiclo, cfg: ConfigRegras['followUp']): boolean {
   return (
     cfg.ativa &&
     lead.status === 'em_contato' &&
+    lead.temTelefone &&
     !houveContatoNoCiclo(lead) &&
     followUpsDoCiclo(lead).length < cfg.maxTentativas
   );
 }
 
-/** Folga na comparação com o disparo anterior: ele é gravado segundos depois
- * de a rodada começar, e sem folga a 2ª tentativa escorregava um dia. */
+/** Folga na comparação com um movimento anterior: o disparo é gravado na hora
+ * da rodada, e o cron da Vercel varia até uma hora. Sem folga, a contagem que
+ * parte de um disparo escorregava um dia útil (de sexta pra segunda). */
 const FOLGA_ENTRE_TENTATIVAS = 6 * HORA;
 
 function decidirFollowUp(
@@ -293,10 +317,11 @@ function decidirFollowUp(
   const anteriores = followUpsDoCiclo(lead);
   const n = anteriores.length;
 
-  // A 2ª tentativa conta a partir da 1ª, não da entrada na etapa: sem isso
-  // ela sairia no dia seguinte ao fechamento da primeira.
+  // A 2ª tentativa conta a partir da 1ª — de quando ela saiu ou de quando
+  // foi concluída, o que vier depois —, não da entrada na etapa: sem isso ela
+  // sairia no dia seguinte a uma tentativa feita com atraso.
   if (n) {
-    const ultimaVez = Math.max(...anteriores.map((d) => Date.parse(d.criadoEm)));
+    const ultimaVez = Math.max(...anteriores.map(ultimoMovimento));
     if (agora.getTime() - ultimaVez < cfg.dias * DIA - FOLGA_ENTRE_TENTATIVAS) return null;
   } else if (agora.getTime() - desde < cfg.dias * DIA) {
     return null;
@@ -321,7 +346,7 @@ function decidirFollowUp(
     'Se a pessoa respondeu por ligação ou pelo seu WhatsApp: mova o card para Qualificado, se ela tem interesse, ou agende um retorno pelo calendário do card. Qualquer um dos dois encerra os follow-ups deste lead. Se você tentou e não conseguiu falar, só conclua esta tarefa.',
     ...(ultima
       ? [
-          'Esta é a última tentativa automática: depois dela o sistema não cria mais follow-up para este lead. Se continuar sem resposta, marque como perdido ou agende um retorno.',
+          'Esta é a última tentativa automática: depois dela o sistema não cria mais follow-up para este lead. Se continuar sem resposta e não houver mais chance, marque como perdido.',
         ]
       : []),
   ].join('\n');
@@ -343,20 +368,34 @@ function decidirFollowUp(
   };
 }
 
-const DICA_POR_ETAPA: Record<(typeof ETAPAS_LEAD_PARADO)[number], string> = {
-  novo: 'Defina quem cuida dele e faça o primeiro contato.',
+const DICA_POR_ETAPA: Record<Exclude<(typeof ETAPAS_LEAD_PARADO)[number], 'novo'>, string> = {
   em_contato: 'Tente outro canal (ligação, advogado) ou decida se ainda vale insistir.',
   qualificado: 'Monte a proposta e envie.',
   proposta_enviada: 'Pergunte se a pessoa decidiu e tire as dúvidas sobre a proposta.',
 };
 
 function dicaDoParado(lead: LeadNoCiclo, etapa: (typeof ETAPAS_LEAD_PARADO)[number]): string {
-  if (etapa === 'novo' && ORIGENS_QUE_PROCURARAM.includes(lead.origem)) {
-    return 'Defina quem cuida dele e faça o primeiro contato: foi a pessoa que procurou a RGT.';
+  if (etapa === 'novo') {
+    // "Defina quem cuida" só faz sentido pra gestão, que recebe o lead sem
+    // dono. Pro dono, mandar definir o dono seria mandar escolher a si mesmo.
+    const acao = lead.donoId
+      ? 'Faça o primeiro contato'
+      : 'Defina quem cuida dele e faça o primeiro contato';
+    return ORIGENS_QUE_PROCURARAM.includes(lead.origem)
+      ? `${acao}: foi a pessoa que procurou a RGT.`
+      : `${acao}.`;
   }
-  // Quem já deu retorno não precisa de "outro canal": precisa decidir o card.
-  if (etapa === 'em_contato' && houveContatoNoCiclo(lead)) {
-    return 'A pessoa já deu retorno: mova o card para a etapa certa (Qualificado, se tem interesse) ou marque como perdido.';
+  if (etapa === 'em_contato') {
+    const desde = Date.parse(lead.statusDesde);
+    const depois = (iso: string | null) => !!iso && Date.parse(iso) > desde;
+    // Só a mensagem recebida PROVA que a pessoa respondeu. Um retorno
+    // agendado pode ser uma ligação que ninguém atendeu: texto neutro.
+    if (depois(lead.ultimaEntradaWhatsapp)) {
+      return 'A pessoa respondeu no WhatsApp da RGT: mova o card para a etapa certa (Qualificado, se tem interesse).';
+    }
+    if (depois(lead.ultimaAcaoHumana)) {
+      return 'Já houve retorno registrado nesta etapa: se a pessoa tem interesse, mova o card para Qualificado.';
+    }
   }
   return DICA_POR_ETAPA[etapa];
 }
@@ -377,14 +416,17 @@ function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): Ta
 
   const desde = Date.parse(lead.statusDesde);
   // Conta a partir do último movimento: a entrada na etapa, o último
-  // follow-up ou o último registro de uma pessoa. Sem isso o "parado" saía
-  // no dia útil seguinte ao último follow-up (dia 2, dia 4, dia 7).
+  // follow-up (saída ou conclusão) ou o último movimento de uma pessoa
+  // (tarefa criada ou concluída). Sem isso o "parado" saía no dia útil
+  // seguinte ao último follow-up (dia 2, dia 4, dia 7), ou no dia seguinte a
+  // um retorno de "1 semana" concluído.
   const referencia = Math.max(
     desde,
-    ...followUpsDoCiclo(lead).map((d) => Date.parse(d.criadoEm)),
+    ...followUpsDoCiclo(lead).map(ultimoMovimento),
+    lead.ultimaAtividade ? Date.parse(lead.ultimaAtividade) : 0,
     lead.ultimaAcaoHumana ? Date.parse(lead.ultimaAcaoHumana) : 0,
   );
-  if (agora.getTime() - referencia < cfg.dias * DIA) return null;
+  if (agora.getTime() - referencia < cfg.dias * DIA - FOLGA_ENTRE_TENTATIVAS) return null;
 
   // "Uma vez por entrada na etapa" sai da própria chave: mudou de etapa, o
   // status_desde muda e a chave também.
@@ -392,7 +434,8 @@ function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): Ta
   if (lead.disparos.some((d) => d.regra === 'lead_parado' && d.chaveCiclo === chave)) return null;
 
   const etapa = labelStatus(lead.status);
-  const ha = plural(Math.floor((agora.getTime() - desde) / DIA), 'dia', 'dias');
+  // Arredondado: com a folga, a rodada pode cair a 6 dias e 20 horas.
+  const ha = plural(Math.round((agora.getTime() - desde) / DIA), 'dia', 'dias');
 
   return {
     regra: 'lead_parado',
@@ -417,13 +460,16 @@ function decidirParado(lead: LeadNoCiclo, regras: ConfigRegras, agora: Date): Ta
  * com o follow-up na frente: duas tarefas de uma vez pro mesmo lead seriam
  * duas formas de dizer a mesma coisa. O parado espera a do follow-up fechar.
  *
- * O "lead parado" tem teto por pessoa (MAX_PARADOS_POR_PESSOA_DIA), os mais
- * antigos primeiro: o resto volta amanhã, sem enxurrada no sino.
+ * O "lead parado" tem teto por pessoa por dia (MAX_PARADOS_POR_PESSOA_DIA),
+ * os mais antigos primeiro: o resto volta amanhã, sem enxurrada no sino.
+ * `jaHoje` traz quantos parados cada pessoa já recebeu hoje (chave: id da
+ * pessoa, ou 'gestao'), pra uma segunda rodada no mesmo dia não furar o teto.
  */
 export function decidirRegrasDeLead(
   leads: readonly LeadNoCiclo[],
   cfg: ConfigRegras,
   agora: Date,
+  jaHoje: ReadonlyMap<string, number> = new Map(),
 ): TarefaDeRegra[] {
   const acoes: TarefaDeRegra[] = [];
   const parados: { acao: TarefaDeRegra; desde: number }[] = [];
@@ -440,7 +486,7 @@ export function decidirRegrasDeLead(
   const porPessoa = new Map<string, number>();
   for (const { acao } of parados.sort((a, b) => a.desde - b.desde)) {
     const quem = acao.destinatarioId ?? 'gestao';
-    const n = porPessoa.get(quem) ?? 0;
+    const n = porPessoa.get(quem) ?? jaHoje.get(quem) ?? 0;
     if (n >= MAX_PARADOS_POR_PESSOA_DIA) continue;
     porPessoa.set(quem, n + 1);
     acoes.push(acao);
@@ -476,8 +522,8 @@ export interface AlvoDaRegraProcesso {
  *    "Nova" é pela DATA, a partir de `corteData`: o DJEN às vezes devolve uma
  *    publicação antiga que ainda não estava salva (entrou como nova uma de
  *    12/11/2025), e ela não é novidade nenhuma. Se a regra já tem tarefa
- *    aberta pra esse alvo, não empilha outra: em processo movimentado sairia
- *    uma por dia.
+ *    aberta pra esse alvo, não empilha outra (em processo movimentado sairia
+ *    uma por dia), a não ser que a nova seja urgente.
  *  - Lead perdido "sem ofício" → só a tarefa de reavaliar, e só quando o
  *    Diário CITA ofício requisitório (X1) depois da perda. Citar não é
  *    expedir — em ~15 de 25 casos amostrados era "expeça-se" ou pendência —,
@@ -540,7 +586,11 @@ export function decidirTarefaDoProcesso(
   const novas = ctx.corteData
     ? ctx.novas.filter((p) => p.dataDisponibilizacao >= ctx.corteData!)
     : ctx.novas;
-  if (!ctx.jaVisto || !novas.length || ctx.temTarefaAbertaDaRegra) return null;
+  if (!ctx.jaVisto || !novas.length) return null;
+  // Com uma "Ler publicação" aberta, a publicação comum fica só no aviso do
+  // sino (no dia seguinte ela já é conhecida). A urgente — pagamento, cessão,
+  // penhora — vira tarefa mesmo assim: esperar a anterior fechar a enterrava.
+  if (ctx.temTarefaAbertaDaRegra && !resumo.urgente) return null;
 
   const maiorId = Math.max(...novas.map((p) => p.id));
   const maisRecente = novas.reduce(

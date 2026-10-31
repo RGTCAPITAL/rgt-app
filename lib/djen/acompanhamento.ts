@@ -35,7 +35,7 @@ export interface AlvoAcompanhado {
   /**
    * Só pra lead perdido "sem ofício" (entra na fila quando a regra está
    * ligada): quando virou Perdido. Esse alvo não gera o aviso genérico, só a
-   * tarefa de reavaliar quando o Diário mostra ofício expedido.
+   * tarefa de reavaliar quando o Diário cita ofício requisitório.
    */
   perdidoDesde?: string;
 }
@@ -166,7 +166,8 @@ export async function carregarAlvos(
 /**
  * Alvos que já têm tarefa ABERTA da regra "processo andou", separando a de
  * leitura da de reavaliar. Em processo movimentado sairia uma tarefa por dia;
- * com isto, a próxima só sai depois de a pessoa fechar a anterior. Separado
+ * com isto, publicação comum que chega com uma tarefa aberta fica só no aviso
+ * do sino, e a urgente vira tarefa mesmo assim (decidirTarefaDoProcesso). Separado
  * porque uma "Ler publicação" esquecida de quando o lead estava ativo não
  * pode calar o aviso de reavaliar depois que ele vira perdido.
  */
@@ -276,19 +277,26 @@ export async function acompanharProcessos(
     (vistos ?? []).map((v) => [v.numero_processo as string, v.verificado_em as string]),
   );
 
-  // Nunca vistos primeiro, depois os mais antigos. Processo que só tem lead
-  // perdido vai pro fim: a cota de ~75 por dia é de quem está em negociação.
+  // Nunca vistos primeiro, depois os mais antigos. A cota de ~75 por dia é de
+  // quem está em negociação, mas os processos que só têm lead perdido ganham
+  // 1 vaga a cada 10, na frente (o prazo da função pode cortar o fim da
+  // fila): sem vaga própria, com 75 processos ativos eles nunca seriam lidos
+  // e o "reavaliar" que o modal de perda promete nunca sairia.
   const soPerdidos = (cnj: string) => alvos.get(cnj)!.every((a) => a.perdidoDesde);
-  const fila = [...alvos.keys()]
-    .sort(
-      (a, b) =>
-        Number(soPerdidos(a)) - Number(soPerdidos(b)) ||
-        (vistoEm.get(a) ?? '').localeCompare(vistoEm.get(b) ?? ''),
-    )
-    .slice(0, limite);
+  const porVisto = (a: string, b: string) =>
+    (vistoEm.get(a) ?? '').localeCompare(vistoEm.get(b) ?? '');
+  const perdidos = [...alvos.keys()].filter(soPerdidos).sort(porVisto);
+  const emNegociacao = [...alvos.keys()].filter((c) => !soPerdidos(c)).sort(porVisto);
+  const vagasPerdidos = Math.min(perdidos.length, Math.floor(limite / 10));
+  const fila = [
+    ...perdidos.slice(0, vagasPerdidos),
+    ...emNegociacao,
+    ...perdidos.slice(vagasPerdidos),
+  ].slice(0, limite);
 
   let admins: string[] | null = null;
   let equipe: string[] | null = null;
+  let gestao: string[] | null = null;
 
   for (const cnj of fila) {
     if (agora() > fim) break;
@@ -323,6 +331,11 @@ export async function acompanharProcessos(
           : undefined;
       const recentes = corteData ? novas.filter((p) => p.dataDisponibilizacao >= corteData) : novas;
 
+      // Quem já foi avisado pela tarefa criada agora (a trigger da 048 manda
+      // "Nova tarefa" no sino): não recebe também o aviso genérico do mesmo
+      // processo, que seria o mesmo recado duas vezes.
+      const avisadoPelaTarefa = new Map<AlvoAcompanhado, Set<string>>();
+
       // Tarefas ANTES de gravar as publicações: se algo falhar daqui pra
       // frente, amanhã elas continuam "novas" e a tarefa sai; a chave da 048
       // impede que saia em dobro.
@@ -353,6 +366,14 @@ export async function acompanharProcessos(
           if (res.resultado === 'criada') {
             r.tarefas++;
             abertas.add(chaveAberta(alvo.tipo, alvo.id, alvo.perdidoDesde ? 'reavaliar' : 'ler'));
+            avisadoPelaTarefa.set(
+              alvo,
+              new Set(
+                tarefa.destinatarioId
+                  ? [tarefa.destinatarioId]
+                  : (gestao ??= await idsDaEquipe(sb, ['gestao'])),
+              ),
+            );
           }
         }
       }
@@ -388,6 +409,8 @@ export async function acompanharProcessos(
         if (!para.length) para = equipe ??= await idsDaEquipe(sb, ['admin', 'gestao']);
         if (resumo.urgente)
           para = [...new Set([...para, ...(admins ??= await idsDaEquipe(sb, ['admin']))])];
+        const jaAvisados = avisadoPelaTarefa.get(alvo);
+        if (jaAvisados) para = para.filter((id) => !jaAvisados.has(id));
         for (const destinatario of para) {
           notifs.push({
             destinatario,

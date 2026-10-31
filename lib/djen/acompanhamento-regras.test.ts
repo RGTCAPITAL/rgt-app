@@ -128,11 +128,14 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
     expect(log.filter((l) => l.tabela === 'leads' && l.acao === 'from')).toHaveLength(1);
   });
 
-  it('regra ligada: cria a tarefa antes de gravar as publicações, e o aviso continua', async () => {
+  it('regra ligada: cria a tarefa antes de gravar as publicações, sem aviso repetido', async () => {
     const { sb, log } = sbFake({ leads: [LEAD_ATIVO], ...JA_VISTO, ativos: ['broker-1'] });
     const r = await rodar(sb);
 
-    expect(r).toMatchObject({ tarefas: 1, avisos: 1, falhas: 0 });
+    // O dono já é avisado pela tarefa (a trigger da 048 manda "Nova tarefa"
+    // no sino): o aviso genérico do mesmo processo seria o mesmo recado.
+    expect(r).toMatchObject({ tarefas: 1, avisos: 0, falhas: 0 });
+    expect(log.some((l) => l.tabela === 'notificacoes')).toBe(false);
     expect(rpcs(log)[0]).toMatchObject({
       p_regra: 'processo_andou',
       p_chave_ciclo: 'processo_andou:lead:lead-1:501',
@@ -174,7 +177,7 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
       ativos: ['broker-1'],
     });
     const r = await rodar(sb);
-    expect(r).toMatchObject({ tarefas: 1, avisos: 1 });
+    expect(r).toMatchObject({ tarefas: 1, avisos: 0 });
     expect(rpcs(log)[0]).toMatchObject({ p_chave_ciclo: 'processo_andou:lead:lead-1:510' });
     expect(String(rpcs(log)[0]!.p_descricao)).not.toContain('12/11/2025');
   });
@@ -198,6 +201,25 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
     const r = await rodar(sb);
     expect(rpcs(log)).toEqual([]);
     expect(r).toMatchObject({ tarefas: 0, avisos: 1 });
+  });
+
+  it('publicação urgente com uma "Ler publicação" aberta: a tarefa sai mesmo assim', async () => {
+    // 4 = penhora, alerta grave.
+    vi.mocked(buscarPorCnj).mockResolvedValue([
+      pub(502, '2026-11-09', ['4']),
+      pub(400, '2026-09-01'),
+    ]);
+    const { sb, log } = sbFake({
+      leads: [LEAD_ATIVO],
+      ...JA_VISTO,
+      ativos: ['broker-1'],
+      abertas: [
+        { lead_id: 'lead-1', operacao_id: null, chave_ciclo: 'processo_andou:lead:lead-1:450' },
+      ],
+    });
+    const r = await rodar(sb);
+    expect(r.tarefas).toBe(1);
+    expect(rpcs(log)[0]).toMatchObject({ p_titulo: 'URGENTE: ler publicação grave no Diário' });
   });
 
   it('RPC devolvendo null (já feito): não conta tarefa e não é falha', async () => {
@@ -294,6 +316,33 @@ describe('acompanhamento do DJEN com a regra "processo andou"', () => {
     const r = await rodar(sb);
     expect(r).toMatchObject({ comNovidade: 1, tarefas: 0, avisos: 0 });
     expect(rpcs(log)).toEqual([]);
+  });
+
+  it('processos só de perdidos têm 1 vaga a cada 10 na fila, na frente', async () => {
+    // 10 processos ativos já vistos e 1 só de perdido: com limite 10, sem
+    // vaga própria o perdido nunca seria lido.
+    const ativos = Array.from({ length: 10 }, (_, i) => ({
+      ...LEAD_ATIVO,
+      id: `lead-a${i}`,
+      numero_processo: `000110733201751900${String(i).padStart(2, '0')}`,
+    }));
+    const { sb } = sbFake({
+      leads: ativos,
+      perdidos: [
+        {
+          id: 'lead-9',
+          nome: 'Bia Lima',
+          numero_processo: CNJ_PERDIDO,
+          dono_id: 'broker-1',
+          status_desde: '2026-10-21T01:00:00Z',
+        },
+      ],
+      ativos: ['broker-1'],
+    });
+    await rodar(sb, LIGADA, 10);
+    const consultados = vi.mocked(buscarPorCnj).mock.calls.map((c) => c[0]);
+    expect(consultados).toHaveLength(10);
+    expect(consultados[0]).toBe(CNJ_PERDIDO);
   });
 
   it('processo que só tem lead perdido vai pro fim da fila', async () => {

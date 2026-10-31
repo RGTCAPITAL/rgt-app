@@ -74,6 +74,7 @@ const BASE: Tabelas = {
     {
       id: 'l1',
       nome: 'Ana Souza',
+      telefone: '(82) 90000-0001',
       status: 'em_contato',
       dono_id: 'b1',
       status_desde: ha(50),
@@ -83,6 +84,7 @@ const BASE: Tabelas = {
     {
       id: 'l2',
       nome: 'Bia Lima',
+      telefone: '(82) 90000-0002',
       status: 'em_contato',
       dono_id: 'b2',
       status_desde: ha(50),
@@ -92,13 +94,23 @@ const BASE: Tabelas = {
     {
       id: 'l3',
       nome: 'Caio Melo',
+      telefone: '(82) 90000-0003',
       status: 'qualificado',
       dono_id: 'b1',
       status_desde: ha(24 * 8),
       dono: { ativo: true },
     },
   ],
-  tarefas: [{ id: 't3', lead_id: 'l3', status: 'pendente', created_at: ha(30) }],
+  tarefas: [
+    {
+      id: 't3',
+      lead_id: 'l3',
+      status: 'pendente',
+      created_at: ha(30),
+      concluida_em: null,
+      destinatario_id: 'b1',
+    },
+  ],
   whatsapp_conversas: [
     { id: 'c1', lead_id: 'l1' },
     { id: 'c2', lead_id: 'l2' },
@@ -233,15 +245,129 @@ describe('rodarRegrasDeLead', () => {
     expect(String(leads.filtros.find((f) => f[0] === 'select')?.[1])).toContain('origem');
   });
 
-  it('só o lead parado ligado: nem olha o WhatsApp', async () => {
+  it('ninguém em Em contato: nem olha o WhatsApp', async () => {
+    const { sb, consultas } = sbFake({ ...BASE, leads: [BASE.leads![2]!] });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    const tabelas = consultas.map((c) => c.tabela);
+    expect(tabelas).not.toContain('whatsapp_conversas');
+    expect(tabelas).not.toContain('whatsapp_mensagens');
+  });
+
+  it('só o lead parado ligado: ainda lê o WhatsApp de quem está em Em contato (pro texto)', async () => {
     const { sb, consultas } = sbFake(BASE);
     await rodarRegrasDeLead(sb, {
       agora: AGORA,
       config: { ...LIGADAS, followUp: { ...LIGADAS.followUp, ativa: false } },
     });
-    const tabelas = consultas.map((c) => c.tabela);
-    expect(tabelas).not.toContain('whatsapp_conversas');
-    expect(tabelas).not.toContain('whatsapp_mensagens');
+    expect(consultas.map((c) => c.tabela)).toContain('whatsapp_mensagens');
+  });
+
+  it('com o lead parado ligado, os importados em Novo já saem na consulta', async () => {
+    const { sb, consultas } = sbFake(BASE);
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    const filtro = consultas.find((c) => c.tabela === 'leads')!.filtros.find((f) => f[0] === 'or');
+    expect(filtro?.[1]).toBe(
+      'status.neq.novo,and(vinculo.is.null,origem.not.in.(importacao_planilha,lista_processual))',
+    );
+    const soFu = sbFake(BASE);
+    await rodarRegrasDeLead(soFu.sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(
+      soFu.consultas.find((c) => c.tabela === 'leads')!.filtros.some((f) => f[0] === 'or'),
+    ).toBe(false);
+  });
+
+  it('muitos leads: os ids vão em lotes de até 200 (o gateway recusa URL longa)', async () => {
+    const leads = Array.from({ length: 450 }, (_, i) => ({
+      ...BASE.leads![2]!,
+      id: `q-${i}`,
+    }));
+    const { sb, consultas } = sbFake({ ...BASE, leads, tarefas: [] });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    for (const tabela of ['tarefas', 'regras_disparos']) {
+      const lotes = consultas
+        .filter((c) => c.tabela === tabela)
+        .map((c) => c.filtros.find((f) => f[0] === 'in')?.[2] as string[] | undefined)
+        .filter(Boolean) as string[][];
+      expect(lotes.map((l) => l.length)).toEqual([200, 200, 50]);
+    }
+  });
+
+  it('a página de leads é lida até o fim (o PostgREST corta em 1000)', async () => {
+    const leads = Array.from({ length: 1001 }, (_, i) => ({ ...BASE.leads![2]!, id: `p-${i}` }));
+    const { sb, consultas } = sbFake({ ...BASE, leads, tarefas: [] });
+    const r = await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(consultas.filter((c) => c.tabela === 'leads')).toHaveLength(2);
+    expect(r.leadsAnalisados).toBe(1001);
+  });
+
+  it('resposta numa conversa de OUTRO lead com o mesmo telefone conta (advogado de dois credores)', async () => {
+    const duda = {
+      id: 'l5',
+      nome: 'Duda Reis',
+      telefone: '+55 (82) 99000-0005',
+      status: 'em_contato',
+      dono_id: 'b1',
+      status_desde: ha(50),
+      dono: { ativo: true },
+    };
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [duda],
+      // A conversa ficou presa ao primeiro credor; o wa_id veio sem o nono dígito.
+      whatsapp_conversas: [{ id: 'c9', lead_id: 'outro', telefone: '558290000005' }],
+      whatsapp_mensagens: [
+        { conversa_id: 'c9', direcao: 'entrada', template_nome: null, created_at: ha(10) },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+    expect(rpcs).toEqual([]);
+  });
+
+  it('tarefa de regra esquecida com o dono antigo não trava o lead', async () => {
+    const { sb, rpcs } = sbFake({
+      ...BASE,
+      leads: [BASE.leads![2]!], // Caio, qualificado há 8 dias, dono b1
+      tarefas: [
+        {
+          id: 'velha',
+          lead_id: 'l3',
+          status: 'pendente',
+          created_at: ha(24 * 9),
+          concluida_em: null,
+          destinatario_id: 'b-antigo',
+        },
+      ],
+      regras_disparos: [
+        {
+          regra: 'processo_andou',
+          lead_id: 'l3',
+          chave_ciclo: 'processo_andou:lead:l3:1',
+          created_at: ha(24 * 9),
+          tarefa_id: 'velha',
+        },
+      ],
+    });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs.map((a) => a.p_lead_id)).toEqual(['l3']);
+  });
+
+  it('teto diário: os parados que a pessoa já recebeu hoje descontam', async () => {
+    const leads = Array.from({ length: 12 }, (_, i) => ({
+      ...BASE.leads![2]!,
+      id: `z-${i}`,
+      status_desde: ha(24 * (8 + i)),
+    }));
+    const hoje = Array.from({ length: 8 }, (_, i) => ({
+      regra: 'lead_parado',
+      lead_id: `ja-${i}`,
+      chave_ciclo: `lead_parado:ja-${i}:qualificado:x`,
+      created_at: ha(2),
+      tarefa_id: `tj-${i}`,
+      tarefa: { destinatario_id: 'b1' },
+    }));
+    const { sb, rpcs } = sbFake({ ...BASE, leads, tarefas: [], regras_disparos: hoje });
+    await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
+    expect(rpcs).toHaveLength(2);
   });
 
   it('resposta depois da linha 1000 ainda conta: pagina as mensagens até o fim', async () => {

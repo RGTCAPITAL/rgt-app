@@ -41,9 +41,11 @@ function lead(p: Partial<LeadNoCiclo> = {}): LeadNoCiclo {
     origem: 'site',
     importado: false,
     statusDesde: ha(49),
+    temTelefone: true,
     temTarefaAberta: false,
     ultimaEntradaWhatsapp: null,
     ultimaAcaoHumana: null,
+    ultimaAtividade: null,
     disparos: [],
     ...p,
   };
@@ -169,6 +171,40 @@ describe('regra (a): follow-up', () => {
     expect(umaSo(lead({ disparos }))?.tentativa).toBe(1);
   });
 
+  it('lead sem telefone: nunca follow-up (não há WhatsApp), e o parado cuida dele', () => {
+    expect(umaSo(lead({ temTelefone: false }))).toBeNull();
+    const t = umaSo(lead({ temTelefone: false, statusDesde: ha(24 * 8) }))!;
+    expect(t.regra).toBe('lead_parado');
+  });
+
+  it('a 2ª tentativa conta da conclusão da 1ª quando ela foi feita com atraso', () => {
+    const desde = ha(24 * 5);
+    const fu1 = {
+      regra: 'follow_up' as const,
+      chaveCiclo: chaveFollowUp('lead-1', desde, 1),
+      criadoEm: ha(48),
+      concluidoEm: ha(20), // o broker só ligou ontem à tarde
+    };
+    expect(umaSo(lead({ statusDesde: desde, disparos: [fu1] }))).toBeNull();
+    const t = umaSo(lead({ statusDesde: desde, disparos: [{ ...fu1, concluidoEm: ha(47) }] }))!;
+    expect(t.tentativa).toBe(2);
+  });
+
+  it('a última tentativa não manda agendar retorno pra quem não respondeu', () => {
+    const desde = ha(24 * 4);
+    const t = umaSo(
+      lead({
+        statusDesde: desde,
+        disparos: [
+          { regra: 'follow_up', chaveCiclo: chaveFollowUp('lead-1', desde, 1), criadoEm: ha(48) },
+        ],
+      }),
+    )!;
+    expect(t.titulo).toMatch(/^Último follow-up/);
+    expect(t.descricao).toContain('Se continuar sem resposta e não houver mais chance');
+    expect(t.descricao).not.toMatch(/sem resposta, marque como perdido ou agende/);
+  });
+
   it('sem dono, ou com dono inativo (donoId null), vai pra gestão', () => {
     const t = umaSo(lead({ donoId: null }))!;
     expect(t.destinatarioId).toBeNull();
@@ -181,8 +217,13 @@ describe('regra (a): follow-up', () => {
 });
 
 describe('regra (b): lead parado', () => {
-  it('6d23h não gera nada; 7d gera, com a dica da etapa', () => {
-    expect(umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7 - 1) }))).toBeNull();
+  it('antes de 6d18h nada; a partir daí (folga do cron) gera, com a dica da etapa', () => {
+    expect(umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7 - 7) }))).toBeNull();
+    // Entrou às 15h, a rodada é às 9h30 do 7º dia: 6 dias e 18h30. Sai, e o
+    // título diz 7 dias (arredondado), não 6.
+    expect(umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7 - 5.5) }))?.titulo).toBe(
+      'Lead parado há 7 dias na etapa Qualificado',
+    );
     const t = umaSo(lead({ status: 'qualificado', statusDesde: ha(24 * 7) }))!;
     expect(t.regra).toBe('lead_parado');
     expect(t.titulo).toBe('Lead parado há 7 dias na etapa Qualificado');
@@ -267,15 +308,43 @@ describe('regra (b): lead parado', () => {
     expect(umaSo(lead({ statusDesde: desde, ultimaAcaoHumana: ha(24 * 3) }))).toBeNull();
     const t = umaSo(lead({ statusDesde: desde, ultimaAcaoHumana: ha(24 * 8) }))!;
     expect(t.regra).toBe('lead_parado');
-    expect(t.descricao).toContain('A pessoa já deu retorno');
+    // Retorno agendado não prova que a pessoa respondeu (pode ser ligação
+    // que ninguém atendeu): texto neutro.
+    expect(t.descricao).toContain('Já houve retorno registrado nesta etapa');
+    expect(t.descricao).not.toContain('respondeu');
     expect(t.descricao).not.toContain('Tente outro canal');
+  });
+
+  it('retorno de 1 semana concluído ontem: o parado conta da conclusão, não da criação', () => {
+    const base = { status: 'qualificado', statusDesde: ha(24 * 9) };
+    // Retorno criado há 8 dias, concluído ontem: a ligação aconteceu ontem.
+    expect(
+      umaSo(lead({ ...base, ultimaAcaoHumana: ha(24 * 8), ultimaAtividade: ha(24) })),
+    ).toBeNull();
+    // Sem a conclusão, a criação há 8 dias já não seguraria.
+    expect(umaSo(lead({ ...base, ultimaAcaoHumana: ha(24 * 8) }))?.regra).toBe('lead_parado');
+  });
+
+  it('parado contado do último follow-up não escorrega de sexta pra segunda', () => {
+    // FU2 gravado na sexta 06/11 às 12h58 UTC; na sexta seguinte o cron roda
+    // às 12h05: faltam 53 minutos pros 7 dias, e mesmo assim sai.
+    const sexta = new Date('2026-11-13T12:05:00Z');
+    const desde = '2026-11-02T12:00:00Z';
+    const fus = [1, 2].map((k) => ({
+      regra: 'follow_up' as const,
+      chaveCiclo: chaveFollowUp('lead-1', desde, k),
+      criadoEm: k === 1 ? '2026-11-04T12:30:00Z' : '2026-11-06T12:58:00Z',
+    }));
+    const r = decidirRegrasDeLead([lead({ statusDesde: desde, disparos: fus })], LIGADAS, sexta);
+    expect(r[0]?.regra).toBe('lead_parado');
   });
 
   it('Em contato que RESPONDEU e travou: volta o parado (o lead mais quente não pode sumir)', () => {
     const t = umaSo(lead({ statusDesde: ha(24 * 8), ultimaEntradaWhatsapp: ha(24 * 7) }))!;
     expect(t.regra).toBe('lead_parado');
     expect(t.titulo).toBe('Lead parado há 8 dias na etapa Em contato');
-    expect(t.descricao).toContain('A pessoa já deu retorno');
+    expect(t.descricao).toContain('A pessoa respondeu no WhatsApp da RGT');
+    expect(t.descricao.match(/marque como perdido/g)).toHaveLength(1);
   });
 
   it('Novo de importação em massa: nunca (sem enxurrada)', () => {
@@ -292,8 +361,24 @@ describe('regra (b): lead parado', () => {
 
   it('Novo que o broker abordou (LinkedIn, evento): sem "foi a pessoa que procurou"', () => {
     const t = umaSo(lead({ status: 'novo', origem: 'linkedin', statusDesde: ha(24 * 7) }))!;
-    expect(t.descricao).toContain('Defina quem cuida dele e faça o primeiro contato.');
+    expect(t.descricao).toContain('Faça o primeiro contato.');
     expect(t.descricao).not.toContain('procurou a RGT');
+  });
+
+  it('Novo: "defina quem cuida" só pra gestão (lead sem dono), nunca pro próprio dono', () => {
+    const comDono = umaSo(lead({ status: 'novo', origem: 'site', statusDesde: ha(24 * 7) }))!;
+    expect(comDono.destinatarioId).toBe('broker-1');
+    expect(comDono.descricao).toContain(
+      'Faça o primeiro contato: foi a pessoa que procurou a RGT.',
+    );
+    expect(comDono.descricao).not.toContain('Defina quem cuida');
+    const semDono = umaSo(
+      lead({ status: 'novo', origem: 'site', donoId: null, statusDesde: ha(24 * 7) }),
+    )!;
+    expect(semDono.destinatarioPerfil).toBe('gestao');
+    expect(semDono.descricao).toContain(
+      'Defina quem cuida dele e faça o primeiro contato: foi a pessoa que procurou a RGT.',
+    );
   });
 
   it('Novo que chegou sozinho (site, WhatsApp) e ninguém pegou: avisa a gestão', () => {
@@ -310,7 +395,7 @@ describe('regra (b): lead parado', () => {
     expect(t.descricao).toContain('não avança da etapa Qualificado há pelo menos 9 dias');
   });
 
-  it(`no máximo ${MAX_PARADOS_POR_PESSOA_DIA} por pessoa por rodada, os mais antigos primeiro`, () => {
+  it(`no máximo ${MAX_PARADOS_POR_PESSOA_DIA} por pessoa, os mais antigos primeiro`, () => {
     const muitos = Array.from({ length: 15 }, (_, i) =>
       lead({ id: `l-${i}`, status: 'qualificado', statusDesde: ha(24 * (8 + i)) }),
     );
@@ -328,6 +413,16 @@ describe('regra (b): lead parado', () => {
     expect(doBroker1.map((t) => t.leadId)).not.toContain('l-0');
     // O teto é por pessoa: o broker-2 não perde a vez.
     expect(r.some((t) => t.leadId === 'outro')).toBe(true);
+  });
+
+  it('o teto é por dia: o que a pessoa já recebeu hoje (rodada repetida) desconta', () => {
+    const muitos = Array.from({ length: 15 }, (_, i) =>
+      lead({ id: `l-${i}`, status: 'qualificado', statusDesde: ha(24 * (8 + i)) }),
+    );
+    const jaHoje = new Map([['broker-1', 7]]);
+    const r = decidirRegrasDeLead(muitos, SO_PARADO, AGORA, jaHoje);
+    expect(r).toHaveLength(MAX_PARADOS_POR_PESSOA_DIA - 7);
+    expect(decidirRegrasDeLead(muitos, SO_PARADO, AGORA, new Map([['broker-1', 10]]))).toEqual([]);
   });
 
   it('o teto não corta follow-up', () => {
@@ -460,6 +555,17 @@ describe('regra (c): processo andou', () => {
     expect(
       decidirTarefaDoProcesso(ativo, ctx({ temTarefaAbertaDaRegra: true }), resumo, HOJE),
     ).toBeNull();
+  });
+
+  it('publicação urgente sai como tarefa mesmo com uma "Ler publicação" aberta', () => {
+    const t = decidirTarefaDoProcesso(
+      ativo,
+      ctx({ temTarefaAbertaDaRegra: true }),
+      { ...resumo, urgente: true },
+      HOJE,
+    )!;
+    expect(t.titulo).toBe('URGENTE: ler publicação grave no Diário');
+    expect(t.chaveCiclo).toBe('processo_andou:lead:lead-1:501');
   });
 
   it('operação sem responsável ativo vai pra gestão', () => {
