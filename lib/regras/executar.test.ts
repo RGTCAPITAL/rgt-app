@@ -486,7 +486,12 @@ describe('rodarRegrasDeLead', () => {
       ],
     });
     await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
-    const msgs = consultas.filter((c) => c.tabela === 'whatsapp_mensagens');
+    // As recebidas, à parte da leitura dos modelos sobre cada lead (049).
+    const msgs = consultas.filter(
+      (c) =>
+        c.tabela === 'whatsapp_mensagens' &&
+        c.filtros.some((f) => f[0] === 'in' && f[1] === 'conversa_id'),
+    );
     expect(msgs).toHaveLength(2);
     // Só as recebidas: enviada nunca conta como resposta.
     expect(msgs[0]!.filtros).toContainEqual(['eq', 'direcao', 'entrada']);
@@ -512,5 +517,136 @@ describe('rodarRegrasDeLead', () => {
     await rodarRegrasDeLead(sb, { agora: AGORA, config: LIGADAS });
     expect(rpcs[0]).toMatchObject({ p_tentativa: 2 });
     expect(rpcs[0]!.p_titulo).toBe('Último follow-up (2 de 2): sem resposta há 4 dias');
+  });
+
+  describe('advogado de dois credores: o modelo diz de qual lead se falou (049)', () => {
+    // Eva é o segundo credor do mesmo advogado. A conversa com ele é uma só
+    // (um telefone, uma conversa) e ficou com o primeiro credor, 'outro'. O
+    // telefone do card da Eva é o dela, não o do advogado.
+    const eva = {
+      id: 'l6',
+      nome: 'Eva Prado',
+      telefone: '(82) 90000-0006',
+      status: 'em_contato',
+      dono_id: 'b1',
+      status_desde: ha(50),
+      dono: { ativo: true },
+    };
+    const conversaDoAdvogado = { id: 'c8', lead_id: 'outro', telefone: '5582999990008' };
+    const modeloSobreEva = (extra: Record<string, unknown> = {}) => ({
+      conversa_id: 'c8',
+      lead_id: 'l6',
+      direcao: 'saida',
+      template_nome: 'rgt_contato_advogado',
+      status_entrega: 'enviada',
+      created_at: ha(50.1),
+      ...extra,
+    });
+    const respostaDoAdvogado = (horas: number) => ({
+      conversa_id: 'c8',
+      lead_id: null,
+      direcao: 'entrada',
+      template_nome: null,
+      created_at: ha(horas),
+    });
+
+    it('a resposta depois do modelo sobre ela conta: sem follow-up', async () => {
+      const { sb, rpcs } = sbFake({
+        ...BASE,
+        leads: [eva],
+        tarefas: [],
+        whatsapp_conversas: [conversaDoAdvogado],
+        whatsapp_mensagens: [modeloSobreEva(), respostaDoAdvogado(10)],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+      expect(rpcs).toEqual([]);
+    });
+
+    it('sem a 049 (modelo sem lead), a mesma resposta não contava', async () => {
+      const { sb, rpcs } = sbFake({
+        ...BASE,
+        leads: [eva],
+        tarefas: [],
+        whatsapp_conversas: [conversaDoAdvogado],
+        whatsapp_mensagens: [modeloSobreEva({ lead_id: null }), respostaDoAdvogado(10)],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+      expect(rpcs.map((a) => a.p_lead_id)).toEqual(['l6']);
+    });
+
+    it('o que o advogado respondeu ANTES do modelo sobre ela era sobre o outro credor', async () => {
+      const { sb, rpcs } = sbFake({
+        ...BASE,
+        // Já estava em Em contato (ligação) quando o modelo saiu.
+        leads: [{ ...eva, status_desde: ha(24 * 3) }],
+        tarefas: [],
+        whatsapp_conversas: [conversaDoAdvogado],
+        whatsapp_mensagens: [respostaDoAdvogado(60), modeloSobreEva({ created_at: ha(50) })],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+      expect(rpcs.map((a) => a.p_lead_id)).toEqual(['l6']);
+    });
+
+    it('sem telefone no card, abordada só pelo número do advogado: ganha follow-up', async () => {
+      const { sb, rpcs } = sbFake({
+        ...BASE,
+        leads: [{ ...eva, telefone: null }],
+        tarefas: [],
+        whatsapp_conversas: [conversaDoAdvogado],
+        whatsapp_mensagens: [modeloSobreEva()],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+      expect(rpcs).toHaveLength(1);
+      expect(rpcs[0]).toMatchObject({ p_regra: 'follow_up', p_lead_id: 'l6' });
+      // O texto aponta pra tela de Conversas, não pro balão do card.
+      expect(rpcs[0]!.p_descricao).toContain('tela de Conversas');
+    });
+
+    it('modelo que falhou não chegou ao advogado: não liga a conversa a ela', async () => {
+      const { sb, rpcs } = sbFake({
+        ...BASE,
+        leads: [{ ...eva, telefone: null }],
+        tarefas: [],
+        whatsapp_conversas: [conversaDoAdvogado],
+        whatsapp_mensagens: [modeloSobreEva({ status_entrega: 'falhou' }), respostaDoAdvogado(10)],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+      // Sem telefone e sem conversa: quem cuida é o parado, não o follow-up.
+      expect(rpcs).toEqual([]);
+    });
+
+    it('a resposta sobre ela continua contando para o primeiro credor, dono da conversa', async () => {
+      const primeiro = { ...eva, id: 'outro', nome: 'Gil Rocha', telefone: null };
+      const { sb, rpcs } = sbFake({
+        ...BASE,
+        leads: [primeiro, eva],
+        tarefas: [],
+        whatsapp_conversas: [conversaDoAdvogado],
+        whatsapp_mensagens: [modeloSobreEva(), respostaDoAdvogado(10)],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+      expect(rpcs).toEqual([]);
+    });
+
+    it('lê os modelos pelos leads em Em contato, só os enviados, em lotes', async () => {
+      const leads = Array.from({ length: 201 }, (_, i) => ({ ...eva, id: `e-${i}` }));
+      const { sb, consultas } = sbFake({
+        ...BASE,
+        leads,
+        tarefas: [],
+        whatsapp_conversas: [],
+        whatsapp_mensagens: [],
+      });
+      await rodarRegrasDeLead(sb, { agora: AGORA, config: SO_FOLLOW_UP });
+      const modelos = consultas.filter(
+        (c) =>
+          c.tabela === 'whatsapp_mensagens' &&
+          c.filtros.some((f) => f[0] === 'in' && f[1] === 'lead_id'),
+      );
+      expect(modelos).toHaveLength(2);
+      expect(modelos[0]!.filtros).toContainEqual(['eq', 'direcao', 'saida']);
+      const lote = modelos[0]!.filtros.find((f) => f[0] === 'in')![2] as string[];
+      expect(lote).toHaveLength(200);
+    });
   });
 });

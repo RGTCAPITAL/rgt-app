@@ -197,10 +197,14 @@ export async function dispararModelo(
   });
 
   // Grava antes de enviar: se a Meta recusar, a tentativa fica registrada.
+  // O lead vai na mensagem, e não só na conversa: a conversa é uma por
+  // telefone, e a do advogado de dois credores fica presa ao primeiro. É por
+  // aqui que as regras sabem que a resposta dele trata deste lead (049).
   const { data: msg, error: erroMsg } = await sb
     .from('whatsapp_mensagens')
     .insert({
       conversa_id: conversa.id,
+      lead_id: leadId,
       direcao: 'saida',
       autor: 'humano',
       autor_id: auth.userId,
