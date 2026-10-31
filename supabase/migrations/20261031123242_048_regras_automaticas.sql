@@ -8,15 +8,16 @@
 -- automação escrevendo pro cliente é o que a Meta pune e a OAB olha.
 --
 --   follow_up       lead em "Em contato" há N dias, sem resposta no WhatsApp
---                   da RGT e sem tarefa aberta → uma tarefa de follow-up pro
---                   dono. Para depois de M tentativas, e a última diz isso.
+--                   da RGT, sem retorno registrado por alguém e sem tarefa
+--                   aberta → uma tarefa de follow-up pro dono. Para depois de
+--                   M tentativas, e a última diz isso.
 --   lead_parado     lead numa etapa ativa há N dias sem mudar e sem tarefa
 --                   aberta → tarefa (o aviso no sino vem da trigger). Uma vez
 --                   por entrada na etapa.
 --   processo_andou  a rotina do DJEN, que já avisa publicação nova, passa a
 --                   criar a tarefa pro dono. Lead perdido "sem ofício" cujo
---                   processo mostra ofício expedido ganha tarefa de reavaliar:
---                   ninguém é reaberto sozinho.
+--                   Diário passa a citar ofício requisitório ganha tarefa de
+--                   reavaliar: ninguém é reaberto sozinho.
 --
 -- As três nascem DESLIGADAS. Ligar é decisão de quem gere a equipe, em
 -- /admin/regras.
