@@ -158,6 +158,15 @@ type LinhaTarefa = {
   destinatario: { ativo: boolean } | null;
 };
 
+/** Mensagem enviada que diz de qual lead trata: hoje, o modelo do disparo. */
+type LinhaEnviadaSobre = {
+  conversa_id: string;
+  lead_id: string | null;
+  direcao: string;
+  status_entrega: string | null;
+  created_at: string;
+};
+
 type LinhaDisparo = {
   regra: ChaveRegra;
   lead_id: string;
@@ -232,7 +241,8 @@ export async function rodarRegrasDeLead(
   // resposta?) e no texto do parado (quem respondeu não ouve "insista").
   const emContato = leads.filter((l) => l.status === 'em_contato');
   const inicioDoDia = `${hojeEmSaoPaulo(agora)}T03:00:00.000Z`; // 0h em São Paulo, sem horário de verão
-  const [tarefas, linhasDisparo, conversas, paradosHoje] = await Promise.all([
+  const idsEmContato = emContato.map((l) => l.id);
+  const [tarefas, linhasDisparo, conversas, paradosHoje, enviadasSobre] = await Promise.all([
     // Todas as tarefas do lead, abertas ou não: as abertas seguram as regras,
     // as criadas por uma PESSOA (retorno, tarefa à mão) contam como contato,
     // e criação e conclusão contam como movimento pro "lead parado".
@@ -255,9 +265,8 @@ export async function rodarRegrasDeLead(
         .order('id')
         .range(de, ate),
     ),
-    // Todas as conversas, e não só as com lead_id: a conversa é única por
-    // telefone, e quando um advogado cuida de dois credores ela fica presa ao
-    // primeiro lead. A resposta sobre o segundo só aparece pelo telefone.
+    // Todas as conversas, e não só as com lead_id: o lead pode ter sido
+    // abordado numa conversa de outro com o mesmo telefone.
     emContato.length
       ? lerTudo<{ id: string; lead_id: string | null; telefone: string | null }>(
           'whatsapp_conversas',
@@ -280,6 +289,20 @@ export async function rodarRegrasDeLead(
             .select('regra, created_at, tarefa:tarefas(destinatario_id)')
             .eq('regra', 'lead_parado')
             .gte('created_at', inicioDoDia)
+            .order('id')
+            .range(de, ate),
+        )
+      : Promise.resolve([]),
+    // Os modelos disparados sobre cada lead (049). A conversa é uma por
+    // telefone: o advogado de dois credores tem uma só, presa ao primeiro, e
+    // é a mensagem que diz de qual credor se falou.
+    idsEmContato.length
+      ? lerEmLotes<LinhaEnviadaSobre>('enviadas sobre o lead', idsEmContato, (lote, de, ate) =>
+          sb
+            .from('whatsapp_mensagens')
+            .select('conversa_id, lead_id, direcao, status_entrega, created_at')
+            .in('lead_id', lote)
+            .eq('direcao', 'saida')
             .order('id')
             .range(de, ate),
         )
@@ -377,26 +400,50 @@ export async function rodarRegrasDeLead(
     disparosPorLead.set(d.lead_id, lista);
   }
 
-  // Conversas de cada lead em Em contato: as dele e as do mesmo telefone.
-  const conversasDoLead = new Map<string, Set<string>>();
-  if (conversas.length) {
-    const porChave = new Map<string, string[]>();
-    for (const c of conversas) {
-      const k = chaveTelefone(c.telefone);
-      if (k) porChave.set(k, [...(porChave.get(k) ?? []), c.id]);
-    }
-    for (const l of emContato) {
-      const doLead = new Set(conversas.filter((c) => c.lead_id === l.id).map((c) => c.id));
-      const k = chaveTelefone(l.telefone);
-      for (const id of k ? (porChave.get(k) ?? []) : []) doLead.add(id);
-      if (doLead.size) conversasDoLead.set(l.id, doLead);
-    }
+  // Conversas de cada lead em Em contato, e desde quando a resposta nelas
+  // conta para ele. A conversa dele e a do mesmo telefone contam inteiras
+  // (null). A de outro telefone em que se disparou um modelo sobre ele (o
+  // advogado) conta do primeiro desses envios em diante: o que o advogado
+  // respondeu antes era sobre outro credor.
+  //   O contrário não se desfaz: a resposta sobre o segundo credor continua
+  // contando para o primeiro, dono da conversa. Errar para esse lado só tira
+  // um follow-up de quem já está falando com a RGT; o "lead parado" cuida dele
+  // depois, com o texto de quem respondeu.
+  const conversasDoLead = new Map<string, Map<string, string | null>>();
+  const ligar = (leadId: string, conversaId: string, desde: string | null) => {
+    const doLead = conversasDoLead.get(leadId) ?? new Map<string, string | null>();
+    const atual = doLead.get(conversaId);
+    // Inteira ganha de "a partir de"; entre dois "a partir de", o mais antigo.
+    if (atual === undefined) doLead.set(conversaId, desde);
+    else if (atual !== null && (desde === null || Date.parse(desde) < Date.parse(atual)))
+      doLead.set(conversaId, desde);
+    conversasDoLead.set(leadId, doLead);
+  };
+  const porChave = new Map<string, string[]>();
+  for (const c of conversas) {
+    const k = chaveTelefone(c.telefone);
+    if (k) porChave.set(k, [...(porChave.get(k) ?? []), c.id]);
+  }
+  const emContatoIds = new Set(idsEmContato);
+  for (const c of conversas)
+    if (c.lead_id && emContatoIds.has(c.lead_id)) ligar(c.lead_id, c.id, null);
+  for (const l of emContato) {
+    const k = chaveTelefone(l.telefone);
+    for (const id of k ? (porChave.get(k) ?? []) : []) ligar(l.id, id, null);
+  }
+  for (const m of enviadasSobre) {
+    // O filtro já veio do banco; conferir de novo impede que uma mensagem
+    // RECEBIDA ou de outro lead abra conversa para este. O envio que falhou
+    // não chegou: o que vier depois dele não é resposta sobre este lead.
+    if (m.direcao !== 'saida' || !m.lead_id || !emContatoIds.has(m.lead_id)) continue;
+    if (m.status_entrega === 'falhou') continue;
+    ligar(m.lead_id, m.conversa_id, m.created_at);
   }
 
   // Mensagens: só as RECEBIDAS, a partir da entrada mais antiga na etapa. O
   // resto da conversa não muda decisão nenhuma.
   const ultimaEntrada = new Map<string, string>();
-  const idsConversa = [...new Set([...conversasDoLead.values()].flatMap((c) => [...c]))];
+  const idsConversa = [...new Set([...conversasDoLead.values()].flatMap((c) => [...c.keys()]))];
   if (idsConversa.length) {
     const desde = new Date(
       Math.min(...emContato.map((l) => Date.parse(l.status_desde))),
@@ -425,7 +472,13 @@ export async function rodarRegrasDeLead(
     }
     for (const [leadId, convs] of conversasDoLead) {
       let ultima: string | null = null;
-      for (const c of convs) ultima = maisRecente(ultima, ultimaDaConversa.get(c));
+      for (const [c, aPartirDe] of convs) {
+        const daConversa = ultimaDaConversa.get(c);
+        // A última resposta da conversa veio depois do modelo sobre ele? Então
+        // houve resposta depois dele: só a mais recente importa.
+        if (daConversa && (aPartirDe === null || Date.parse(daConversa) > Date.parse(aPartirDe)))
+          ultima = maisRecente(ultima, daConversa);
+      }
       if (ultima) ultimaEntrada.set(leadId, ultima);
     }
   }
