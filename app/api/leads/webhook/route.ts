@@ -63,6 +63,18 @@ export const payloadSchema = z.object({
       return d.length === 20 ? d : v;
     }),
   mensagem: z.string().trim().max(2000).optional().or(z.literal('')),
+  /**
+   * O texto da caixa de autorização que a pessoa marcou, como estava na tela.
+   * O site só envia quando a caixa está marcada. Vira a prova do aceite no
+   * lead (migration 050); vazio = sem registro, nunca "autorizou".
+   */
+  consentimento_texto: z
+    .string()
+    .trim()
+    .max(1000)
+    .optional()
+    .or(z.literal(''))
+    .transform((v) => v || ''),
 });
 
 export async function POST(req: Request) {
@@ -109,6 +121,13 @@ export async function POST(req: Request) {
       origem: 'site',
       status: 'novo',
       notas: notasFinal,
+      // A hora é a do nosso servidor, não a do celular da pessoa.
+      ...(data.consentimento_texto
+        ? {
+            consentimento_em: new Date().toISOString(),
+            consentimento_texto: data.consentimento_texto,
+          }
+        : {}),
     })
     .select('id')
     .single();
