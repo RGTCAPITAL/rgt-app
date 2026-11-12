@@ -33,7 +33,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     .select(
       `id, nome, telefone, email, cpf_cnpj, origem, status, created_at, motivo_perda,
        operacao_id, dono_id, notas, is_exemplo, valor_processo, valor_proposta_indicativa, ente_devedor,
-       numero_processo,
+       numero_processo, consentimento_em,
        dono:usuarios!leads_dono_id_fkey(id, nome),
        retornos:tarefas(id, titulo, prazo, criado_por_id)`,
     )

@@ -119,3 +119,20 @@ describe('formato de contato', () => {
     );
   });
 });
+
+describe('consentimento_texto', () => {
+  it('o texto da autorização passa como a pessoa viu', () => {
+    const texto = 'Autorizo a RGT Capital a tratar meus dados, inclusive por WhatsApp.';
+    expect(payloadSchema.parse({ ...BASE, consentimento_texto: texto }).consentimento_texto).toBe(
+      texto,
+    );
+  });
+
+  it('sem o campo (página antiga em cache) fica vazio, nunca "autorizou"', () => {
+    expect(payloadSchema.parse(BASE).consentimento_texto).toBe('');
+  });
+
+  it('texto gigante é recusado', () => {
+    expect(() => payloadSchema.parse({ ...BASE, consentimento_texto: 'x'.repeat(1001) })).toThrow();
+  });
+});

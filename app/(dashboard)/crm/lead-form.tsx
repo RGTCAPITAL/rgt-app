@@ -47,7 +47,19 @@ export type LeadEdit = {
   ente_devedor: string | null;
   numero_processo: string | null;
   valor_processo: number | null;
+  /** Só leitura: quando autorizou o contato no site. Ninguém edita (050). */
+  consentimento_em?: string | null;
 };
+
+/** Hora de São Paulo, como o broker lê: o aceite é prova, não pode depender do fuso de quem abre. */
+const dataHoraSP = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 type Props = {
   aberto: boolean;
@@ -131,6 +143,13 @@ export function LeadForm({ aberto, onClose, donos, meuId, isAdmin, editando }: P
         <DialogHeader>
           <DialogTitle>{editando ? 'Editar lead' : 'Novo lead'}</DialogTitle>
         </DialogHeader>
+
+        {editando?.consentimento_em && (
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            Autorizou o contato no formulário do site em{' '}
+            {dataHoraSP.format(new Date(editando.consentimento_em))}.
+          </p>
+        )}
 
         {editando && <StatusVinculo lead={editando} />}
 

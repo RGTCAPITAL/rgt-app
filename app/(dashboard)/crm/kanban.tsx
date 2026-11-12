@@ -58,6 +58,8 @@ export type LeadCard = {
   valor_proposta_indicativa: number | null;
   ente_devedor: string | null;
   numero_processo: string | null;
+  /** Quando autorizou o contato no formulário do site (050). */
+  consentimento_em: string | null;
   retornos: RetornoCard[];
   dono: { nome: string | null } | null;
 };
@@ -152,6 +154,7 @@ function paraEdicao(lead: LeadCard): LeadEdit {
     ente_devedor: lead.ente_devedor,
     numero_processo: lead.numero_processo,
     valor_processo: lead.valor_processo,
+    consentimento_em: lead.consentimento_em,
   };
 }
 
