@@ -77,6 +77,24 @@ export const payloadSchema = z.object({
     .transform((v) => v || ''),
 });
 
+/**
+ * O banco só aceita CNJ de 20 dígitos em `leads.numero_processo` (033). Número
+ * de ofício ou qualquer outra coisa vai pras notas, como a pessoa escreveu.
+ * Antes ia direto pro campo: o insert falhava e o lead do site se perdia
+ * (o credor via o WhatsApp abrir e nem sabia).
+ */
+export function notasDoSite(data: { numero_processo: string; mensagem?: string }): {
+  numeroProcesso: string | null;
+  notas: string | null;
+} {
+  const cnj = /^\d{20}$/.test(data.numero_processo) ? data.numero_processo : null;
+  const partes = [
+    !cnj && data.numero_processo ? `Processo ou ofício informado: ${data.numero_processo}` : null,
+    data.mensagem ? `Mensagem do site:\n${data.mensagem}` : null,
+  ].filter(Boolean);
+  return { numeroProcesso: cnj, notas: partes.length ? partes.join('\n\n') : null };
+}
+
 export async function POST(req: Request) {
   // 1. Auth via header secret
   const secretHeader = req.headers.get('x-rgt-secret');
@@ -108,7 +126,7 @@ export async function POST(req: Request) {
   // 3. Insere lead com service role (bypass RLS)
   const supabase = createServiceClient();
 
-  const notasFinal = data.mensagem ? `Mensagem do site:\n${data.mensagem}` : null;
+  const { numeroProcesso, notas: notasFinal } = notasDoSite(data);
 
   const { data: lead, error } = await supabase
     .from('leads')
@@ -117,7 +135,7 @@ export async function POST(req: Request) {
       telefone: data.telefone || null,
       email: data.email || null,
       cpf_cnpj: data.cpf_cnpj || null,
-      numero_processo: data.numero_processo || null,
+      numero_processo: numeroProcesso,
       origem: 'site',
       status: 'novo',
       notas: notasFinal,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { payloadSchema } from './route';
+import { notasDoSite, payloadSchema } from './route';
 
 /**
  * O webhook é a única porta por onde o site escreve no banco, e quem chama é
@@ -134,5 +134,29 @@ describe('consentimento_texto', () => {
 
   it('texto gigante é recusado', () => {
     expect(() => payloadSchema.parse({ ...BASE, consentimento_texto: 'x'.repeat(1001) })).toThrow();
+  });
+});
+
+describe('notasDoSite: o lead nunca se perde pelo número do processo', () => {
+  it('CNJ de 20 dígitos vai pro campo do processo', () => {
+    const r = notasDoSite(
+      payloadSchema.parse({ ...BASE, numero_processo: '0001107-33.2017.5.19.0001' }),
+    );
+    expect(r.numeroProcesso).toBe('00011073320175190001');
+    expect(r.notas).toBeNull();
+  });
+
+  it('número de ofício vai pras notas (o banco recusaria no campo do processo)', () => {
+    const r = notasDoSite(
+      payloadSchema.parse({ ...BASE, numero_processo: 'RP 1234/2024 - TRT19', mensagem: 'Oi' }),
+    );
+    expect(r.numeroProcesso).toBeNull();
+    expect(r.notas).toBe(
+      'Processo ou ofício informado: RP 1234/2024 - TRT19\n\nMensagem do site:\nOi',
+    );
+  });
+
+  it('sem número e sem mensagem: notas vazias', () => {
+    expect(notasDoSite(payloadSchema.parse(BASE))).toEqual({ numeroProcesso: null, notas: null });
   });
 });
