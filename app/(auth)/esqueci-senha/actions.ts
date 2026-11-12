@@ -20,7 +20,7 @@ export async function resetPassword(formData: FormData) {
   }
 
   const headersList = await headers();
-  const origin = headersList.get('origin') ?? 'https://rgt-app-ten.vercel.app';
+  const origin = headersList.get('origin') ?? 'https://app.rgtcapital.com.br';
 
   const supabase = await createClient();
 

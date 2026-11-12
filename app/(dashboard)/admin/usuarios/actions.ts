@@ -59,7 +59,7 @@ export async function convidarUsuario(
   if (!user) return { ok: false, error: 'Sessão expirada.' };
   if (!isAdmin) return { ok: false, error: 'Só admin pode convidar usuários.' };
 
-  const origin = (await headers()).get('origin') ?? 'https://rgt-app-ten.vercel.app';
+  const origin = (await headers()).get('origin') ?? 'https://app.rgtcapital.com.br';
 
   // service role: convidar exige privilégio de admin da Auth API
   const admin = createServiceClient();
